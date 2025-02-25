@@ -1,0 +1,25 @@
+{
+  "name": "tensorus",
+  "version": "0.0.1",
+  "description": "An agentic tensor database for tensor data.",
+  "keywords": [
+    "agentic",
+    "tensor",
+    "database"
+  ],
+  "homepage": "https://github.com/tensorus/tensorus#readme",
+  "bugs": {
+    "url": "https://github.com/tensorus/tensorus/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tensorus/tensorus.git"
+  },
+  "license": "MIT",
+  "author": "Tensorus",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  }
+}
