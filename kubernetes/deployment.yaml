@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tensorus
+  labels:
+    app: tensorus
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tensorus
+  template:
+    metadata:
+      labels:
+        app: tensorus
+    spec:
+      containers:
+      - name: tensorus
+        image: tensorus:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+        env:
+        - name: TENSORUS_STORAGE_PATH
+          value: "/data/tensor_db.h5"
+        - name: TENSORUS_INDEX_PATH
+          value: "/data/tensor_index.pkl"
+        - name: TENSORUS_CONFIG_PATH
+          value: "/config/db_config.json"
+        - name: PORT
+          value: "5000"
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+        - name: config-volume
+          mountPath: /config
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: tensorus-data-pvc
+      - name: config-volume
+        configMap:
+          name: tensorus-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tensorus
+  labels:
+    app: tensorus
+spec:
+  selector:
+    app: tensorus
+  ports:
+  - port: 80
+    targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tensorus-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tensorus-config
+data:
+  db_config.json: |
+    {
+      "index_type": "flat",
+      "metric": "l2",
+      "default_dimension": 1024,
+      "auto_index": true
+    } 
