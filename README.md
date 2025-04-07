@@ -18,6 +18,7 @@
 
 ## Project Structure
 
+```bash
 tensorus/
 ├── api.py                     # FastAPI application providing the REST API
 ├── automl_agent.py            # AutoML agent for hyperparameter search
@@ -29,6 +30,7 @@ tensorus/
 ├── tensor_ops.py              # Library for robust tensor operations
 ├── tensor_storage.py          # Core tensor storage module (in-memory)
 └── README.md                  # This file
+```
 
 ## Module Descriptions
 
@@ -51,7 +53,7 @@ tensorus/
 2.  **Clone Repository (if applicable):**
     If this code were in a Git repository:
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/tensorus/tensorus
     cd tensorus
     ```
     Otherwise, ensure all the `.py` files listed in the Project Structure are in the same directory.
