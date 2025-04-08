@@ -6,6 +6,7 @@ Action: Move left (-1), Stay (0), Move right (+1) (Discrete actions)
 Goal: Reach position 0
 Reward: -abs(position), +10 if at goal
 """
+from typing import Tuple, Dict
 import torch
 import random
 import numpy as np # Use numpy for state representation convenience

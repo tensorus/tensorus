@@ -1,14 +1,28 @@
-# Core dependencies for Tensorus
+# requirements.txt
+# Updated: 2025-04-08
+
+# --- Core Tensor and Numerics ---
 torch>=1.13.0
 numpy>=1.21.0
 
-# Dependencies for Ingestion Agent examples
+# --- Agent Specific Dependencies ---
+# For Ingestion Agent image processing example
 Pillow>=9.0.0
 
-# Dependencies for API Layer
+# --- API Layer Dependencies ---
 fastapi>=0.90.0
-uvicorn[standard]>=0.20.0 # Includes standard dependencies like watchfiles
-pydantic>=1.10.0,<2.0.0 # FastAPI often has specific Pydantic v1 compatibility, lock for safety
-
-# Optional for potential future file uploads via API
+# Lock Pydantic < 2.0 for broad FastAPI compatibility, adjust if using newer FastAPI explicitly with Pydantic v2
+pydantic>=1.10.0,<2.0.0
+# ASGI Server (standard includes extras like watchfiles for reload)
+uvicorn[standard]>=0.20.0
+# Optional: Needed if using FastAPI file uploads via forms
 # python-multipart>=0.0.5
+
+# --- Streamlit UI Dependencies ---
+streamlit>=1.25.0
+# For calling the FastAPI backend from the Streamlit UI
+requests>=2.28.0
+# For plotting in the Streamlit UI (Dashboard, Data Explorer)
+plotly>=5.10.0
+# Optional: For plotting example in rl_agent.py
+matplotlib>=3.5.0
