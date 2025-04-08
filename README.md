@@ -1,158 +1,211 @@
-# Tensorus - Agentic Tensor Database/Data Lake
+# Tensorus: Agentic Tensor Database/Data Lake
 
-**Tensorus** is an innovative, proof-of-concept hybrid cloud/open-source agentic tensor database/data lake designed for modern AI and machine learning workflows. It stores all data uniformly as multi-dimensional tensors and integrates autonomous AI agents that can continuously ingest, optimize, and learn from the stored data.
-
-**Current Status:** This implementation is a functional proof-of-concept based on the provided design document. Key features include in-memory tensor storage, basic agent implementations (ingestion, RL, NQL, AutoML), and a FastAPI interface. It serves as a foundation for further development.
+Tensorus is an experimental platform for managing and querying tensor data, designed with agentic capabilities in mind. It provides a flexible way to store, retrieve, and manipulate tensors, and it's built to integrate with intelligent agents for tasks like data ingestion, reinforcement learning, and AutoML.
 
 ## Key Features
 
-* **Unified Tensor Storage:** All data (structured, unstructured, multi-modal) is intended to be stored uniformly as tensors (`tensor_storage.py`, currently in-memory).
-* **Robust Tensor Operations:** A library for common tensor manipulations with shape checking (`tensor_ops.py`).
-* **Agentic Intelligence:** Embedded autonomous agents:
-    * **Data Ingestion Agent:** Monitors local directories and ingests recognized file types (CSV, images) as tensors (`ingestion_agent.py`).
-    * **Reinforcement Learning Agent:** Implements DQN, stores experiences (state tensor IDs, actions, rewards) in TensorStorage, samples, and trains (`rl_agent.py`). Includes a `dummy_env.py`.
-    * **NQL Query Agent:** Parses basic natural language queries (using regex) to retrieve data from TensorStorage (`nql_agent.py`).
-    * **AutoML Agent:** Performs basic hyperparameter random search for a dummy model on synthetic data, storing results (`automl_agent.py`).
-* **REST API:** A FastAPI application provides endpoints for dataset management, data ingestion (via JSON), and NQL querying (`api.py`).
-* **Modularity:** Designed with distinct modules for easier extension and maintenance.
+*   **Tensor Storage:** Efficiently store and retrieve PyTorch tensors with associated metadata.
+*   **Natural Query Language (NQL):** Query your tensor data using a simple, natural language-like syntax.
+*   **Agent Framework:** A foundation for building and integrating intelligent agents that interact with your data.
+    *   **Data Ingestion Agent:** Automatically monitors a directory for new files and ingests them as tensors.
+    *   **RL Agent:** A Deep Q-Network (DQN) agent that can learn from experiences stored in TensorStorage.
+    *   **AutoML Agent:** Performs hyperparameter optimization for a dummy model using random search.
+*   **API-Driven:** A FastAPI backend provides a RESTful API for interacting with Tensorus.
+*   **Streamlit UI:** A user-friendly Streamlit frontend for exploring data and controlling agents.
+*   **Tensor Operations:** A library of robust tensor operations for common manipulations.
+*   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
 
 ## Project Structure
 
-```bash
-tensorus/
-├── api.py                     # FastAPI application providing the REST API
-├── automl_agent.py            # AutoML agent for hyperparameter search
-├── dummy_env.py               # Simple environment for the RL agent example
-├── ingestion_agent.py         # Agent for automated data ingestion from files
-├── nql_agent.py               # Agent for parsing basic Natural Query Language
-├── requirements.txt           # Project dependencies
-├── rl_agent.py                # Reinforcement Learning (DQN) agent
-├── tensor_ops.py              # Library for robust tensor operations
-├── tensor_storage.py          # Core tensor storage module (in-memory)
-└── README.md                  # This file
-```
+*   `api.py`: The FastAPI application that serves as the backend API.
+*   `app.py`: The Streamlit frontend application.
+*   `tensor_storage.py`: The core TensorStorage implementation.
+*   `nql_agent.py`: The Natural Query Language (NQL) agent.
+*   `ingestion_agent.py`: The Data Ingestion agent.
+*   `rl_agent.py`: The Reinforcement Learning (DQN) agent.
+*   `automl_agent.py`: The AutoML agent.
+*   `tensor_ops.py`: A library of tensor operations.
+*   `dummy_env.py`: A simple environment for the RL agent.
+*   `tensor_utils.py`: Utility functions for tensor manipulation and conversion.
+*   `ui_utils.py`: Utility functions for the Streamlit UI.
+*   `requirements.txt`: Lists the project's dependencies.
 
-## Module Descriptions
+## Getting Started
 
-* **`tensor_storage.py`**: Implements the core `TensorStorage` class. Manages named datasets containing PyTorch tensors and associated metadata. Currently uses an **in-memory dictionary** for storage. Provides methods for creating datasets, inserting tensors, retrieving data, querying via functions, and sampling.
-* **`tensor_ops.py`**: Defines a static `TensorOps` class providing various tensor operations (arithmetic, linear algebra, reductions, reshaping) with built-in type and shape checking for robustness.
-* **`ingestion_agent.py`**: Implements the `DataIngestionAgent`. Monitors a specified directory in a background thread, uses configurable rules (defaulting to CSV/image processing) to convert files into tensors, and inserts them into `TensorStorage`.
-* **`rl_agent.py`**: Implements the `RLAgent` using Deep Q-Network (DQN). It interacts with an environment (`DummyEnv`), stores experiences by linking state tensor IDs (stored separately) with action/reward/done metadata in `TensorStorage`, samples these experiences, and performs training steps.
-* **`dummy_env.py`**: Defines a very simple `DummyEnv` class (1D state, discrete actions) used for demonstrating the `RLAgent`.
-* **`nql_agent.py`**: Implements the `NQLAgent`. Parses simple, predefined natural language query patterns using regular expressions and translates them into queries against `TensorStorage`. **Does not use an LLM.**
-* **`automl_agent.py`**: Implements the `AutoMLAgent`. Performs random search over a defined hyperparameter space for a dummy MLP model trained on synthetic data. Stores trial results (parameters and scores) in `TensorStorage`.
-* **`api.py`**: The main entry point for interacting with Tensorus programmatically. It uses FastAPI to create REST endpoints for managing datasets, ingesting tensors (via JSON body containing shape, dtype, and data list), fetching data, and executing NQL queries. Includes helpers for tensor serialization/deserialization between lists and `torch.Tensor`.
-* **`requirements.txt`**: Lists all the Python packages required to run the project.
+### Prerequisites
 
-## Setup and Installation
+*   Python 3.9+
+*   PyTorch
+*   FastAPI
+*   Uvicorn
+*   Streamlit
+*   Pydantic
+*   Requests
+*   Pillow (for image preprocessing)
+*   Matplotlib (optional, for plotting RL rewards)
 
-1.  **Prerequisites:**
-    * Python 3.7+
-    * `pip` (Python package installer)
+### Installation
 
-2.  **Clone Repository (if applicable):**
-    If this code were in a Git repository:
+1.  Clone the repository:
+
     ```bash
-    git clone https://github.com/tensorus/tensorus
-    cd tensorus
-    ```
-    Otherwise, ensure all the `.py` files listed in the Project Structure are in the same directory.
-
-3.  **Create Virtual Environment (Recommended):**
-    ```bash
-    python -m venv venv
-    # On Windows:
-    # venv\Scripts\activate
-    # On macOS/Linux:
-    # source venv/bin/activate
+    git clone <your_repository_url>
+    cd Tensorus_MVP
     ```
 
-4.  **Install Dependencies:**
+2.  Create a virtual environment (recommended):
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate  # On Linux/macOS
+    venv\Scripts\activate  # On Windows
+    ```
+
+3.  Install dependencies:
+
     ```bash
     pip install -r requirements.txt
     ```
 
-## Execution Guide
+### Running the API
 
-### 1. Running the API Server
+1.  Navigate to the project root directory.
+2.  Start the FastAPI backend:
 
-The primary way to interact with Tensorus is through the FastAPI server.
-
-* **Start the Server:**
-    ```bash
-    python api.py
-    ```
-    Or using uvicorn directly (enables auto-reload):
     ```bash
     uvicorn api:app --reload --host 127.0.0.1 --port 8000
     ```
-* **Access API Documentation:**
-    Once the server is running, open your web browser and navigate to:
-    * **Swagger UI:** `http://127.0.0.1:8000/docs`
-    * **ReDoc:** `http://127.0.0.1:8000/redoc`
-    This provides interactive documentation for all API endpoints.
 
-* **Example API Interactions (using `curl`):**
+    *   Access the API documentation at `http://127.0.0.1:8000/docs` or `http://127.0.0.1:8000/redoc`.
 
-    * **Create a dataset named "test_data":**
-        ```bash
-        curl -X POST "[http://127.0.0.1:8000/datasets/create](https://www.google.com/search?q=http://127.0.0.1:8000/datasets/create)" \
-             -H "Content-Type: application/json" \
-             -d '{"name": "test_data"}'
-        ```
+### Running the Streamlit UI
 
-    * **Ingest a 2x2 float32 tensor into "test_data":**
-        ```bash
-        curl -X POST "[http://127.0.0.1:8000/datasets/test_data/ingest](https://www.google.com/search?q=http://127.0.0.1:8000/datasets/test_data/ingest)" \
-             -H "Content-Type: application/json" \
-             -d '{
-                   "shape": [2, 2],
-                   "dtype": "float32",
-                   "data": [[1.1, 2.2], [3.3, 4.4]],
-                   "metadata": {"source": "curl_example"}
-                 }'
-        ```
+1.  In a separate terminal (with the virtual environment activated), navigate to the project root.
+2.  Start the Streamlit frontend:
 
-    * **Fetch all data from "test_data":**
-        ```bash
-        curl -X GET "[http://127.0.0.1:8000/datasets/test_data/fetch](https://www.google.com/search?q=http://127.0.0.1:8000/datasets/test_data/fetch)"
-        ```
-
-    * **Execute an NQL query:**
-        ```bash
-        curl -X POST "[http://127.0.0.1:8000/query](https://www.google.com/search?q=http://127.0.0.1:8000/query)" \
-             -H "Content-Type: application/json" \
-             -d '{"query": "get all data from test_data where source = curl_example"}'
-        ```
-
-### 2. Running Individual Module Examples
-
-Most modules (`ingestion_agent.py`, `rl_agent.py`, `nql_agent.py`, `automl_agent.py`, `tensor_storage.py`, `tensor_ops.py`, `dummy_env.py`) contain an `if __name__ == "__main__":` block demonstrating their standalone functionality.
-
-* **Run an Example:**
-    Activate your virtual environment first (`source venv/bin/activate` or `venv\Scripts\activate`).
     ```bash
-    python <module_name>.py
-    # Example:
+    streamlit run app.py
+    ```
+
+    *   Access the UI in your browser at the URL provided by Streamlit (usually `http://localhost:8501`).
+
+### Running the Agents (Examples)
+
+You can run the example agents directly from their respective files:
+
+*   **RL Agent:**
+
+    ```bash
     python rl_agent.py
     ```
 
-* **Specific Notes:**
-    * `ingestion_agent.py`: Creates a temporary directory (`temp_ingestion_source`) and dummy files within it. It monitors this directory. You might need `Pillow` installed (`pip install Pillow`) for the image example.
-    * `rl_agent.py`: Runs a training loop using `DummyEnv`. If `matplotlib` is installed (`pip install matplotlib`), it will attempt to plot the episode rewards at the end. Close the plot window to terminate the script.
-    * Other scripts (`nql_agent.py`, `automl_agent.py`, etc.) will execute their internal examples and print output to the console.
+*   **AutoML Agent:**
 
-## Limitations and Future Work
+    ```bash
+    python automl_agent.py
+    ```
 
-* **In-Memory Storage:** `TensorStorage` currently only stores data in memory. Data is lost when the process stops. Implementing persistent storage (e.g., HDF5, Parquet, database integration) is a crucial next step.
-* **Basic Agents:** The agents (Ingestion, RL, NQL, AutoML) are basic implementations. They lack advanced features, robust error handling, and sophisticated algorithms (e.g., NQL uses simple regex, AutoML uses only random search).
-* **Serialization:** Tensor serialization in the API uses simple nested lists, which might be inefficient for very large tensors.
-* **Scalability & Performance:** The current implementation is single-process and not optimized for performance or large-scale data handling.
-* **Security:** The API lacks authentication and authorization mechanisms.
+*   **Ingestion Agent:**
 
-Future work could involve addressing these limitations, implementing cloud integration, adding more sophisticated agent behaviors (e.g., using LLMs for NQL), supporting more data types and operations, and optimizing for performance and scalability.
+    ```bash
+    python ingestion_agent.py
+    ```
+
+    *   Note: The Ingestion Agent will monitor the `temp_ingestion_source` directory (created automatically) for new files.
+
+## Using Tensorus
+
+### API Endpoints
+
+The API provides the following main endpoints:
+
+*   **Datasets:**
+    *   `POST /datasets/create`: Create a new dataset.
+    *   `POST /datasets/{name}/ingest`: Ingest a tensor into a dataset.
+    *   `GET /datasets/{name}/fetch`: Retrieve all records from a dataset.
+    *   `GET /datasets`: List all available datasets.
+*   **Querying:**
+    *   `POST /query`: Execute an NQL query.
+*   **Agents:**
+    *   `GET /agents`: List all registered agents.
+    *   `GET /agents/{agent_id}/status`: Get the status of a specific agent.
+    *   `POST /agents/{agent_id}/start`: Start an agent.
+    *   `POST /agents/{agent_id}/stop`: Stop an agent.
+    *   `GET /agents/{agent_id}/logs`: Get recent logs for an agent.
+*   **Metrics & Monitoring:**
+    *   `GET /metrics/dashboard`: Get aggregated dashboard metrics.
+
+### Streamlit UI
+
+The Streamlit UI provides a user-friendly interface for:
+
+*   **Dashboard:** View basic system metrics and agent status.
+*   **Agent Control:** Start, stop, and view logs for agents.
+*   **NQL Chat:** Enter natural language queries and view results.
+*   **Data Explorer:** Browse datasets, preview data, and perform tensor operations.
+
+## Agent Details
+
+### Data Ingestion Agent
+
+*   **Functionality:** Monitors a source directory for new files, preprocesses them into tensors, and inserts them into TensorStorage.
+*   **Supported File Types:** CSV, PNG, JPG, JPEG, TIF, TIFF (can be extended).
+*   **Preprocessing:** Uses default functions for CSV and images (resize, normalize).
+*   **Configuration:**
+    *   `source_directory`: The directory to monitor.
+    *   `polling_interval_sec`: How often to check for new files.
+    *   `preprocessing_rules`: A dictionary mapping file extensions to custom preprocessing functions.
+
+### RL Agent
+
+*   **Functionality:** A Deep Q-Network (DQN) agent that learns from experiences stored in TensorStorage.
+*   **Environment:** Uses a `DummyEnv` for demonstration.
+*   **Experience Storage:** Stores experiences (state, action, reward, next_state, done) in TensorStorage.
+*   **Training:** Implements epsilon-greedy exploration and target network updates.
+*   **Configuration:**
+    *   `state_dim`: Dimensionality of the environment state.
+    *   `action_dim`: Number of discrete actions.
+    *   `hidden_size`: Hidden layer size for the DQN.
+    *   `lr`: Learning rate.
+    *   `gamma`: Discount factor.
+    *   `epsilon_*`: Epsilon-greedy parameters.
+    *   `target_update_freq`: Target network update frequency.
+    *   `batch_size`: Experience batch size.
+    *   `experience_dataset`: Dataset name for experiences.
+    *   `state_dataset`: Dataset name for state tensors.
+
+### AutoML Agent
+
+*   **Functionality:** Performs hyperparameter optimization using random search.
+*   **Model:** Trains a simple `DummyMLP` model.
+*   **Search Space:** Configurable hyperparameter search space (learning rate, hidden size, activation).
+*   **Evaluation:** Trains and evaluates models on synthetic data.
+*   **Results:** Stores trial results (parameters, score) in TensorStorage.
+*   **Configuration:**
+    *   `search_space`: Dictionary defining the hyperparameter search space.
+    *   `input_dim`: Input dimension for the model.
+    *   `output_dim`: Output dimension for the model.
+    *   `task_type`: Type of task ('regression' or 'classification').
+    *   `results_dataset`: Dataset name for storing results.
+
+## Future Work
+
+*   **Enhanced NQL:** Integrate a local or remote LLM for more robust natural language understanding.
+*   **Advanced Agents:** Develop more sophisticated agents for specific tasks.
+*   **Persistent Storage:** Replace in-memory TensorStorage with a persistent backend (e.g., database, cloud storage).
+*   **Scalability:** Implement chunking and other optimizations for handling very large tensors.
+*   **Security:** Add authentication and authorization.
+*   **Real-World Data:** Integrate with real-world data sources and environments.
+*   **Advanced Search:** Implement more advanced hyperparameter search algorithms (Bayesian Optimization, Hyperband).
+*   **Model Management:** Add capabilities for saving and loading trained models.
+*   **Streaming Data:** Support for streaming data sources.
+*   **Schema Validation:** Implement schema validation for datasets.
+*   **Resource Management:** Add controls for managing agent resource usage.
+
+## Contributing
+
+Contributions are welcome! Please feel free to open issues or submit pull requests.
 
 ## License
 
-MIT License
-
+[Your License] (e.g., MIT License)

@@ -1,570 +1,406 @@
-# app.py (Revised)
+# app.py
 """
-app.py - Main entry point for the extended Tensorus platform (FastAPI version).
-
-This file exposes FastAPI endpoints for:
-  • A Unified Operations Dashboard (via WebSocket for metrics).
-  • A Multi-Agent Control Panel (API endpoints for status/control placeholders).
-  * A Natural Language Query Chatbot endpoint.
-  * An Interactive Data Explorer endpoint (basic tensor operations).
-  * Built-in API Playground via FastAPI's /docs and /redoc endpoints.
-
-Prerequisites: The existing modules (tensor_storage.py, rl_agent.py, automl_agent.py,
-nql_agent.py, tensor_ops.py, dummy_env.py etc.) must exist in the same project directory or be importable.
+Streamlit frontend application for the Tensorus platform.
+Interacts with the FastAPI backend (api.py).
 """
 
-import logging
-import asyncio
+import streamlit as st
 import json
-import random
 import time
-from typing import List, Dict, Any, Optional, Set, Union
+import requests # Needed for ui_utils functions if integrated
+import logging # Needed for ui_utils functions if integrated
+import torch # Needed for integrated tensor utils
+from typing import List, Dict, Any, Optional, Union, Tuple # Needed for integrated tensor utils
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Path, Body, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field # Use Pydantic for request bodies
-import uvicorn
-import torch
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="Tensorus Platform",
+    page_icon="🧊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Import modules from Tensorus project
-try:
-    from tensor_storage import TensorStorage
-    # Assuming RLAgent init requires state/action dims matching DummyEnv + storage
-    from rl_agent import RLAgent
-    from dummy_env import DummyEnv
-    # Assuming AutoMLAgent needs storage, search_space, dims etc.
-    from automl_agent import AutoMLAgent
-    from nql_agent import NQLAgent
-    from tensor_ops import TensorOps # Import TensorOps correctly
-except ImportError as e:
-    print(f"Error importing Tensorus modules: {e}. Please ensure all required .py files are present.")
-    raise
-
-# --- Basic Logging Setup ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# --- Configure Logging (Optional but good practice) ---
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- Integrated Tensor Utilities ---
 
-# --- Initialize FastAPI app ---
-app = FastAPI(
-    title="Tensorus Agentic Platform API",
-    description="Extended interactive service layer for Tensorus: dashboard, agent control, NQL chatbot, data explorer.",
-    version="1.0.0" # Updated version
-)
-
-# --- CORS Middleware ---
-# Allow all origins for development ease, restrict in production
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # e.g., ["http://localhost:3000", "http://127.0.0.1:8501"] for frontend
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# --- Global Instances and State ---
-# Initialize global TensorStorage (in-memory)
-storage = TensorStorage()
-
-# Create default datasets if they don't exist
-try:
-    storage.create_dataset("rl_experiences")
-    storage.create_dataset("rl_states") # Needed by RLAgent implementation
-    storage.create_dataset("automl_results")
-    # Add a dataset for testing explorer
-    storage.create_dataset("sample_data")
-    storage.insert("sample_data", torch.randn(5, 3, 10))
-    storage.insert("sample_data", torch.rand(5, 3, 10) * 10)
-
-except ValueError:
-    logger.info("Datasets may already exist, skipping creation.")
-
-# Initialize agents (ensure parameters match module definitions)
-try:
-    dummy_env = DummyEnv()
-    # Correct RLAgent initialization based on its expected signature
-    rl_agent_instance = RLAgent(
-        tensor_storage=storage,
-        state_dim=dummy_env.state_dim,
-        action_dim=dummy_env.action_dim
-        # Use default hyperparameters or load from config
-    )
-
-    # Correct AutoMLAgent initialization (provide a basic search space)
-    # TODO: Define search space properly, potentially load from config
-    basic_search_space = {
-        'lr': lambda: 10**random.uniform(-5, -2),
-        'hidden_size': lambda: random.choice([32, 64, 128]),
-    }
-    automl_agent_instance = AutoMLAgent(
-        tensor_storage=storage,
-        search_space=basic_search_space,
-        input_dim=10, # Example input dim
-        output_dim=1, # Example output dim
-        results_dataset="automl_results" # Ensure dataset name matches
-    )
-    nql_agent_instance = NQLAgent(tensor_storage=storage)
-except Exception as e:
-     logger.exception(f"Error initializing agents: {e}")
-     raise RuntimeError(f"Agent initialization failed: {e}") from e
-
-
-# Global dictionary for placeholder agent status and in-memory logs
-# TODO: Replace simple logs with a proper logging service integration
-agent_status: Dict[str, Dict[str, Any]] = {
-    "ingestion": {
-        "name": "Data Ingestion",
-        "running": False,
-        "log": ["Ingestion agent initialized."],
-        "config": {"source_directory": "simulated_source", "polling_interval": 15}
-        },
-    "rl_trainer": {
-        "name": "RL Trainer",
-        "running": False,
-        "log": ["RL Trainer initialized."],
-        "config": rl_agent_instance.__dict__.get('config', {}) # Try to get config if agent stores it
-        },
-    "automl_search": {
-        "name": "AutoML Search",
-        "running": False,
-        "log": ["AutoML Search initialized."],
-        "config": {"search_space_keys": list(basic_search_space.keys()), "results_dataset": "automl_results"}
-        },
-    "nql_service": {
-        "name": "NQL Query Service",
-        "running": True, # Part of API, always running
-        "log": ["NQL Service ready."],
-        "config": {"parser_type": "regex"}
-        },
-}
-
-# --- Real-time Dashboard Logic ---
-class DashboardManager:
-    """Manages WebSocket connections and broadcasts dashboard metrics."""
-    def __init__(self):
-        self.active_connections: Set[WebSocket] = set()
-        self.metrics: Dict[str, Any] = {
-            "timestamp": time.time(),
-            "ingestion_rate": 0.0,
-            "query_latency_ms": 0.0,
-            "rl_episode": 0,
-            "rl_latest_reward": None,
-            "automl_trials": 0,
-            "automl_best_score": None,
-            "active_connections": 0,
-            # Add more metrics as needed
-        }
-        self._lock = asyncio.Lock() # Lock for managing connections
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        async with self._lock:
-            self.active_connections.add(websocket)
-            self.metrics["active_connections"] = len(self.active_connections)
-        await self.send_update(websocket) # Send current state on connect
-
-    async def disconnect(self, websocket: WebSocket):
-        async with self._lock:
-            self.active_connections.remove(websocket)
-            self.metrics["active_connections"] = len(self.active_connections)
-        # Optionally broadcast the updated connection count
-        # await self.broadcast()
-
-    async def send_update(self, websocket: WebSocket):
-         """Sends the current metrics to a single client."""
-         try:
-              await websocket.send_text(json.dumps(self.metrics))
-         except Exception as e:
-              logger.warning(f"Failed to send metrics to client: {e}")
-
-
-    async def broadcast(self):
-        """Broadcasts current metrics to all connected clients."""
-        async with self._lock:
-             if self.active_connections:
-                 message = json.dumps(self.metrics)
-                 # Use asyncio.gather for concurrent sending
-                 results = await asyncio.gather(
-                     *[client.send_text(message) for client in self.active_connections],
-                     return_exceptions=True # Don't crash if one client fails
-                 )
-                 # Log errors or handle disconnected clients based on results
-                 for i, result in enumerate(results):
-                      if isinstance(result, Exception):
-                           # Client likely disconnected, consider removing from active_connections
-                           logger.warning(f"Error broadcasting to client {i}: {result}")
-
-
-dashboard_manager = DashboardManager()
-
-async def update_metrics_periodically():
-    """Coroutine to periodically update and broadcast metrics."""
-    # TODO: Fetch real metrics from agents/storage when available
-    while True:
-        try:
-            dashboard_manager.metrics["timestamp"] = time.time()
-            # Simulate metric updates
-            if agent_status["ingestion"].get("running"):
-                dashboard_manager.metrics["ingestion_rate"] = round(random.uniform(5.0, 50.0), 1)
-            else:
-                 dashboard_manager.metrics["ingestion_rate"] = round(random.uniform(0.0, 2.0), 1)
-
-            dashboard_manager.metrics["query_latency_ms"] = round(random.uniform(50.0, 300.0), 1)
-
-            if agent_status["rl_trainer"].get("running"):
-                dashboard_manager.metrics["rl_episode"] += random.randint(0, 1)
-                dashboard_manager.metrics["rl_latest_reward"] = round(random.gauss(0, 5.0), 2) # Simulate fluctuating reward
-            # else: keep last known reward? Or set to None? Set to None if stopped.
-            #     dashboard_manager.metrics["rl_latest_reward"] = None
-
-
-            if agent_status["automl_search"].get("running"):
-                 dashboard_manager.metrics["automl_trials"] += random.randint(0, 1)
-                 # Simulate best score (assuming lower is better)
-                 current_best = dashboard_manager.metrics.get("automl_best_score")
-                 if current_best is None or random.random() < 0.1: # Chance of finding better
-                      new_best = random.uniform(0.1, 5.0) * (current_best if current_best else 1.0) * 0.95
-                      dashboard_manager.metrics["automl_best_score"] = round(new_best, 4)
-            # else: keep last known score
-
-            await dashboard_manager.broadcast()
-            await asyncio.sleep(2) # Update every 2 seconds
-        except Exception as e:
-            logger.exception(f"Error in metrics update loop: {e}")
-            await asyncio.sleep(10) # Wait longer if error occurs
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Start background tasks on application startup."""
-    logger.info("Starting background metrics update task...")
-    # Run the periodic update within the main asyncio loop
-    asyncio.create_task(update_metrics_periodically())
-
-
-# --- API Endpoints ---
-
-# 1. Unified Operations Dashboard
-@app.get("/dashboard", response_class=HTMLResponse, tags=["Dashboard"])
-async def get_dashboard_html():
-    """Serves a simple HTML dashboard using WebSocket for live metrics."""
-    # In a real application, this HTML would likely be served by a separate
-    # frontend framework (React, Vue, etc.) or a more sophisticated
-    # Python dashboarding library integration (like Dash within FastAPI).
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-    <head> <title>Tensorus Dashboard</title> </head>
-    <body>
-      <h1>Tensorus Live Dashboard</h1>
-      <pre id="metrics" style="white-space: pre-wrap; word-wrap: break-word;"></pre>
-      <script>
-        const metricsElement = document.getElementById('metrics');
-        let ws;
-        function connect() {
-          ws = new WebSocket(`ws://${window.location.host}/ws/dashboard`); // Use relative host
-          metricsElement.textContent = 'Connecting...';
-          ws.onmessage = function(event) {
-            try {
-              const data = JSON.parse(event.data);
-              metricsElement.textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-              metricsElement.textContent = 'Error parsing metrics: ' + event.data;
-            }
-          };
-          ws.onclose = function(event) {
-            metricsElement.textContent = 'Connection closed. Attempting to reconnect in 5 seconds...';
-            setTimeout(connect, 5000); // Attempt to reconnect
-          };
-          ws.onerror = function(error) {
-             metricsElement.textContent = 'WebSocket Error. Check console.';
-             console.error('WebSocket Error:', error);
-             ws.close(); // Ensure close is called on error before reconnect attempt
-          };
-        }
-        connect(); // Initial connection attempt
-      </script>
-    </body>
-    </html>
+def _validate_tensor_data(data: List[Any], shape: List[int]):
     """
-    return HTMLResponse(content=html_content)
+    Validates if the nested list structure of 'data' matches the 'shape'.
+    Raises ValueError on mismatch. (Optional validation)
+    """
+    if not shape:
+        if not isinstance(data, (int, float)): raise ValueError("Scalar tensor data must be a single number.")
+        return True
+    if not isinstance(data, list): raise ValueError(f"Data for shape {shape} must be a list.")
+    expected_len = shape[0]
+    if len(data) != expected_len: raise ValueError(f"Dimension 0 mismatch: Expected {expected_len}, got {len(data)} for shape {shape}.")
+    if len(shape) > 1:
+        for item in data: _validate_tensor_data(item, shape[1:])
+    elif len(shape) == 1:
+        if not all(isinstance(x, (int, float)) for x in data): raise ValueError("Innermost list elements must be numbers.")
+    return True
 
-@app.websocket("/ws/dashboard", name="dashboard_websocket")
-async def dashboard_websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint to stream dashboard metrics."""
-    await dashboard_manager.connect(websocket)
+def list_to_tensor(shape: List[int], dtype_str: str, data: Union[List[Any], int, float]) -> torch.Tensor:
+    """
+    Converts a Python list (potentially nested) or scalar into a PyTorch tensor
+    with the specified shape and dtype.
+    """
     try:
-        while True:
-            # Keep connection alive, optionally handle client pings
-            await websocket.receive_text() # Wait for message (or disconnect)
-            # await websocket.send_text("Pong") # Example pong response
-    except WebSocketDisconnect:
-        logger.info("Dashboard client disconnected.")
-    except Exception as e:
-         logger.error(f"Dashboard WebSocket error: {e}")
-    finally:
-        await dashboard_manager.disconnect(websocket)
-
-
-# 2. Multi-Agent Control Panel Endpoints
-
-# Pydantic model for agent configuration payload
-class AgentConfigPayload(BaseModel):
-     config: Dict[str, Any] = Field(..., description="New configuration dictionary for the agent.")
-
-@app.get("/agents/status", response_model=Dict[str, Dict[str, Any]], tags=["Agents"])
-async def get_all_agent_status():
-    """Returns the current status, logs (limited), and config for all agents."""
-    # Return a copy to avoid direct modification issues if any
-    status_copy = {}
-    for agent_id, data in agent_status.items():
-         status_copy[agent_id] = {
-             "name": data["name"],
-             "running": data["running"],
-             "config": data["config"],
-             "logs": data["log"][-10:] # Return last 10 log entries for brevity
-         }
-    return status_copy
-
-
-@app.post("/agents/{agent_id}/start", response_model=ApiResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Agents"])
-async def start_agent(agent_id: str = Path(..., description="ID of the agent (e.g., 'ingestion', 'rl_trainer').")):
-    """Starts a specified agent (Placeholder Action)."""
-    if agent_id not in agent_status:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found")
-    if agent_status[agent_id]["running"]:
-         return ApiResponse(success=False, message=f"Agent '{agent_id}' is already running.")
-
-    logger.info(f"API: Received start signal for agent '{agent_id}' (Placeholder).")
-    agent_status[agent_id]["running"] = True
-    agent_status[agent_id]["log"].append(f"{time.strftime('%H:%M:%S')} - Agent '{agent_id}' started (simulated).")
-    # TODO: Implement actual agent process starting logic (e.g., using subprocess, celery, k8s job)
-    return ApiResponse(success=True, message=f"Start signal sent to agent '{agent_id}'.")
-
-
-@app.post("/agents/{agent_id}/stop", response_model=ApiResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Agents"])
-async def stop_agent(agent_id: str = Path(..., description="ID of the agent.")):
-    """ Stops a specified agent (Placeholder Action)."""
-    if agent_id not in agent_status:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found")
-    if not agent_status[agent_id]["running"]:
-         return ApiResponse(success=False, message=f"Agent '{agent_id}' is already stopped.")
-
-    logger.info(f"API: Received stop signal for agent '{agent_id}' (Placeholder).")
-    agent_status[agent_id]["running"] = False
-    agent_status[agent_id]["log"].append(f"{time.strftime('%H:%M:%S')} - Agent '{agent_id}' stopped (simulated).")
-    # TODO: Implement actual agent process stopping logic
-    return ApiResponse(success=True, message=f"Stop signal sent to agent '{agent_id}'.")
-
-
-@app.post("/agents/{agent_id}/configure", response_model=ApiResponse, tags=["Agents"])
-async def configure_agent(agent_id: str = Path(..., description="ID of the agent."), payload: AgentConfigPayload = Body(...)):
-    """Dynamically configures an agent (updates placeholder config)."""
-    if agent_id not in agent_status:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found")
-
-    new_config = payload.config
-    logger.info(f"API: Received configuration update for agent '{agent_id}': {new_config}")
-    # Update the placeholder config
-    agent_status[agent_id]["config"].update(new_config)
-    agent_status[agent_id]["log"].append(f"{time.strftime('%H:%M:%S')} - Agent '{agent_id}' reconfigured (simulated): {new_config}")
-    # TODO: Implement logic to apply configuration to the actual running agent process
-    return ApiResponse(success=True, message=f"Agent '{agent_id}' configuration updated.", data={"new_config": agent_status[agent_id]["config"]})
-
-
-# 3. Natural Language Query Chatbot Endpoint
-
-# Pydantic model for chat query
-class ChatQueryRequest(BaseModel):
-     query: str = Field(..., description="The natural language query from the user.")
-
-# Pydantic model for chat response
-class ChatQueryResponse(BaseModel):
-    query: str
-    response_text: str
-    results: Optional[List[Dict[str, Any]]] = None # Include structured results if applicable
-    error: Optional[str] = None
-
-@app.post("/chat/query", response_model=ChatQueryResponse, tags=["Chatbot"])
-async def chat_query_endpoint(request: ChatQueryRequest):
-    """Processes a natural language query via NQL agent (Regex version)."""
-    query_str = request.query
-    logger.info(f"Received chat query: '{query_str}'")
-    # Use the existing NQL Agent (regex based)
-    try:
-        nql_result = nql_agent_instance.process_query(query_str)
-        # TODO: Integrate real LLM here for better understanding and response generation.
-
-        if nql_result.get("success"):
-            response_text = nql_result.get("message", "Query processed.")
-            count = nql_result.get("count")
-            if count is not None:
-                 response_text += f" Found {count} record(s)."
-
-            serialized_results = None
-            if nql_result.get("results"):
-                 serialized_results = []
-                 for record in nql_result["results"]:
-                      # Serialize tensor to list for JSON response
-                      shape, dtype, data_list = tensor_to_list(record['tensor'])
-                      serialized_results.append({
-                          "record_id": record['metadata'].get('record_id', 'N/A'),
-                          "shape": shape,
-                          "dtype": dtype,
-                          "data_preview": data_list[:min(len(data_list), 5)], # Preview data
-                          "metadata": record['metadata']
-                      })
-            return ChatQueryResponse(query=query_str, response_text=response_text, results=serialized_results)
-        else:
-            # NQL agent reported failure (parsing error, etc.)
-            return ChatQueryResponse(query=query_str, response_text="Sorry, I couldn't process that query.", error=nql_result.get("message"))
-
-    except Exception as e:
-        logger.exception(f"Error processing chat query '{query_str}': {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error processing query: {e}")
-
-
-# 4. Interactive Data Explorer Endpoints
-
-# Pydantic models for Explorer
-class ExplorerQueryPayload(BaseModel):
-    dataset: str = Field(..., description="Target dataset name.")
-    operation: str = Field(..., description="Tensor operation (e.g., 'slice', 'info', 'head').")
-    params: Optional[Dict[str, Any]] = Field({}, description="Parameters for the operation.")
-    tensor_index: int = Field(0, description="Index of the tensor within the dataset to operate on.")
-
-
-@app.get("/explorer/datasets", response_model=Dict[str, List[str]], tags=["Data Explorer"])
-async def list_explorer_datasets():
-    """Lists dataset names available for exploration."""
-    # TODO: Add filtering or pagination if many datasets exist
-    datasets = list(storage.datasets.keys())
-    return {"datasets": datasets}
-
-
-@app.get("/explorer/dataset/{dataset_name}/preview", response_model=Dict[str, Any], tags=["Data Explorer"])
-async def get_dataset_preview(dataset_name: str = Path(..., description="Dataset name."), limit: int = 5):
-    """Retrieves metadata and tensor previews for a dataset."""
-    try:
-        # Fetch records with metadata
-        records = storage.get_dataset_with_metadata(dataset_name)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-
-    preview_data = []
-    for i, record in enumerate(records):
-        if i >= limit:
-            break
-        shape, dtype, data_list = tensor_to_list(record['tensor'])
-        preview_data.append({
-             "index": i,
-             "record_id": record['metadata'].get('record_id', 'N/A'),
-             "shape": shape,
-             "dtype": dtype,
-             "metadata": record['metadata'],
-             "data_preview": data_list[:min(len(data_list), 5)] # Preview only first few elements
-        })
-    return {"dataset": dataset_name, "record_count": len(records), "preview": preview_data}
-
-
-@app.post("/explorer/operate", response_model=Dict[str, Any], tags=["Data Explorer"])
-async def explorer_operate_on_tensor(payload: ExplorerQueryPayload = Body(...)):
-    """Performs a specified operation on a tensor within a dataset."""
-    dataset_name = payload.dataset
-    operation = payload.operation.lower()
-    params = payload.params
-    tensor_index = payload.tensor_index
-
-    try:
-        # Fetch the specific tensor (more efficient than getting the whole dataset)
-        # NOTE: get_dataset() gets all; need a get_tensor_at_index method ideally.
-        # Workaround: get all and index. Inefficient for large datasets.
-        dataset_tensors = storage.get_dataset(dataset_name)
-        if not dataset_tensors or tensor_index >= len(dataset_tensors):
-             raise HTTPException(status_code=404, detail=f"Tensor index {tensor_index} out of bounds for dataset '{dataset_name}'")
-        tensor = dataset_tensors[tensor_index]
-    except ValueError as e: # Dataset not found
-        raise HTTPException(status_code=404, detail=str(e))
-    except IndexError:
-         raise HTTPException(status_code=404, detail=f"Tensor index {tensor_index} invalid.")
-
-    result = None
-    result_metadata = {"operation": operation, "params": params, "original_shape": list(tensor.shape)}
-
-    try:
-        if operation == "info":
-            result_metadata["dtype"] = str(tensor.dtype)
-            result_metadata["device"] = str(tensor.device)
-            result_metadata["num_elements"] = tensor.numel()
-            result = "See metadata for info." # No tensor data returned for 'info'
-        elif operation == "head":
-            count = params.get("count", 5)
-            result = tensor.flatten()[:count] # Get first few flattened elements
-        elif operation == "slice":
-            # Basic slicing on a specified dimension
-            dim = params.get("dim", 0)
-            start = params.get("start", 0)
-            end = params.get("end", None) # Slice to end if not specified
-            if not isinstance(dim, int) or not isinstance(start, int):
-                 raise ValueError("Slice 'dim' and 'start' must be integers.")
-            if end is not None and not isinstance(end, int):
-                 raise ValueError("Slice 'end' must be an integer if provided.")
-
-            # Construct slice object dynamically
-            slices = [slice(None)] * tensor.ndim # slice(None) means ':'
-            if dim < 0 or dim >= tensor.ndim:
-                raise ValueError(f"Dimension {dim} out of range for tensor with {tensor.ndim} dimensions.")
-            slices[dim] = slice(start, end) # Create the slice for the target dimension
-
-            result = tensor[tuple(slices)] # Apply the tuple of slices
-            result_metadata["result_shape"] = list(result.shape)
-        # TODO: Add more operations using TensorOps or torch directly (e.g., 'mean', 'sum', 'reshape')
-        # Example using TensorOps if available and has static methods:
-        # elif operation == "mean":
-        #     dim = params.get("dim", None) # Optional dimension
-        #     result = TensorOps.mean(tensor, dim=dim) # Assuming TensorOps.mean exists
-        else:
-            raise ValueError(f"Unsupported operation: '{operation}'")
-
-        # Serialize result tensor if it's a tensor
-        if isinstance(result, torch.Tensor):
-            _, _, result_list = tensor_to_list(result)
-        else:
-             result_list = result # Use result directly if not a tensor (like info message)
-
-        return {"success": True, "metadata": result_metadata, "result_data": result_list}
-
-    except Exception as e:
-        logger.error(f"Error during explorer operation '{operation}' on dataset '{dataset_name}': {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"Operation failed: {e}")
-
-
-# 5. API Playground and Documentation Hub (Provided by FastAPI)
-# Endpoints /docs and /redoc are automatically available.
-
-
-# --- Root Endpoint ---
-@app.get("/", tags=["Root"])
-async def root():
-    """Root endpoint providing platform overview and documentation links."""
-    return JSONResponse(content={
-        "message": "Welcome to Tensorus - Agentic Tensor Database/Data Lake API",
-        "version": app.version,
-        "documentation": {
-            "Swagger_UI": "/docs",
-            "ReDoc": "/redoc"
-        },
-        "features": {
-             "Dashboard_Metrics": "/metrics/dashboard (WebSocket at /ws/dashboard)",
-             "Agent_Control": "/agents/status",
-             "NQL_Chat": "/chat/query (POST)",
-             "Data_Explorer": "/explorer/datasets",
+        dtype_map = {
+            'float32': torch.float32, 'float': torch.float,
+            'float64': torch.float64, 'double': torch.double,
+            'int32': torch.int32, 'int': torch.int,
+            'int64': torch.int64, 'long': torch.long,
+            'bool': torch.bool
         }
-    })
+        torch_dtype = dtype_map.get(dtype_str.lower())
+        if torch_dtype is None: raise ValueError(f"Unsupported dtype string: {dtype_str}")
 
-# --- Main Execution ---
-if __name__ == "__main__":
-    logger.info(f"Starting Tensorus FastAPI Server v{app.version}...")
-    # Recommended: Use 'uvicorn app:app --reload' from terminal for development
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+        tensor = torch.tensor(data, dtype=torch_dtype)
+
+        if list(tensor.shape) != shape:
+            logger.debug(f"Initial tensor shape {list(tensor.shape)} differs from target {shape}. Attempting reshape.")
+            try:
+                tensor = tensor.reshape(shape)
+            except RuntimeError as reshape_err:
+                raise ValueError(f"Created tensor shape {list(tensor.shape)} != requested {shape} and reshape failed: {reshape_err}") from reshape_err
+
+        return tensor
+    except (TypeError, ValueError) as e:
+        logger.error(f"Error converting list to tensor: {e}. Shape: {shape}, Dtype: {dtype_str}")
+        raise ValueError(f"Failed tensor conversion: {e}") from e
+    except Exception as e:
+        logger.exception(f"Unexpected error during list_to_tensor: {e}")
+        raise ValueError(f"Unexpected tensor conversion error: {e}") from e
+
+def tensor_to_list(tensor: torch.Tensor) -> Tuple[List[int], str, List[Any]]:
+    """
+    Converts a PyTorch tensor back into its shape, dtype string, and nested list representation.
+    """
+    if not isinstance(tensor, torch.Tensor):
+        raise TypeError("Input must be a torch.Tensor")
+    shape = list(tensor.shape)
+    dtype_str = str(tensor.dtype).split('.')[-1]
+    data = tensor.tolist()
+    return shape, dtype_str, data
+
+# --- Integrated UI Utilities (from former ui_utils.py) ---
+
+# Define the base URL of your FastAPI backend
+API_BASE_URL = "http://127.0.0.1:8000" # Make sure this matches where api.py runs
+
+def get_api_status():
+    """Checks if the backend API is reachable."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/", timeout=2)
+        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
+        return True, response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API connection error: {e}")
+        return False, {"error": str(e)}
+
+def get_agent_status():
+    """Fetches status for all agents from the backend."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/agents/status", timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error fetching agent status: {e}")
+        return None
+
+def start_agent(agent_id: str):
+    """Sends a request to start an agent."""
+    try:
+        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/start", timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error starting agent {agent_id}: {e}")
+        return {"success": False, "message": str(e)}
+
+def stop_agent(agent_id: str):
+    """Sends a request to stop an agent."""
+    try:
+        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/stop", timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error stopping agent {agent_id}: {e}")
+        return {"success": False, "message": str(e)}
+
+def configure_agent(agent_id: str, config: dict):
+    """Sends a request to configure an agent."""
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/agents/{agent_id}/configure",
+            json={"config": config},
+            timeout=5
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error configuring agent {agent_id}: {e}")
+        return {"success": False, "message": str(e)}
+
+def post_nql_query(query: str):
+    """Sends an NQL query to the backend."""
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/chat/query",
+            json={"query": query},
+            timeout=15 # Allow more time for potentially complex queries
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error posting NQL query: {e}")
+        return {"query": query, "response_text": "Error connecting to backend.", "error": str(e)}
+
+def get_datasets():
+    """Fetches the list of available datasets."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/explorer/datasets", timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("datasets", [])
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error fetching datasets: {e}")
+        return [] # Return empty list on error
+
+def get_dataset_preview(dataset_name: str, limit: int = 5):
+    """Fetches preview data for a specific dataset."""
+    try:
+        response = requests.get(f"{API_BASE_URL}/explorer/dataset/{dataset_name}/preview?limit={limit}", timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error fetching preview for {dataset_name}: {e}")
+        return None
+
+def operate_explorer(dataset: str, operation: str, index: int, params: dict):
+    """Sends an operation request to the data explorer."""
+    payload = {
+        "dataset": dataset,
+        "operation": operation,
+        "tensor_index": index,
+        "params": params
+    }
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/explorer/operate",
+            json=payload,
+            timeout=15 # Allow time for computation
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error performing operation '{operation}' on {dataset}: {e}")
+        return {"success": False, "metadata": {"error": str(e)}, "result_data": None}
+
+
+# --- Initialize Session State ---
+if 'agent_status' not in st.session_state:
+    st.session_state.agent_status = None
+if 'datasets' not in st.session_state:
+    st.session_state.datasets = []
+if 'selected_dataset' not in st.session_state:
+    st.session_state.selected_dataset = None
+if 'dataset_preview' not in st.session_state:
+    st.session_state.dataset_preview = None
+if 'explorer_result' not in st.session_state:
+    st.session_state.explorer_result = None
+if 'nql_response' not in st.session_state:
+    st.session_state.nql_response = None
+
+
+# --- Sidebar ---
+with st.sidebar:
+    st.title("Tensorus Control")
+    st.markdown("---")
+
+    # API Status Check
+    st.subheader("API Status")
+    api_ok, api_info = get_api_status() # Use integrated function
+    if api_ok:
+        st.success(f"Connected to API v{api_info.get('version', 'N/A')}")
+    else:
+        st.error(f"API Connection Failed: {api_info.get('error', 'Unknown error')}")
+        st.warning("Ensure the backend (`uvicorn api:app ...`) is running.")
+        st.stop()
+
+    st.markdown("---")
+    # Navigation
+    app_mode = st.radio(
+        "Select Feature",
+        ("Dashboard", "Agent Control", "NQL Chat", "Data Explorer")
+    )
+    st.markdown("---")
+
+
+# --- Main Page Content ---
+
+if app_mode == "Dashboard":
+    st.title("📊 Operations Dashboard")
+    st.warning("Live WebSocket dashboard view is best accessed directly via the backend's `/dashboard` HTML page or a dedicated JS frontend. This is a simplified view.")
+    st.markdown(f"Access the basic live dashboard here.", unsafe_allow_html=True) # Link to backend dashboard
+    st.info("This Streamlit view doesn't currently support live WebSocket updates.")
+
+
+elif app_mode == "Agent Control":
+    st.title("🤖 Agent Control Panel")
+
+    if st.button("Refresh Agent Status"):
+        st.session_state.agent_status = get_agent_status() # Use integrated function
+
+    if st.session_state.agent_status:
+        agents = st.session_state.agent_status
+        agent_ids = list(agents.keys())
+
+        if not agent_ids:
+            st.warning("No agents reported by the backend.")
+        else:
+            selected_agent_id = st.selectbox("Select Agent", agent_ids)
+
+            if selected_agent_id:
+                agent_info = agents[selected_agent_id]
+                st.subheader(f"Agent: {agent_info.get('name', selected_agent_id)}")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Status", "Running" if agent_info.get('running') else "Stopped")
+                    st.write("**Configuration:**")
+                    st.json(agent_info.get('config', {}))
+                with col2:
+                    st.write("**Recent Logs:**")
+                    st.code('\n'.join(agent_info.get('logs', [])), language='log')
+
+                st.write("**Actions:**")
+                btn_col1, btn_col2, btn_col3 = st.columns(3)
+                with btn_col1:
+                    if st.button("Start Agent", key=f"start_{selected_agent_id}", disabled=agent_info.get('running')):
+                        result = start_agent(selected_agent_id) # Use integrated function
+                        st.toast(result.get("message", "Request sent."))
+                        st.session_state.agent_status = get_agent_status() # Refresh status
+                        st.rerun()
+                with btn_col2:
+                    if st.button("Stop Agent", key=f"stop_{selected_agent_id}", disabled=not agent_info.get('running')):
+                        result = stop_agent(selected_agent_id) # Use integrated function
+                        st.toast(result.get("message", "Request sent."))
+                        st.session_state.agent_status = get_agent_status() # Refresh status
+                        st.rerun()
+
+    else:
+        st.info("Click 'Refresh Agent Status' to load agent information.")
+
+
+elif app_mode == "NQL Chat":
+    st.title("💬 Natural Language Query (NQL)")
+    st.info("Ask questions about the data stored in Tensorus (e.g., 'show me tensors from rl_experiences', 'count records in sample_data').")
+
+    user_query = st.text_input("Enter your query:", key="nql_query_input")
+
+    if st.button("Submit Query", key="nql_submit"):
+        if user_query:
+            with st.spinner("Processing query..."):
+                st.session_state.nql_response = post_nql_query(user_query) # Use integrated function
+        else:
+            st.warning("Please enter a query.")
+
+    if st.session_state.nql_response:
+        resp = st.session_state.nql_response
+        st.markdown("---")
+        st.write(f"**Query:** {resp.get('query')}")
+        if resp.get("error"):
+            st.error(f"Error: {resp.get('error')}")
+        else:
+            st.success(f"**Response:** {resp.get('response_text')}")
+            if resp.get("results"):
+                st.write("**Results Preview:**")
+                st.json(resp.get("results"))
+        st.session_state.nql_response = None
+
+
+elif app_mode == "Data Explorer":
+    st.title("🔍 Data Explorer")
+
+    if not st.session_state.datasets or st.button("Refresh Datasets"):
+        st.session_state.datasets = get_datasets() # Use integrated function
+
+    if not st.session_state.datasets:
+        st.warning("No datasets found or failed to fetch from backend.")
+    else:
+        st.session_state.selected_dataset = st.selectbox(
+            "Select Dataset",
+            st.session_state.datasets,
+            index=st.session_state.datasets.index(st.session_state.selected_dataset) if st.session_state.selected_dataset in st.session_state.datasets else 0
+        )
+
+        if st.session_state.selected_dataset:
+            if st.button("Show Preview", key="preview_btn"):
+                with st.spinner(f"Fetching preview for {st.session_state.selected_dataset}..."):
+                    st.session_state.dataset_preview = get_dataset_preview(st.session_state.selected_dataset) # Use integrated function
+
+            if st.session_state.dataset_preview:
+                st.subheader(f"Preview: {st.session_state.dataset_preview.get('dataset')}")
+                st.write(f"Total Records: {st.session_state.dataset_preview.get('record_count')}")
+                st.dataframe(st.session_state.dataset_preview.get('preview', []))
+                st.markdown("---")
+
+            st.subheader("Perform Operation")
+            record_count = st.session_state.dataset_preview.get('record_count', 1) if st.session_state.dataset_preview else 1
+            tensor_index = st.number_input("Select Tensor Index", min_value=0, max_value=max(0, record_count - 1), value=0, step=1)
+
+            operations = ["info", "head", "slice", "sum", "mean", "reshape", "transpose"]
+            selected_op = st.selectbox("Select Operation", operations)
+
+            params = {}
+            # Dynamic parameter inputs
+            if selected_op == "head":
+                params['count'] = st.number_input("Count", min_value=1, value=5, step=1)
+            elif selected_op == "slice":
+                params['dim'] = st.number_input("Dimension (dim)", value=0, step=1)
+                params['start'] = st.number_input("Start Index", value=0, step=1)
+                params['end'] = st.number_input("End Index (optional)", value=None, step=1, format="%d")
+                params['step'] = st.number_input("Step (optional)", value=None, step=1, format="%d")
+            elif selected_op in ["sum", "mean"]:
+                dim_input = st.text_input("Dimension(s) (optional, e.g., 0 or 0,1)")
+                if dim_input:
+                    try: params['dim'] = [int(x.strip()) for x in dim_input.split(',')] if ',' in dim_input else int(dim_input)
+                    except ValueError: st.warning("Invalid dimension format.")
+                params['keepdim'] = st.checkbox("Keep Dimensions (keepdim)", value=False)
+            elif selected_op == "reshape":
+                shape_input = st.text_input("Target Shape (comma-separated, e.g., 2,3,5)")
+                if shape_input:
+                    try: params['shape'] = [int(x.strip()) for x in shape_input.split(',')]
+                    except ValueError: st.warning("Invalid shape format.")
+            elif selected_op == "transpose":
+                params['dim0'] = st.number_input("Dimension 0", value=0, step=1)
+                params['dim1'] = st.number_input("Dimension 1", value=1, step=1)
+
+            if st.button("Run Operation", key="run_op_btn"):
+                valid_request = True
+                if selected_op == "reshape" and not params.get('shape'):
+                    st.error("Target Shape is required for reshape.")
+                    valid_request = False
+
+                if valid_request:
+                    with st.spinner(f"Running {selected_op} on {st.session_state.selected_dataset}[{tensor_index}]..."):
+                        st.session_state.explorer_result = operate_explorer( # Use integrated function
+                            st.session_state.selected_dataset,
+                            selected_op,
+                            tensor_index,
+                            params
+                        )
+
+            if st.session_state.explorer_result:
+                st.markdown("---")
+                st.subheader("Operation Result")
+                st.write("**Metadata:**")
+                st.json(st.session_state.explorer_result.get("metadata", {}))
+                st.write("**Result Data:**")
+                st.json(st.session_state.explorer_result.get("result_data", "No data returned."))
+
