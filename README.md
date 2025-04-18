@@ -115,7 +115,7 @@ You can run the example agents directly from their respective files:
 
 ## Using Tensorus
 
-### API Endpoints
+### API Endpointss: ([tensorus-api.hf.space/docs](tensorus-api.hf.space/docs))
 
 The API provides the following main endpoints:
 
@@ -208,4 +208,4 @@ Contributions are welcome! Please feel free to open issues or submit pull reques
 
 ## License
 
-[Your License] (e.g., MIT License)
+MIT License
