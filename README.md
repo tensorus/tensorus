@@ -26,9 +26,15 @@ Tensorus is an experimental platform for managing and querying tensor data, desi
 *   `automl_agent.py`: The AutoML agent.
 *   `tensor_ops.py`: A library of tensor operations.
 *   `dummy_env.py`: A simple environment for the RL agent.
-*   `tensor_utils.py`: Utility functions for tensor manipulation and conversion.
 *   `ui_utils.py`: Utility functions for the Streamlit UI.
 *   `requirements.txt`: Lists the project's dependencies.
+
+## Huggingface Demo
+
+You can try Tensorus online via Huggingface Spaces:
+
+*   **API Documentation:** [Swagger UI](https://tensorus-api.hf.space/docs) | [ReDoc](https://tensorus-api.hf.space/redoc)
+*   **Dashboard UI:** [Streamlit Dashboard](https://tensorus-dashboard.hf.space)
 
 ## Getting Started
 
@@ -115,7 +121,7 @@ You can run the example agents directly from their respective files:
 
 ## Using Tensorus
 
-### API Endpoints: ([https://tensorus-api.hf.space/docs](https://tensorus-api.hf.space/docs))
+### API Endpoints
 
 The API provides the following main endpoints:
 
