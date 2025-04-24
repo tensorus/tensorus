@@ -55,8 +55,8 @@ You can try Tensorus online via Huggingface Spaces:
 1.  Clone the repository:
 
     ```bash
-    git clone <your_repository_url>
-    cd Tensorus_MVP
+    git clone https://github.com/tensorus/tensorus.git
+    cd tensorus
     ```
 
 2.  Create a virtual environment (recommended):
