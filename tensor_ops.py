@@ -108,6 +108,57 @@ class TensorOps:
             logging.error(f"Error during division: {e}. t1 shape: {t1.shape}, t2 type: {type(t2)}, t2 shape (if tensor): {t2.shape if isinstance(t2, torch.Tensor) else 'N/A'}")
             raise e
 
+    @staticmethod
+    def power(t1: torch.Tensor, t2: Union[torch.Tensor, float, int]) -> torch.Tensor:
+        """
+        Computes the element-wise power of tensor t1 to the exponent t2.
+
+        Args:
+            t1 (torch.Tensor): The base tensor.
+            t2 (Union[torch.Tensor, float, int]): The exponent, which can be
+                a tensor, a float, or an integer.
+
+        Returns:
+            torch.Tensor: The result of t1 raised to the power of t2, element-wise.
+
+        Raises:
+            TypeError: If t1 is not a torch.Tensor, or if t2 is a tensor but
+                       not a torch.Tensor.
+            RuntimeError: If an error occurs during the torch.pow computation.
+        """
+        TensorOps._check_tensor(t1)
+        if isinstance(t2, torch.Tensor):
+            TensorOps._check_tensor(t2)
+        try:
+            return torch.pow(t1, t2)
+        except RuntimeError as e:
+            logging.error(f"Error during power operation: {e}. t1 shape: {t1.shape}, t2 type: {type(t2)}, t2 shape (if tensor): {t2.shape if isinstance(t2, torch.Tensor) else 'N/A'}")
+            raise e
+
+    @staticmethod
+    def log(tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the element-wise natural logarithm of a tensor.
+
+        Args:
+            tensor (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The natural logarithm of the input tensor.
+
+        Raises:
+            TypeError: If the input is not a torch.Tensor.
+            RuntimeError: If an error occurs during the torch.log computation.
+        """
+        TensorOps._check_tensor(tensor)
+        if torch.any(tensor <= 0):
+            logging.warning("Logarithm of non-positive value encountered in tensor. This will result in NaN or -inf values.")
+        try:
+            return torch.log(tensor)
+        except RuntimeError as e:
+            logging.error(f"Error during log operation: {e}. Input tensor shape: {tensor.shape}")
+            raise e
+
     # --- Matrix and Dot Operations ---
 
     @staticmethod
