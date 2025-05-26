@@ -44,42 +44,35 @@ You can try Tensorus online via Huggingface Spaces:
 graph TD
     %% Subgraphs
     subgraph User_Interaction ["User Interaction"]
-        UI[Streamlit UI (app.py)]
+        UI[Streamlit UI - app.py]
     end
-
     subgraph Backend_Services ["Backend Services"]
-        API[FastAPI Backend (api.py)]
+        API[FastAPI Backend - api.py]
     end
-
     subgraph Core_Storage ["Core Storage"]
-        TS[TensorStorage (tensor_storage.py)]
+        TS[TensorStorage - tensor_storage.py]
     end
-
     subgraph Agents_Group ["Agents"]
-        IA[Ingestion Agent (ingestion_agent.py)]
-        NQLA[NQL Agent (nql_agent.py)]
-        RLA[RL Agent (rl_agent.py)]
-        AutoMLA[AutoML Agent (automl_agent.py)]
+        IA[Ingestion Agent - ingestion_agent.py]
+        NQLA[NQL Agent - nql_agent.py]
+        RLA[RL Agent - rl_agent.py]
+        AutoMLA[AutoML Agent - automl_agent.py]
     end
-
     subgraph Tensor_Operations_Library ["Tensor Operations Library"]
-        TOps[TensorOps (tensor_ops.py)]
+        TOps[TensorOps - tensor_ops.py]
     end
-
     %% Data flows
-    UI   -->|"/predict", "/train"| API
-    API  -->|enqueue raw data| IA
-    IA   -->|writes tensors| TS
-    TS   -->|reads tensors| NQLA
-    TS   -->|reads tensors| RLA
-    TS   -->|reads tensors| AutoMLA
-
+    UI -->|/predict, /train| API
+    API -->|enqueue raw data| IA
+    IA -->|writes tensors| TS
+    TS -->|reads tensors| NQLA
+    TS -->|reads tensors| RLA
+    TS -->|reads tensors| AutoMLA
     %% Agents invoking the ops library
-    NQLA    -->|vector math| TOps
-    RLA     -->|policy eval| TOps
+    NQLA -->|vector math| TOps
+    RLA -->|policy eval| TOps
     AutoMLA -->|model tuning| TOps
-
-    %% Ops writing back (optional)
+    %% Ops writing back optional
     TOps -->|save intermediates| TS
 ```
 
