@@ -42,51 +42,7 @@ You can try Tensorus online via Huggingface Spaces:
 
 ```mermaid
 graph TD
-    subgraph User_Interaction ["User Interaction"]
-        UI[Streamlit UI (app.py)]
-    end
-
-    subgraph Backend_Services ["Backend Services"]
-        API[FastAPI Backend (api.py)]
-    end
-
-    subgraph Core_Storage ["Core Storage"]
-        TS[TensorStorage (tensor_storage.py)]
-    end
-
-    subgraph Agents_Group ["Agents"]
-        IA[Ingestion Agent (ingestion_agent.py)]
-        NQLA[NQL Agent (nql_agent.py)]
-        RLA[RL Agent (rl_agent.py)]
-        AutoMLA[AutoML Agent (automl_agent.py)]
-    end
-
-    subgraph Tensor_Operations_Library ["Tensor Operations Library"]
-        TOps[TensorOps (tensor_ops.py)]
-    end
-
-    UI -- HTTP Requests --> API
-    API -- Interacts with --> TS
-    API -- Controls/Manages --> IA
-    API -- Controls/Manages --> NQLA
-    API -- Controls/Manages --> RLA
-    API -- Controls/Manages --> AutoMLA
-
-    IA -- Stores/Retrieves Data --> TS
-    NQLA -- Queries Data from --> TS
-    RLA -- Stores/Retrieves Experiences & States --> TS
-    AutoMLA -- Stores/Retrieves Trial Data --> TS
-
-    IA -- Uses --> TOps
-    RLA -- Uses --> TOps
-    AutoMLA -- Uses --> TOps
-    TS -- May Use (Internally) --> TOps
-
-    style UI fill:#f9f,stroke:#333,stroke-width:2px
-    style API fill:#ccf,stroke:#333,stroke-width:2px
-    style TS fill:#cfc,stroke:#333,stroke-width:2px
-    style Agents_Group fill:#ff9,stroke:#333,stroke-width:2px
-    style Tensor_Operations_Library fill:#fcf,stroke:#333,stroke-width:2px
+    A[Start] --> B(End)
 ```
 
 ## Getting Started
