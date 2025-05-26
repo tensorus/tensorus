@@ -42,26 +42,26 @@ You can try Tensorus online via Huggingface Spaces:
 
 ```mermaid
 graph TD
-    subgraph "User Interaction"
+    subgraph User_Interaction_Graph ["User Interaction"]
         UI[Streamlit UI (app.py)]
     end
 
-    subgraph "Backend Services"
+    subgraph Backend_Services_Graph ["Backend Services"]
         API[FastAPI Backend (api.py)]
     end
 
-    subgraph "Core Storage"
+    subgraph Core_Storage_Graph ["Core Storage"]
         TS[TensorStorage (tensor_storage.py)]
     end
 
-    subgraph "Agents"
+    subgraph Agents_Graph ["Agents"]
         IA[Ingestion Agent (ingestion_agent.py)]
         NQLA[NQL Agent (nql_agent.py)]
         RLA[RL Agent (rl_agent.py)]
         AutoMLA[AutoML Agent (automl_agent.py)]
     end
 
-    subgraph "Tensor Operations Library"
+    subgraph Tensor_Operations_Library_Graph ["Tensor Operations Library"]
         TOps[TensorOps (tensor_ops.py)]
     end
 
