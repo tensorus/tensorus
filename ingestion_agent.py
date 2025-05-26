@@ -26,6 +26,7 @@ import csv
 from PIL import Image
 import torch
 import torchvision.transforms as T # Use torchvision for image transforms
+import collections # Added import
 
 from typing import Dict, Callable, Optional, Tuple, List, Any
 from tensor_storage import TensorStorage # Import our storage module
@@ -33,6 +34,19 @@ from tensor_storage import TensorStorage # Import our storage module
 # Configure basic logging (can be customized further)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+# --- Custom Log Handler ---
+class AgentMemoryLogHandler(logging.Handler):
+    """
+    A custom logging handler that stores log records in a deque.
+    """
+    def __init__(self, deque: collections.deque):
+        super().__init__()
+        self.deque = deque
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.deque.append(self.format(record))
 
 
 # --- Default Preprocessing Functions ---
@@ -163,8 +177,27 @@ class DataIngestionAgent:
         self.processed_files = set() # Keep track of files already processed in this session
         self._stop_event = threading.Event()
         self._monitor_thread = None
+        self.status = "stopped" # Status reporting
+        self.logs = collections.deque(maxlen=100) # Log capturing
+
+        # Setup custom log handler
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        memory_handler = AgentMemoryLogHandler(self.logs)
+        memory_handler.setFormatter(formatter)
+        logger.addHandler(memory_handler) # Add handler to the specific logger instance
+
         logger.info(f"DataIngestionAgent initialized for dataset '{self.dataset_name}' monitoring '{self.source_directory}'.")
 
+    def get_status(self) -> str:
+        """Returns the current status of the agent."""
+        return self.status
+
+    def get_logs(self, max_lines: Optional[int] = None) -> List[str]:
+        """Returns recent log messages from the agent."""
+        if max_lines is None:
+            return list(self.logs)
+        else:
+            return list(self.logs)[-max_lines:]
 
     def _validate_data(self, tensor: Optional[torch.Tensor], metadata: Dict[str, Any]) -> bool:
         """
@@ -255,7 +288,13 @@ class DataIngestionAgent:
         self._stop_event.clear()
         self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._monitor_thread.start()
-        logger.info("Data Ingestion Agent started monitoring.")
+        if self._monitor_thread.is_alive(): # Check if thread actually started
+            self.status = "running"
+            logger.info("Data Ingestion Agent started monitoring.")
+        else:
+            self.status = "error" # Or some other appropriate error state
+            logger.error("Data Ingestion Agent failed to start monitoring thread.")
+
 
     def stop(self) -> None:
         """Signals the monitoring thread to stop."""
@@ -269,16 +308,21 @@ class DataIngestionAgent:
 
         if self._monitor_thread.is_alive():
              logger.warning("Monitoring thread did not stop gracefully after timeout.")
+             # self.status remains "running" or could be set to "stopping_error"
         else:
              logger.info("Data Ingestion Agent monitoring stopped successfully.")
+             self.status = "stopped"
         self._monitor_thread = None
 
 
 # --- Example Usage ---
 if __name__ == "__main__":
-    logger.info("--- Starting Ingestion Agent Example ---")
+    run_example = os.getenv("RUN_INGESTION_AGENT_EXAMPLE", "False").lower() == "true"
 
-    # 1. Setup TensorStorage
+    if run_example:
+        logger.info("--- Starting Ingestion Agent Example (RUN_INGESTION_AGENT_EXAMPLE=True) ---")
+
+        # 1. Setup TensorStorage
     storage = TensorStorage()
 
     # 2. Setup a temporary directory for the agent to monitor
@@ -359,4 +403,6 @@ if __name__ == "__main__":
     # import shutil
     # shutil.rmtree(source_dir)
 
-    logger.info("--- Ingestion Agent Example Finished ---")
+        logger.info("--- Ingestion Agent Example Finished ---")
+    else:
+        logger.info("--- Ingestion Agent Example SKIPPED (RUN_INGESTION_AGENT_EXAMPLE not set to 'true') ---")

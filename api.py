@@ -17,8 +17,7 @@ from pydantic import BaseModel, Field
 try:
     from tensor_storage import TensorStorage
     from nql_agent import NQLAgent
-    # Import other agents if needed for direct control (less common for API layer)
-    # from ingestion_agent import DataIngestionAgent
+    from ingestion_agent import DataIngestionAgent # Added import
     # from rl_agent import RLAgent
     # from automl_agent import AutoMLAgent
 except ImportError as e:
@@ -46,17 +45,21 @@ except Exception as e:
     # This is critical, so raise an error to prevent the API from starting incorrectly.
     raise RuntimeError(f"Tensorus initialization failed: {e}") from e
 
-# --- Placeholder Agent State Management ---
-# In a real system, this would interact with a process manager, message queue,
-# or shared state store (like Redis) to control and monitor actual agent processes.
+import os # Added import
+
+# --- Agent State Management ---
+# agent_registry holds static configuration and metadata.
+# live_agents holds actual running instances of agents that are managed by this API.
 agent_registry = {
     "ingestion": {
         "name": "Data Ingestion",
-        "description": "Monitors sources and ingests data into datasets.",
-        "status": "stopped", # Possible statuses: running, stopped, error, starting, stopping
-        "config": {"source_directory": "temp_ingestion_source", "polling_interval_sec": 10},
-        "last_log_timestamp": None,
-        # Add simulation state if needed by metrics endpoint
+        "description": "Monitors sources and ingests data into TensorStorage.",
+        "config": {
+            "source_directory": "./temp_ingestion_source_api", # API managed source
+            "polling_interval_sec": 15, # Slightly different default for API
+            "dataset_name": "ingested_data_api" # API specific dataset
+        },
+        # No 'status' or 'last_log_timestamp' here; these are dynamic for live agents
     },
     "rl_trainer": {
         "name": "RL Trainer",
@@ -75,15 +78,50 @@ agent_registry = {
         "sim_trials": 0, # Added for metrics simulation
         "sim_best_score": None, # Added for metrics simulation
     },
-     # NQL Agent is stateless, typically part of API request/response, but could be listed
      "nql_query": {
          "name": "NQL Query Service",
          "description": "Processes natural language queries.",
          "status": "running", # Assumed always running as part of API
-         "config": {"parser_type": "regex"}, # Example config
-         "last_log_timestamp": None,
+         "config": {"parser_type": "regex"},
+         "last_log_timestamp": None, # NQL agent is stateless, logs not stored this way
      },
 }
+
+live_agents: Dict[str, DataIngestionAgent] = {} # Stores live agent instances, key is agent_id
+
+def _get_or_create_ingestion_agent() -> DataIngestionAgent:
+    """
+    Retrieves the existing DataIngestionAgent instance or creates a new one
+    if it doesn't exist. Ensures its source directory is created.
+    """
+    global live_agents
+    if "ingestion" not in live_agents:
+        if "ingestion" not in agent_registry:
+            # This should not happen if agent_registry is correctly defined
+            logger.error("Ingestion agent configuration missing in agent_registry.")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ingestion agent configuration missing.")
+
+        config = agent_registry["ingestion"]["config"]
+        source_dir = config["source_directory"]
+        dataset_name = config["dataset_name"]
+        polling_interval = config["polling_interval_sec"]
+
+        # Ensure source directory exists
+        try:
+            os.makedirs(source_dir, exist_ok=True)
+            logger.info(f"Ensured source directory exists: {source_dir}")
+        except OSError as e:
+            logger.error(f"Could not create source directory {source_dir}: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create source directory: {e}")
+
+        logger.info(f"Creating DataIngestionAgent instance for dataset '{dataset_name}' monitoring '{source_dir}'.")
+        live_agents["ingestion"] = DataIngestionAgent(
+            tensor_storage=tensor_storage_instance, # Global instance
+            dataset_name=dataset_name,
+            source_directory=source_dir,
+            polling_interval_sec=polling_interval
+        )
+    return live_agents["ingestion"]
 
 def _simulate_agent_log(agent_id: str) -> str:
     """Generates a simulated log line."""
@@ -558,28 +596,41 @@ async def list_agents():
     """
     try:
         agents_list = []
-        for agent_id, details in agent_registry.items():
-            # Validate expected keys before creating AgentInfo to prevent Pydantic errors
-            if not isinstance(details, dict) or not all(k in details for k in ["name", "description", "status", "config"]):
-                 # More detailed logging
-                 logger.warning(f"Agent '{agent_id}' in registry is missing required keys or is not a dict. Details: {details}. Skipping.")
-                 continue
+        for agent_id, static_details in agent_registry.items():
+            if not isinstance(static_details, dict) or not all(k in static_details for k in ["name", "description", "config"]):
+                logger.warning(f"Agent '{agent_id}' in registry is missing required static keys. Skipping.")
+                continue
+
+            current_status = "unknown"
+            if agent_id == "ingestion":
+                # For ingestion agent, always try to get live status, but don't create if not existing
+                ingestion_instance = live_agents.get("ingestion")
+                if ingestion_instance:
+                    current_status = ingestion_instance.get_status()
+                else:
+                    # If not in live_agents, it's effectively stopped from API's perspective
+                    current_status = "stopped"
+            elif "status" in static_details: # For placeholder agents
+                current_status = static_details["status"]
+            else: # Should not happen if registry is well-defined
+                logger.warning(f"Agent '{agent_id}' has no status info in registry. Defaulting to 'unknown'.")
+
+
             try:
                 agents_list.append(AgentInfo(
                     id=agent_id,
-                    name=details["name"],
-                    description=details["description"],
-                    status=details["status"],
-                    config=details["config"]
+                    name=static_details["name"],
+                    description=static_details["description"],
+                    status=current_status, # Use dynamically determined status
+                    config=static_details["config"]
                 ))
-            except Exception as pydantic_err: # Catch potential Pydantic validation errors
-                 logger.error(f"Error creating AgentInfo for agent '{agent_id}': {pydantic_err}. Details: {details}", exc_info=True) # Added exc_info
-                 continue # Skip malformed entries
+            except Exception as pydantic_err:
+                logger.error(f"Error creating AgentInfo for agent '{agent_id}': {pydantic_err}. Details: {static_details}", exc_info=True)
+                continue
 
         logger.info(f"Retrieved list of {len(agents_list)} agents.")
         return agents_list
     except Exception as e:
-        # Catch errors iterating the registry itself
         logger.exception(f"Unexpected error listing agents: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error listing agents.")
 
@@ -588,7 +639,7 @@ async def list_agents():
 async def get_agent_status_api(agent_id: str = Path(..., description="The unique identifier of the agent.")):
     """
     Gets the current status, configuration, and last log timestamp for a specific agent.
-    Reads data from the global `agent_registry`.
+    For the 'ingestion' agent, status is live. For others, it's from the placeholder registry.
 
     - **agent_id**: Path parameter for the agent's unique ID.
     \f
@@ -596,49 +647,61 @@ async def get_agent_status_api(agent_id: str = Path(..., description="The unique
     - AgentStatus object containing the agent's details.
 
     Raises HTTPException:
-    - 404 Not Found: If the agent_id does not exist in the registry.
-    - 500 Internal Server Error: If the agent's entry in the registry is malformed.
+    - 404 Not Found: If the agent_id does not exist.
+    - 500 Internal Server Error: If the agent's entry is malformed or for other errors.
     """
     logger.debug(f"Request received for status of agent '{agent_id}'.")
     if agent_id not in agent_registry:
         logger.warning(f"Status requested for unknown agent '{agent_id}'.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found.")
 
-    details = agent_registry[agent_id]
-    # Basic validation of expected keys
-    if not isinstance(details, dict) or not all(k in details for k in ["name", "description", "status", "config"]):
-        logger.error(f"Agent '{agent_id}' registry entry is malformed: {details}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error: Malformed status data for agent '{agent_id}'.")
+    static_details = agent_registry[agent_id]
+    if not isinstance(static_details, dict) or not all(k in static_details for k in ["name", "description", "config"]):
+        logger.error(f"Agent '{agent_id}' registry entry is malformed: {static_details}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error: Malformed static data for agent '{agent_id}'.")
 
-    # Simulate potential status updates if needed (optional placeholder)
-    # if details['status'] in ['starting', 'stopping']: details['status'] = random.choice(['running', 'stopped', 'error'])
+    current_status: str
+    last_log_ts: Optional[float] = None # Placeholder for last log timestamp
+
+    if agent_id == "ingestion":
+        agent_instance = _get_or_create_ingestion_agent() # Ensures instance exists for status check
+        current_status = agent_instance.get_status()
+        # For last_log_timestamp, one could fetch logs and get the last one, or agent could track it.
+        # Here, we'll fake it for now or leave it None.
+        # To get it from actual logs (could be slightly expensive if logs are long):
+        # recent_logs = agent_instance.get_logs(max_lines=1)
+        # if recent_logs: last_log_ts = time.time() # Approximation
+        last_log_ts = time.time() # Simulate update on access for live agent
+    else: # Placeholder agents
+        current_status = static_details.get("status", "unknown")
+        last_log_ts = static_details.get("last_log_timestamp")
 
     try:
         status_response = AgentStatus(
             id=agent_id,
-            name=details["name"],
-            description=details["description"],
-            status=details["status"],
-            config=details["config"],
-            last_log_timestamp=details.get("last_log_timestamp") # Safely get optional field
+            name=static_details["name"],
+            description=static_details["description"],
+            status=current_status,
+            config=static_details["config"],
+            last_log_timestamp=last_log_ts
         )
         logger.info(f"Returning status for agent '{agent_id}': {status_response.status}")
         return status_response
-    except Exception as pydantic_err: # Catch potential Pydantic validation errors
-        logger.error(f"Error creating AgentStatus response for agent '{agent_id}': {pydantic_err}. Details: {details}", exc_info=True) # Added exc_info
+    except Exception as pydantic_err:
+        logger.error(f"Error creating AgentStatus response for agent '{agent_id}': {pydantic_err}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal error creating status response for agent '{agent_id}'.")
 
 
 @app.post("/agents/{agent_id}/start", response_model=ApiResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Agents"])
 async def start_agent_api(agent_id: str = Path(..., description="The unique identifier of the agent to start.")):
     """
-    Signals an agent to start its operation (Placeholder/Simulated).
-    Updates the agent's status in the global `agent_registry`.
+    Signals an agent to start its operation.
+    For 'ingestion' agent, it's a live command. For others, it's simulated.
 
     - **agent_id**: Path parameter for the agent's unique ID.
     \f
     Returns:
-    - ApiResponse indicating success or failure (if already running/starting).
+    - ApiResponse indicating success or failure.
 
     Raises HTTPException:
     - 404 Not Found: If the agent_id does not exist.
@@ -648,39 +711,54 @@ async def start_agent_api(agent_id: str = Path(..., description="The unique iden
         logger.warning(f"Start signal received for unknown agent '{agent_id}'.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found.")
 
-    # Check current status before attempting start
-    current_status = agent_registry[agent_id].get("status", "unknown")
-    if current_status in ["running", "starting"]:
-         logger.info(f"Agent '{agent_id}' is already {current_status}. No action taken.")
-         # Return success=False for idempotent-like behavior
-         return ApiResponse(success=False, message=f"Agent '{agent_id}' is already {current_status}.")
-    if current_status == "error":
-        # Added logging for starting from error state
-        logger.warning(f"Attempting to start agent '{agent_id}' which is in 'error' state. Resetting status.")
-        # Decide if starting from error state is allowed/needs special handling
+    if agent_id == "ingestion":
+        agent_instance = _get_or_create_ingestion_agent()
+        current_status = agent_instance.get_status()
+        if current_status == "running":
+            logger.info(f"Ingestion agent is already running.")
+            return ApiResponse(success=False, message="Ingestion agent is already running.")
+        if current_status == "error" and agent_instance._monitor_thread and agent_instance._monitor_thread.is_alive():
+             logger.warning(f"Ingestion agent is in error state but thread is alive. Attempting to stop first.")
+             agent_instance.stop() # Try to clean up before restart
+             await asyncio.sleep(1) # Give it a moment to stop
 
-    logger.info(f"API: Processing start signal for agent '{agent_id}' (Placeholder Action).")
-    # Simulate state change - In reality, trigger async start process
-    agent_registry[agent_id]["status"] = "starting"
-    # TODO: Implement actual agent process starting logic (e.g., message queue, process manager call, background task).
-    # Simulate transition to running after a short delay in a real scenario
-    # For now, just accept the request and simulate immediate change for simplicity.
-    await asyncio.sleep(0.1) # Tiny delay to simulate transition time if desired
-    agent_registry[agent_id]["status"] = "running" # Immediate simulation for now
-    agent_registry[agent_id]["last_log_timestamp"] = time.time() # Update timestamp on action
-    logger.info(f"Agent '{agent_id}' status set to 'running' (simulated).")
-    return ApiResponse(success=True, message=f"Start signal sent to agent '{agent_id}'. Status is now 'running' (simulated).")
+        logger.info("Attempting to start live DataIngestionAgent...")
+        agent_instance.start()
+        # Brief pause to allow status to potentially update if start is synchronous
+        await asyncio.sleep(0.1)
+        new_status = agent_instance.get_status()
+        if new_status == "running":
+            logger.info("DataIngestionAgent started successfully.")
+            return ApiResponse(success=True, message="Data Ingestion Agent started successfully.")
+        else:
+            logger.error(f"DataIngestionAgent failed to start. Current status: {new_status}")
+            return ApiResponse(success=False, message=f"Data Ingestion Agent failed to start. Status: {new_status}")
+
+    else: # Placeholder agents
+        current_status = agent_registry[agent_id].get("status", "unknown")
+        if current_status in ["running", "starting"]:
+            logger.info(f"Placeholder agent '{agent_id}' is already {current_status}. No action taken.")
+            return ApiResponse(success=False, message=f"Agent '{agent_id}' is already {current_status}.")
+        if current_status == "error":
+            logger.warning(f"Attempting to start placeholder agent '{agent_id}' from 'error' state.")
+
+        agent_registry[agent_id]["status"] = "starting"
+        await asyncio.sleep(0.1) # Simulate transition
+        agent_registry[agent_id]["status"] = "running"
+        agent_registry[agent_id]["last_log_timestamp"] = time.time()
+        logger.info(f"Placeholder agent '{agent_id}' status set to 'running' (simulated).")
+        return ApiResponse(success=True, message=f"Start signal sent to placeholder agent '{agent_id}'. Status is now 'running' (simulated).")
 
 @app.post("/agents/{agent_id}/stop", response_model=ApiResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Agents"])
 async def stop_agent_api(agent_id: str = Path(..., description="The unique identifier of the agent to stop.")):
     """
-    Signals an agent to stop its operation gracefully (Placeholder/Simulated).
-    Updates the agent's status in the global `agent_registry`.
+    Signals an agent to stop its operation gracefully.
+    For 'ingestion' agent, it's a live command. For others, it's simulated.
 
     - **agent_id**: Path parameter for the agent's unique ID.
     \f
     Returns:
-    - ApiResponse indicating success or failure (if already stopped/stopping).
+    - ApiResponse indicating success or failure.
 
     Raises HTTPException:
     - 404 Not Found: If the agent_id does not exist.
@@ -690,62 +768,91 @@ async def stop_agent_api(agent_id: str = Path(..., description="The unique ident
         logger.warning(f"Stop signal received for unknown agent '{agent_id}'.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found.")
 
-    # Check current status before attempting stop
-    current_status = agent_registry[agent_id].get("status", "unknown")
-    # Consider 'error' as effectively stopped for control purposes, or handle separately if needed
-    if current_status in ["stopped", "stopping"]:
-         # Improved logging
-         logger.info(f"Agent '{agent_id}' is already {current_status}. No action taken.")
-         return ApiResponse(success=False, message=f"Agent '{agent_id}' is already {current_status}.")
+    if agent_id == "ingestion":
+        # Don't use _get_or_create_ingestion_agent() here if we only want to stop an *existing* live agent.
+        agent_instance = live_agents.get("ingestion")
+        if not agent_instance:
+            logger.info(f"Ingestion agent '{agent_id}' is not currently live (already stopped or never started).")
+            return ApiResponse(success=True, message="Ingestion agent is already stopped or was never started.")
 
-    logger.info(f"API: Processing stop signal for agent '{agent_id}' (Placeholder Action).")
-    # Simulate state change - In reality, trigger async stop process
-    agent_registry[agent_id]["status"] = "stopping"
-    # TODO: Implement actual agent process stopping logic (e.g., sending signal, waiting for confirmation).
-    # Simulate transition to stopped after a short delay in a real scenario
-    await asyncio.sleep(0.1) # Tiny delay
-    agent_registry[agent_id]["status"] = "stopped" # Immediate simulation for now
-    agent_registry[agent_id]["last_log_timestamp"] = time.time() # Update timestamp on action
-    logger.info(f"Agent '{agent_id}' status set to 'stopped' (simulated).")
-    return ApiResponse(success=True, message=f"Stop signal sent to agent '{agent_id}'. Status is now 'stopped' (simulated).")
+        current_status = agent_instance.get_status()
+        if current_status == "stopped":
+            logger.info(f"Ingestion agent is already stopped.")
+            return ApiResponse(success=True, message="Ingestion agent is already stopped.")
+
+        logger.info("Attempting to stop live DataIngestionAgent...")
+        agent_instance.stop()
+        await asyncio.sleep(0.1) # Allow for status update
+        new_status = agent_instance.get_status()
+        if new_status == "stopped":
+            logger.info("DataIngestionAgent stopped successfully.")
+            # Optionally remove from live_agents: del live_agents["ingestion"] to allow full re-creation
+            return ApiResponse(success=True, message="Data Ingestion Agent stopped successfully.")
+        else:
+            logger.warning(f"DataIngestionAgent may not have stopped cleanly. Current status: {new_status}")
+            return ApiResponse(success=False, message=f"Data Ingestion Agent stop signal sent. Status: {new_status}")
+
+    else: # Placeholder agents
+        current_status = agent_registry[agent_id].get("status", "unknown")
+        if current_status in ["stopped", "stopping"]:
+            logger.info(f"Placeholder agent '{agent_id}' is already {current_status}. No action taken.")
+            return ApiResponse(success=False, message=f"Agent '{agent_id}' is already {current_status}.")
+
+        agent_registry[agent_id]["status"] = "stopping"
+        await asyncio.sleep(0.1) # Simulate transition
+        agent_registry[agent_id]["status"] = "stopped"
+        agent_registry[agent_id]["last_log_timestamp"] = time.time()
+        logger.info(f"Placeholder agent '{agent_id}' status set to 'stopped' (simulated).")
+        return ApiResponse(success=True, message=f"Stop signal sent to placeholder agent '{agent_id}'. Status is now 'stopped' (simulated).")
 
 
 @app.get("/agents/{agent_id}/logs", response_model=AgentLogResponse, tags=["Agents"])
 async def get_agent_logs_api(
     agent_id: str = Path(..., description="The unique identifier of the agent."),
-    lines: int = Query(20, ge=1, le=1000, description="Maximum number of recent log lines to retrieve.") # Added Query validation
+    lines: int = Query(20, ge=1, le=1000, description="Maximum number of recent log lines to retrieve.")
 ):
     """
-    Retrieves recent logs for a specific agent (Simulated - generates new logs each time).
+    Retrieves recent logs for a specific agent.
+    For 'ingestion' agent, logs are from the live instance. For others, they are simulated.
 
     - **agent_id**: Path parameter for the agent's unique ID.
-    - **lines**: Query parameter for the number of log lines (default 20, min 1, max 1000).
+    - **lines**: Query parameter for the number of log lines.
     \f
     Returns:
-    - AgentLogResponse containing a list of simulated log strings.
+    - AgentLogResponse containing a list of log strings.
 
     Raises HTTPException:
     - 404 Not Found: If the agent_id does not exist.
-    - 500 Internal Server Error: If log generation fails.
+    - 500 Internal Server Error: If log generation/retrieval fails.
     """
     logger.debug(f"Request received for logs of agent '{agent_id}' (lines={lines}).")
     if agent_id not in agent_registry:
         logger.warning(f"Log request for unknown agent '{agent_id}'.")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found.")
 
-    # Parameter 'lines' is already validated by FastAPI/Pydantic via Query(ge=1, le=1000)
-
-    # TODO: Implement actual log retrieval from agent process, file, or logging service.
-    # This simulation generates new logs each time, it doesn't store/retrieve history.
-    try:
-        simulated_logs = [_simulate_agent_log(agent_id) for _ in range(lines)]
-        agent_registry[agent_id]["last_log_timestamp"] = time.time() # Update timestamp on access
-        logger.info(f"Generated {len(simulated_logs)} simulated log lines for agent '{agent_id}'.")
-        return AgentLogResponse(logs=simulated_logs)
-    except Exception as e:
-        logger.exception(f"Error generating simulated logs for agent '{agent_id}': {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generating logs for agent '{agent_id}'.")
-
+    if agent_id == "ingestion":
+        # For logs, we want to get them even if agent is stopped, so _get_or_create is okay.
+        # If it was never started, it will be created in "stopped" state, and logs will be empty.
+        agent_instance = _get_or_create_ingestion_agent()
+        try:
+            actual_logs = agent_instance.get_logs(max_lines=lines)
+            logger.info(f"Retrieved {len(actual_logs)} log lines for DataIngestionAgent.")
+            return AgentLogResponse(logs=actual_logs)
+        except Exception as e:
+            logger.exception(f"Error retrieving logs from DataIngestionAgent '{agent_id}': {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error retrieving logs for agent '{agent_id}'.")
+    else: # Placeholder agents
+        # Parameter 'lines' is already validated by FastAPI/Pydantic
+        try:
+            simulated_logs = [_simulate_agent_log(agent_id) for _ in range(lines)]
+            # For placeholder agents, update last_log_timestamp in agent_registry
+            if agent_id in agent_registry and isinstance(agent_registry[agent_id], dict):
+                 agent_registry[agent_id]["last_log_timestamp"] = time.time()
+            logger.info(f"Generated {len(simulated_logs)} simulated log lines for placeholder agent '{agent_id}'.")
+            return AgentLogResponse(logs=simulated_logs)
+        except Exception as e:
+            logger.exception(f"Error generating simulated logs for agent '{agent_id}': {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generating logs for agent '{agent_id}'.")
 
 # --- Metrics & Monitoring Endpoint ---
 @app.get("/metrics/dashboard", response_model=DashboardMetrics, tags=["Metrics & Monitoring"])
@@ -896,14 +1003,16 @@ if __name__ == "__main__":
     try:
         from tensor_storage import TensorStorage
         from nql_agent import NQLAgent
+        from ingestion_agent import DataIngestionAgent # Check this too
     except ImportError as import_err:
         print(f"\nERROR: Missing required local modules: {import_err}.")
-        print("Please ensure tensor_storage.py and nql_agent.py are in the same directory or Python path.\n")
+        print("Please ensure tensor_storage.py, nql_agent.py, and ingestion_agent.py are in the same directory or Python path.\n")
         modules_ok = False
         # exit(1) # Exit if modules are absolutely critical for startup
 
     if modules_ok:
-        print(f"--- Starting Tensorus API Server (v{app.version} with Agent Placeholders) ---")
+        # Updated server start message
+        print(f"--- Starting Tensorus API Server (v{app.version} with Live Ingestion Agent and Placeholders) ---")
         print(f"--- Logging level set to: {logging.getLevelName(logger.getEffectiveLevel())} ---")
         print(f"--- Access API documentation at http://127.0.0.1:8000/docs ---")
         print(f"--- Alternative documentation at http://127.0.0.1:8000/redoc ---")
