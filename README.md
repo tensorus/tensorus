@@ -44,43 +44,63 @@ You can try Tensorus online via Huggingface Spaces:
 graph TD
     %% Subgraphs
     subgraph User_Interaction ["User Interaction"]
-        UI[Streamlit UI (app.py)]
+        UI[Streamlit UI - app.py]
     end
-
     subgraph Backend_Services ["Backend Services"]
-        API[FastAPI Backend (api.py)]
+        API[FastAPI Backend - api.py]
     end
-
-    subgraph Core_Storage ["Core Storage"]
-        TS[TensorStorage (tensor_storage.py)]
+    subgraph Core_Storage ["Core Storage / TensorStorage - tensor_storage.py"]
+        TS[TensorStorage]
+        subgraph TS_Interactions ["Example Methods"]
+            direction LR
+            TS_insert["insert(data, metadata)"]
+            TS_query["query(query_fn)"]
+            TS_get["get_by_id(id)"]
+            TS_sample["sample(n)"]
+            TS_update["update_metadata()"]
+        end
+        TS --- TS_Interactions
     end
-
     subgraph Agents_Group ["Agents"]
-        IA[Ingestion Agent (ingestion_agent.py)]
-        NQLA[NQL Agent (nql_agent.py)]
-        RLA[RL Agent (rl_agent.py)]
-        AutoMLA[AutoML Agent (automl_agent.py)]
+        IA[Ingestion Agent - ingestion_agent.py]
+        NQLA[NQL Agent - nql_agent.py]
+        RLA[RL Agent - rl_agent.py]
+        AutoMLA[AutoML Agent - automl_agent.py]
     end
-
     subgraph Tensor_Operations_Library ["Tensor Operations Library"]
-        TOps[TensorOps (tensor_ops.py)]
+        TOps[TensorOps - tensor_ops.py]
     end
 
-    %% Data flows
-    UI   -->|"/predict", "/train"| API
-    API  -->|enqueue raw data| IA
-    IA   -->|writes tensors| TS
-    TS   -->|reads tensors| NQLA
-    TS   -->|reads tensors| RLA
-    TS   -->|reads tensors| AutoMLA
+    %% UI to API
+    UI -->|"/predict", "/train", "/query"| API
+
+    %% API to Agents & TensorStorage (high level)
+    API -->|control commands| IA
+    API -->|control commands| NQLA
+    API -->|control commands| RLA
+    API -->|control commands| AutoMLA
+    API -->|direct NQL query?| TS_query %% Or API routes NQL to NQLA first
+
+    %% Agent Interactions with TensorStorage methods
+    IA -->|uses insert()| TS_insert
+    
+    NQLA -->|uses query(), get_dataset()| TS_query
+    NQLA -->|uses query(), get_dataset()| TS_get %% NQL might also fetch specific records if parsed
+
+    RLA -->|stores states/exp with insert()| TS_insert
+    RLA -->|samples experiences with sample()| TS_sample
+    RLA -->|retrieves states with get_by_id()| TS_get
+    
+    AutoMLA -->|stores trial results with insert()| TS_insert
+    AutoMLA -->|may retrieve data via query()| TS_query
 
     %% Agents invoking the ops library
-    NQLA    -->|vector math| TOps
-    RLA     -->|policy eval| TOps
+    NQLA -->|vector math| TOps
+    RLA -->|policy eval| TOps
     AutoMLA -->|model tuning| TOps
 
     %% Ops writing back (optional)
-    TOps -->|save intermediates| TS
+    TOps -.->|save intermediates via agent/API| TS_insert %% Clarified that TensorOps doesn't call TS directly
 ```
 
 ## Getting Started
