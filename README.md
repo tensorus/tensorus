@@ -42,6 +42,7 @@ You can try Tensorus online via Huggingface Spaces:
 
 ```mermaid
 graph TD
+    %% Subgraphs
     subgraph User_Interaction ["User Interaction"]
         UI[Streamlit UI (app.py)]
     end
@@ -64,6 +65,22 @@ graph TD
     subgraph Tensor_Operations_Library ["Tensor Operations Library"]
         TOps[TensorOps (tensor_ops.py)]
     end
+
+    %% Data flows
+    UI   -->|"“/predict”, “/train”"| API
+    API  -->|enqueue raw data| IA
+    IA   -->|writes tensors| TS
+    TS   -->|reads tensors| NQLA
+    TS   -->|reads tensors| RLA
+    TS   -->|reads tensors| AutoMLA
+
+    %% Agents invoking the ops library
+    NQLA    -->|vector math| TOps
+    RLA     -->|policy eval| TOps
+    AutoMLA -->|model tuning| TOps
+
+    %% (optionally) have ops write back results to storage
+    TOps -->|save intermediates| TS
 ```
 
 ## Getting Started
