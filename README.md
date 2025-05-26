@@ -12,7 +12,7 @@ Tensorus is an experimental platform for managing and querying tensor data, desi
     *   **AutoML Agent:** Performs hyperparameter optimization for a dummy model using random search.
 *   **API-Driven:** A FastAPI backend provides a RESTful API for interacting with Tensorus.
 *   **Streamlit UI:** A user-friendly Streamlit frontend for exploring data and controlling agents.
-*   **Tensor Operations:** A library of robust tensor operations for common manipulations.
+*   **Tensor Operations:** A comprehensive library of robust tensor operations for common manipulations. See [Basic Tensor Operations](#basic-tensor-operations) for details.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
 
 ## Project Structure
@@ -211,6 +211,44 @@ The Streamlit UI provides a user-friendly interface for:
 ## Contributing
 
 Contributions are welcome! Please feel free to open issues or submit pull requests.
+
+### Basic Tensor Operations
+
+This section details the core tensor manipulation functionalities provided by `tensor_ops.py`. These operations are designed to be robust, with built-in type and shape checking where appropriate.
+
+#### Arithmetic Operations
+
+*   `add(t1, t2)`: Element-wise addition of two tensors, or a tensor and a scalar.
+*   `subtract(t1, t2)`: Element-wise subtraction of two tensors, or a tensor and a scalar.
+*   `multiply(t1, t2)`: Element-wise multiplication of two tensors, or a tensor and a scalar.
+*   `divide(t1, t2)`: Element-wise division of two tensors, or a tensor and a scalar. Includes checks for division by zero.
+
+#### Matrix and Dot Operations
+
+*   `matmul(t1, t2)`: Matrix multiplication of two tensors, supporting various dimensionalities (e.g., 2D matrices, batched matrix multiplication).
+*   `dot(t1, t2)`: Computes the dot product of two 1D tensors.
+
+#### Reduction Operations
+
+*   `sum(tensor, dim=None, keepdim=False)`: Computes the sum of tensor elements over specified dimensions.
+*   `mean(tensor, dim=None, keepdim=False)`: Computes the mean of tensor elements over specified dimensions. Tensor is cast to float for calculation.
+*   `min(tensor, dim=None, keepdim=False)`: Finds the minimum value in a tensor, optionally along a dimension. Returns values and indices if `dim` is specified.
+*   `max(tensor, dim=None, keepdim=False)`: Finds the maximum value in a tensor, optionally along a dimension. Returns values and indices if `dim` is specified.
+
+#### Reshaping and Slicing
+
+*   `reshape(tensor, shape)`: Changes the shape of a tensor without changing its data.
+*   `transpose(tensor, dim0, dim1)`: Swaps two dimensions of a tensor.
+*   `permute(tensor, dims)`: Permutes the dimensions of a tensor according to the specified order.
+
+#### Concatenation and Splitting
+
+*   `concatenate(tensors, dim=0)`: Joins a sequence of tensors along an existing dimension.
+*   `stack(tensors, dim=0)`: Joins a sequence of tensors along a new dimension.
+
+#### Advanced Operations
+
+*   `einsum(equation, *tensors)`: Applies Einstein summation convention to the input tensors based on the provided equation string.
 
 ## License
 
