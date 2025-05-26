@@ -42,51 +42,26 @@ You can try Tensorus online via Huggingface Spaces:
 
 ```mermaid
 graph TD
-    subgraph User_Interaction_Graph ["User Interaction"]
-        UI[Streamlit UI (app.py)]
+    subgraph sguser
+        ui[UI]
     end
 
-    subgraph Backend_Services_Graph ["Backend Services"]
-        API[FastAPI Backend (api.py)]
+    subgraph sgbackend
+        api[API]
     end
 
-    subgraph Core_Storage_Graph ["Core Storage"]
-        TS[TensorStorage (tensor_storage.py)]
+    subgraph sgstorage
+        ts[Storage]
     end
 
-    subgraph Agents_Graph ["Agents"]
-        IA[Ingestion Agent (ingestion_agent.py)]
-        NQLA[NQL Agent (nql_agent.py)]
-        RLA[RL Agent (rl_agent.py)]
-        AutoMLA[AutoML Agent (automl_agent.py)]
+    subgraph sgagents
+        agent[Agent]
     end
 
-    subgraph Tensor_Operations_Library_Graph ["Tensor Operations Library"]
-        TOps[TensorOps (tensor_ops.py)]
-    end
-
-    UI -- HTTP Requests --> API
-    API -- Interacts with --> TS
-    API -- Controls/Manages --> IA
-    API -- Controls/Manages --> NQLA
-    API -- Controls/Manages --> RLA
-    API -- Controls/Manages --> AutoMLA
-
-    IA -- Stores/Retrieves Data --> TS
-    NQLA -- Queries Data from --> TS
-    RLA -- Stores/Retrieves Experiences & States --> TS
-    AutoMLA -- Stores/Retrieves Trial Data --> TS
-
-    IA -- Uses --> TOps
-    RLA -- Uses --> TOps
-    AutoMLA -- Uses --> TOps
-    TS -- May Use (Internally) --> TOps
-
-    style UI fill:#f9f,stroke:#333,stroke-width:2px
-    style API fill:#ccf,stroke:#333,stroke-width:2px
-    style TS fill:#cfc,stroke:#333,stroke-width:2px
-    style Agents fill:#ff9,stroke:#333,stroke-width:2px
-    style TOps fill:#fcf,stroke:#333,stroke-width:2px
+    ui --> api
+    api --> ts
+    api --> agent
+    agent --> ts
 ```
 
 ## Getting Started
