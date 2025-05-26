@@ -67,7 +67,7 @@ graph TD
     end
 
     %% Data flows
-    UI   -->|"“/predict”, “/train”"| API
+    UI   -->|"/predict", "/train"| API
     API  -->|enqueue raw data| IA
     IA   -->|writes tensors| TS
     TS   -->|reads tensors| NQLA
@@ -79,7 +79,7 @@ graph TD
     RLA     -->|policy eval| TOps
     AutoMLA -->|model tuning| TOps
 
-    %% (optionally) have ops write back results to storage
+    %% Ops writing back (optional)
     TOps -->|save intermediates| TS
 ```
 
