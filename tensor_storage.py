@@ -5,6 +5,8 @@ import logging
 import time
 import uuid
 import random # Added for sampling
+import os
+from pathlib import Path
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -12,21 +14,114 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 class TensorStorage:
     """
     Manages datasets stored as collections of tensors in memory.
+    Optionally, can persist datasets to disk if a storage_path is provided.
     """
 
-    def __init__(self):
-        """Initializes the TensorStorage with an empty dictionary for datasets."""
-        # In-memory storage. Replace with persistent storage solution for production.
-        # Structure: { dataset_name: { "tensors": List[Tensor], "metadata": List[Dict] } }
+    def __init__(self, storage_path: Optional[str] = "tensor_data"):
+        """
+        Initializes the TensorStorage.
+
+        If a `storage_path` is provided, datasets will be persisted to disk in that
+        directory. Each dataset is stored as a separate '.pt' file. If the path
+        is None, or if directory creation fails (e.g., due to permissions),
+        the storage will operate in in-memory mode only.
+
+        Args:
+            storage_path (Optional[str]): Path to a directory for storing datasets.
+                                         If None, storage is in-memory only.
+                                         Defaults to "tensor_data".
+        """
         self.datasets: Dict[str, Dict[str, List[Any]]] = {}
-        logging.info("TensorStorage initialized (In-Memory).")
+        self.storage_path: Optional[Path] = None
+
+        if storage_path:
+            self.storage_path = Path(storage_path)
+            try:
+                self.storage_path.mkdir(parents=True, exist_ok=True) # Create directory if it doesn't exist
+                logging.info(f"TensorStorage initialized with persistence directory: {self.storage_path}")
+                self._load_all_datasets_from_disk() # Attempt to load existing datasets from disk
+            except OSError as e: # Handle errors like permission issues
+                logging.error(f"Error creating storage directory {self.storage_path}: {e}. Falling back to in-memory only mode.")
+                self.storage_path = None # Fallback to in-memory if directory creation fails
+        else:
+            logging.info("TensorStorage initialized (In-Memory only mode).")
+
+    def _save_dataset(self, dataset_name: str) -> None:
+        """
+        Internal helper to save a single dataset to a .pt file.
+
+        This method is called by public methods that modify dataset content
+        (e.g., insert, delete_tensor, create_dataset) if persistence is enabled.
+        Tensors are cloned and moved to CPU before saving to ensure data integrity
+        and broad compatibility.
+
+        Args:
+            dataset_name (str): The name of the dataset to save.
+        """
+        if not self.storage_path or dataset_name not in self.datasets:
+            # Do nothing if persistence is not enabled or dataset doesn't exist (e.g., during deletion)
+            return
+
+        file_path = self.storage_path / f"{dataset_name}.pt"
+        try:
+            # Prepare data for saving:
+            # - Tensors are cloned and moved to CPU to avoid issues with saving GPU tensors
+            #   or tensors that might be part of an active computation graph.
+            # - Metadata (dicts, lists) is typically already CPU-based and serializable.
+            data_to_save = {
+                "tensors": [t.clone().cpu() for t in self.datasets[dataset_name]["tensors"]],
+                "metadata": self.datasets[dataset_name]["metadata"]
+            }
+            torch.save(data_to_save, file_path)
+            logging.info(f"Dataset '{dataset_name}' saved successfully to {file_path}")
+        except Exception as e: # Catch a broad range of exceptions during file I/O or serialization
+            logging.error(f"Error saving dataset '{dataset_name}' to {file_path}: {e}")
+
+    def _load_all_datasets_from_disk(self) -> None:
+        """
+        Internal helper to load all datasets from .pt files in the storage_path directory.
+
+        This method is called during initialization if persistence is enabled.
+        It scans the `storage_path` for files ending with '.pt', attempts to load
+        them, and populates the in-memory `self.datasets` dictionary.
+        """
+        if not self.storage_path:
+            return
+
+        logging.info(f"Scanning for existing datasets in {self.storage_path}...")
+        for file_path in self.storage_path.glob("*.pt"): # Iterate over .pt files
+            dataset_name = file_path.stem # Extract dataset name from filename (e.g., "my_data.pt" -> "my_data")
+            try:
+                loaded_data = torch.load(file_path)
+                # Basic validation of the loaded data structure
+                if isinstance(loaded_data, dict) and "tensors" in loaded_data and "metadata" in loaded_data:
+                    self.datasets[dataset_name] = {
+                        "tensors": loaded_data["tensors"],
+                        "metadata": loaded_data["metadata"]
+                    }
+                    logging.info(f"Dataset '{dataset_name}' loaded successfully from {file_path}")
+                else:
+                    logging.warning(f"File {file_path} does not appear to be a valid dataset file (missing keys or wrong format). Skipping.")
+            except Exception as e: # Catch errors during file loading or deserialization
+                logging.error(f"Error loading dataset from {file_path}: {e}. The file might be corrupted or not a PyTorch file.")
+
+    def list_datasets(self) -> List[str]:
+        """
+        Lists the names of all datasets currently stored.
+
+        Returns:
+            List[str]: A list of dataset names.
+        """
+        dataset_names = list(self.datasets.keys())
+        logging.info(f"Available datasets: {dataset_names}")
+        return dataset_names
 
     def create_dataset(self, name: str) -> None:
         """
         Creates a new, empty dataset.
 
         Args:
-            name: The unique name for the new dataset.
+            name (str): The unique name for the new dataset.
 
         Raises:
             ValueError: If a dataset with the same name already exists.
@@ -37,23 +132,32 @@ class TensorStorage:
 
         self.datasets[name] = {"tensors": [], "metadata": []}
         logging.info(f"Dataset '{name}' created successfully.")
+        self._save_dataset(name) # Save after creation
 
     def insert(self, name: str, tensor: torch.Tensor, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Inserts a tensor into a specified dataset.
 
+        The method generates a unique `record_id` and a `version` number for the
+        tensor. User-provided `metadata` is copied and can include custom fields.
+        If `record_id` is present in the user-provided `metadata`, it will be
+        ignored and replaced by a system-generated one (a warning will be logged).
+        Users can specify `timestamp_utc`, `shape`, and `dtype`; otherwise, these
+        are generated automatically.
+
         Args:
-            name: The name of the dataset to insert into.
-            tensor: The PyTorch tensor to insert.
-            metadata: Optional dictionary containing metadata about the tensor
-                      (e.g., source, timestamp, custom tags).
+            name (str): The name of the dataset to insert into.
+            tensor (torch.Tensor): The PyTorch tensor to insert.
+            metadata (Optional[Dict[str, Any]]): Optional dictionary containing
+                                                metadata about the tensor.
 
         Returns:
-            str: A unique ID assigned to the inserted tensor record.
+            str: A unique ID assigned to the inserted tensor record. This ID is
+                 system-generated.
 
         Raises:
-            ValueError: If the dataset does not exist.
-            TypeError: If the provided object is not a PyTorch tensor.
+            ValueError: If the dataset `name` does not exist.
+            TypeError: If the provided `tensor` object is not a PyTorch tensor.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for insertion.")
@@ -65,39 +169,50 @@ class TensorStorage:
 
         # Ensure metadata consistency if not provided
         if metadata is None:
-            metadata = {} # Start with empty dict if none provided
+        if metadata is None:
+            metadata = {}
+        else:
+            # Make a copy to avoid modifying the caller's dictionary
+            metadata = metadata.copy()
 
-        # Basic metadata generation
-        record_id = str(uuid.uuid4())
-        default_metadata = {
-            "record_id": record_id,
-            "timestamp_utc": time.time(),
-            "shape": tuple(tensor.shape),
-            "dtype": str(tensor.dtype),
-            # Placeholder for versioning - simple sequence for now
-            "version": len(self.datasets[name]["tensors"]) + 1,
-        }
-        # Update default_metadata with provided metadata, overwriting reserved keys if necessary
-        # Check for reserved keys before updating
-        for key in default_metadata:
-            if key in metadata and key != 'record_id': # Allow users to specify record_id if really needed, though risky
-                logging.warning(f"Provided metadata key '{key}' might conflict with generated defaults.")
+        # Generate essential, non-overridable metadata fields
+        system_record_id = str(uuid.uuid4()) # System-generated record_id is authoritative
+        current_version = len(self.datasets[name]["tensors"]) + 1 # Version is based on current number of items
 
-        # Merge: user-provided metadata takes precedence for non-essential fields
-        # but essential fields from default_metadata are always included.
-        final_metadata = {**metadata, **default_metadata} # Default values overwrite if keys conflict (like record_id)
-        final_metadata.update(metadata) # Ensure user metadata takes priority after defaults are set
+        # Warn if user attempts to provide 'record_id' and remove it from their dict; system ID takes precedence.
+        if "record_id" in metadata:
+            logging.warning(
+                f"User-provided 'record_id' ('{metadata['record_id']}') in metadata for insert into dataset '{name}' will be ignored. "
+                f"Using system-generated ID: '{system_record_id}'."
+            )
+            del metadata["record_id"] # User-provided record_id is discarded
+        
+        # Initialize final_metadata with the (potentially modified) user's metadata.
+        # This ensures custom fields are preserved.
+        final_metadata = metadata # `metadata` is already a copy or a new dict.
+
+        # Set or overwrite essential fields in final_metadata.
+        final_metadata["record_id"] = system_record_id # System-generated ID is always used.
+        
+        # For other standard fields, use user's value if provided, otherwise generate default.
+        final_metadata["timestamp_utc"] = metadata.get("timestamp_utc", time.time())
+        final_metadata["shape"] = metadata.get("shape", tuple(tensor.shape))
+        final_metadata["dtype"] = metadata.get("dtype", str(tensor.dtype))
+        final_metadata["version"] = current_version # Version is system-controlled.
 
         # --- Placeholder for Chunking Logic ---
-        # In a real implementation, large tensors would be chunked here.
-        # Each chunk would be stored separately with associated metadata.
-        # For now, we store the whole tensor.
+        # In a real-world scenario, large tensors might be split into chunks here.
+        # Each chunk would be stored, and metadata would track these chunks.
+        # For this example, the entire tensor is stored directly.
         # ------------------------------------
 
-        self.datasets[name]["tensors"].append(tensor.clone()) # Store a copy
+        self.datasets[name]["tensors"].append(tensor.clone()) # Store a copy of the tensor to prevent external modifications
         self.datasets[name]["metadata"].append(final_metadata)
-        logging.debug(f"Tensor with shape {tuple(tensor.shape)} inserted into dataset '{name}'. Record ID: {record_id}")
-        return record_id # Return the generated ID
+        
+        # Use the authoritative system-generated record_id for logging and return value
+        logging.debug(f"Tensor with shape {tuple(tensor.shape)} inserted into dataset '{name}'. Record ID: {final_metadata['record_id']}")
+        self._save_dataset(name) # Persist dataset changes if storage_path is configured
+        return final_metadata['record_id'] # Return the actual record_id used for storage
 
 
     def get_dataset(self, name: str) -> List[torch.Tensor]:
@@ -105,13 +220,13 @@ class TensorStorage:
         Retrieves all tensors from a specified dataset.
 
         Args:
-            name: The name of the dataset to retrieve.
+            name (str): The name of the dataset to retrieve.
 
         Returns:
-            A list of all tensors in the dataset.
+            List[torch.Tensor]: A list of all tensors in the dataset.
 
         Raises:
-            ValueError: If the dataset does not exist.
+            ValueError: If the dataset `name` does not exist.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for retrieval.")
@@ -128,13 +243,15 @@ class TensorStorage:
         Retrieves all tensors and their metadata from a specified dataset.
 
         Args:
-            name: The name of the dataset to retrieve.
+            name (str): The name of the dataset to retrieve.
 
         Returns:
-            A list of dictionaries, each containing a 'tensor' and its 'metadata'.
+            List[Dict[str, Any]]: A list of dictionaries, where each dictionary
+                                 contains a 'tensor' (torch.Tensor) and its
+                                 associated 'metadata' (Dict[str, Any]).
 
         Raises:
-            ValueError: If the dataset does not exist.
+            ValueError: If the dataset `name` does not exist.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for retrieval with metadata.")
@@ -155,17 +272,19 @@ class TensorStorage:
 
         Args:
             name: The name of the dataset to query.
-            query_fn: A callable that takes a tensor and its metadata dictionary
+            query_fn (Callable[[torch.Tensor, Dict[str, Any]], bool]):
+                      A callable that takes a tensor and its metadata dictionary
                       as input and returns True if the tensor should be included
                       in the result, False otherwise.
 
         Returns:
-            A list of dictionaries, each containing a 'tensor' and its 'metadata'
-            that satisfy the query function.
+            List[Dict[str, Any]]: A list of dictionaries, each containing a 'tensor'
+                                 and its 'metadata' for records that satisfy the
+                                 query function.
 
         Raises:
-            ValueError: If the dataset does not exist.
-            TypeError: If query_fn is not callable.
+            ValueError: If the dataset `name` does not exist.
+            TypeError: If `query_fn` is not a callable function.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for querying.")
@@ -199,14 +318,16 @@ class TensorStorage:
         Retrieves a specific tensor and its metadata by its unique record ID.
 
         Args:
-            name: The name of the dataset.
-            record_id: The unique ID of the record to retrieve.
+            name (str): The name of the dataset.
+            record_id (str): The unique ID of the record to retrieve.
 
         Returns:
-            A dictionary containing the 'tensor' and 'metadata', or None if not found.
+            Optional[Dict[str, Any]]: A dictionary containing the 'tensor' and
+                                     'metadata', or None if the `record_id` is
+                                     not found in the specified dataset.
 
         Raises:
-            ValueError: If the dataset does not exist.
+            ValueError: If the dataset `name` does not exist.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for get_tensor_by_id.")
@@ -227,15 +348,18 @@ class TensorStorage:
         Retrieves a random sample of records (tensor and metadata) from a dataset.
 
         Args:
-            name: The name of the dataset to sample from.
-            n_samples: The number of samples to retrieve.
+            name (str): The name of the dataset to sample from.
+            n_samples (int): The number of samples to retrieve.
 
         Returns:
-            A list of dictionaries, each containing 'tensor' and 'metadata' for
-            the sampled records. Returns fewer than n_samples if the dataset is smaller.
+            List[Dict[str, Any]]: A list of dictionaries, each containing 'tensor'
+                                 and 'metadata' for the sampled records. Returns
+                                 fewer than `n_samples` if the dataset size is
+                                 smaller than `n_samples`. Returns an empty list
+                                 if `n_samples` is non-positive.
 
         Raises:
-            ValueError: If the dataset does not exist.
+            ValueError: If the dataset `name` does not exist.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for sampling.")
@@ -270,92 +394,236 @@ class TensorStorage:
         Deletes an entire dataset. Use with caution!
 
         Args:
-            name: The name of the dataset to delete.
+            name (str): The name of the dataset to delete.
 
         Returns:
-            True if the dataset was deleted, False if it didn't exist.
+            bool: True if the dataset was deleted (from memory and disk if applicable),
+                  False if the dataset did not exist.
         """
         if name in self.datasets:
+            # If persistence is enabled, attempt to delete the dataset file
+            if self.storage_path:
+                file_path = self.storage_path / f"{name}.pt"
+                try:
+                    if file_path.exists():
+                        file_path.unlink() # Delete the .pt file
+                        logging.info(f"Dataset file {file_path} deleted successfully from disk.")
+                    else:
+                        # This case might occur if a file was manually deleted or never saved
+                        logging.warning(f"Dataset file {file_path} not found on disk for deletion.")
+                except OSError as e: # Catch potential file system errors
+                    logging.error(f"Error deleting dataset file {file_path} from disk: {e}. "
+                                  "The dataset will still be removed from memory.")
+                    # Proceed to delete from memory even if file deletion fails, but log the error.
+
+            # Delete from in-memory storage
             del self.datasets[name]
-            logging.warning(f"Dataset '{name}' has been permanently deleted.")
+            logging.warning(f"Dataset '{name}' has been permanently deleted from memory.")
             return True
         else:
             logging.warning(f"Attempted to delete non-existent dataset '{name}'.")
             return False
 
+    def update_tensor_metadata(self, dataset_name: str, record_id: str, new_metadata: Dict[str, Any]) -> bool:
+        """
+        Updates the metadata for a specific tensor in a dataset.
+
+        Args:
+            dataset_name (str): The name of the dataset containing the tensor.
+            record_id (str): The unique ID of the tensor record to update.
+            new_metadata (Dict[str, Any]): A dictionary containing the new metadata
+                                           fields to add or update. The 'record_id'
+                                           field, if present in `new_metadata`, will be
+                                           ignored to prevent changing the unique ID.
+
+        Returns:
+            bool: True if the metadata was updated successfully, False otherwise
+                  (e.g., dataset or `record_id` not found).
+        """
+        if dataset_name not in self.datasets:
+            logging.warning(f"Dataset '{dataset_name}' not found for metadata update of record '{record_id}'.")
+            return False
+
+        dataset = self.datasets[dataset_name]
+        found_record = False
+        for i, meta_item in enumerate(dataset["metadata"]):
+            if meta_item.get("record_id") == record_id:
+                # User cannot change 'record_id' via this method.
+                # If 'record_id' is in new_metadata, log a warning and remove it.
+                if "record_id" in new_metadata:
+                    logging.warning(
+                        f"Attempt to change 'record_id' for record '{record_id}' in dataset '{dataset_name}' "
+                        "during metadata update was ignored."
+                    )
+                    # Use a copy to avoid modifying the caller's dictionary if it's reused
+                    current_new_metadata = new_metadata.copy()
+                    del current_new_metadata["record_id"]
+                else:
+                    current_new_metadata = new_metadata
+
+                # Update the existing metadata dictionary with the new fields
+                dataset["metadata"][i].update(current_new_metadata)
+                logging.info(f"Metadata updated for record '{record_id}' in dataset '{dataset_name}'.")
+                self._save_dataset(dataset_name) # Persist changes if applicable
+                found_record = True
+                break # Exit loop once record is found and updated
+        
+        if not found_record:
+            logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for metadata update.")
+            return False
+        return True
+
+    def delete_tensor(self, dataset_name: str, record_id: str) -> bool:
+        """
+        Deletes a specific tensor and its metadata from a dataset by its record ID.
+
+        Args:
+            dataset_name (str): The name of the dataset from which to delete the tensor.
+            record_id (str): The unique ID of the tensor record to delete.
+
+        Returns:
+            bool: True if the tensor was deleted successfully, False otherwise
+                  (e.g., dataset or `record_id` not found).
+        """
+        if dataset_name not in self.datasets:
+            logging.warning(f"Dataset '{dataset_name}' not found for deletion of record '{record_id}'.")
+            return False
+
+        dataset = self.datasets[dataset_name]
+        for i, meta in enumerate(dataset["metadata"]):
+            if meta.get("record_id") == record_id:
+                del dataset["tensors"][i]
+                del dataset["metadata"][i]
+                logging.info(f"Tensor record '{record_id}' deleted from dataset '{dataset_name}'.")
+                self._save_dataset(dataset_name) # Save after tensor deletion
+                return True
+
+        logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for deletion.")
+        return False
+
 # Example Usage (can be run directly if needed)
 if __name__ == "__main__":
-    storage = TensorStorage()
+    # --- Test with persistence ---
+    print("--- Testing with Persistence ---")
+    persistent_storage_path = "my_tensor_data"
+    # Clean up previous test runs if any
+    if Path(persistent_storage_path).exists():
+        import shutil
+        shutil.rmtree(persistent_storage_path)
+        print(f"Cleaned up old '{persistent_storage_path}' directory.")
+
+    storage1 = TensorStorage(storage_path=persistent_storage_path)
+    storage1.create_dataset("persistent_images")
+    img_tensor1 = torch.rand(3, 32, 32)
+    img_id1 = storage1.insert("persistent_images", img_tensor1, metadata={"source": "cam1", "label": "truck"})
+    print(f"Inserted image {img_id1} into 'persistent_images' in storage1.")
+
+    # Verify data in storage1
+    print("Datasets in storage1:", storage1.list_datasets())
+    retrieved1 = storage1.get_tensor_by_id("persistent_images", img_id1)
+    if retrieved1:
+        print(f"Retrieved from storage1: {retrieved1['metadata']}")
+
+    # Create a new storage instance pointing to the same path
+    print("\nCreating storage2 pointing to the same path...")
+    storage2 = TensorStorage(storage_path=persistent_storage_path)
+    print("Datasets in storage2 (loaded from disk):", storage2.list_datasets())
+    retrieved2 = storage2.get_tensor_by_id("persistent_images", img_id1)
+    if retrieved2:
+        print(f"Retrieved from storage2: {retrieved2['metadata']}")
+        assert torch.equal(retrieved1['tensor'], retrieved2['tensor']), "Tensors are not equal after loading!"
+        assert retrieved1['metadata'] == retrieved2['metadata'], "Metadata is not equal after loading!"
+        print("Data consistency verified between storage1 and storage2 for 'persistent_images'.")
+
+    # Test deletion with persistence
+    storage2.delete_tensor("persistent_images", img_id1)
+    print(f"Deleted tensor {img_id1} from 'persistent_images' in storage2.")
+    assert storage2.get_tensor_by_id("persistent_images", img_id1) is None, "Tensor not deleted from storage2"
+
+    # Create a third storage instance to check if deletion persisted
+    print("\nCreating storage3 pointing to the same path...")
+    storage3 = TensorStorage(storage_path=persistent_storage_path)
+    print("Datasets in storage3 (should reflect deletion):", storage3.list_datasets())
+    assert storage3.get_tensor_by_id("persistent_images", img_id1) is None, "Tensor deletion did not persist!"
+    print("Tensor deletion persistence verified.")
+
+    storage3.delete_dataset("persistent_images")
+    print("Deleted dataset 'persistent_images' from storage3.")
+    assert "persistent_images" not in storage3.list_datasets(), "Dataset not deleted from storage3"
+    assert not (Path(persistent_storage_path) / "persistent_images.pt").exists(), "Dataset file not deleted."
+    print("Dataset file deletion verified.")
+
+
+    # --- Test in-memory (original behavior) ---
+    print("\n\n--- Testing In-Memory Storage ---")
+    storage_in_memory = TensorStorage(storage_path=None) # Explicitly in-memory
 
     # Create datasets
-    storage.create_dataset("images")
-    storage.create_dataset("sensor_readings")
+    storage_in_memory.create_dataset("images")
+    storage_in_memory.create_dataset("sensor_readings")
 
     # Insert tensors
     img_tensor = torch.rand(3, 64, 64) # Example image tensor (Channels, H, W)
-    sensor_tensor1 = torch.tensor([10.5, 11.2, 10.9])
-    sensor_tensor2 = torch.tensor([11.1, 11.5, 11.3])
-    sensor_tensor3 = torch.tensor([9.8, 10.1, 9.9])
+    sensor_tensor1_mem = torch.tensor([10.5, 11.2, 10.9])
+    sensor_tensor2_mem = torch.tensor([11.1, 11.5, 11.3])
+    sensor_tensor3_mem = torch.tensor([9.8, 10.1, 9.9])
 
-    img_id = storage.insert("images", img_tensor, metadata={"source": "camera_A", "label": "cat"})
-    sensor_id1 = storage.insert("sensor_readings", sensor_tensor1, metadata={"sensor_id": "XYZ", "location": "lab1"})
-    sensor_id2 = storage.insert("sensor_readings", sensor_tensor2, metadata={"sensor_id": "XYZ", "location": "lab1"})
-    sensor_id3 = storage.insert("sensor_readings", sensor_tensor3, metadata={"sensor_id": "ABC", "location": "lab2"})
+    img_id_mem = storage_in_memory.insert("images", img_tensor, metadata={"source": "camera_A", "label": "cat"})
+    sensor_id1_mem = storage_in_memory.insert("sensor_readings", sensor_tensor1_mem, metadata={"sensor_id": "XYZ", "location": "lab1"})
+    sensor_id2_mem = storage_in_memory.insert("sensor_readings", sensor_tensor2_mem, metadata={"sensor_id": "XYZ", "location": "lab1"})
+    sensor_id3_mem = storage_in_memory.insert("sensor_readings", sensor_tensor3_mem, metadata={"sensor_id": "ABC", "location": "lab2"})
 
-
-    print(f"Inserted image with ID: {img_id}")
-    print(f"Inserted sensor reading 1 with ID: {sensor_id1}")
-    print(f"Inserted sensor reading 2 with ID: {sensor_id2}")
-    print(f"Inserted sensor reading 3 with ID: {sensor_id3}")
-
+    print(f"Inserted image with ID: {img_id_mem}")
+    print(f"Inserted sensor reading 1 with ID: {sensor_id1_mem}")
 
     # Retrieve a dataset
-    all_sensor_tensors_meta = storage.get_dataset_with_metadata("sensor_readings")
-    print(f"\nRetrieved {len(all_sensor_tensors_meta)} sensor records:")
-    for item in all_sensor_tensors_meta:
+    all_sensor_tensors_meta_mem = storage_in_memory.get_dataset_with_metadata("sensor_readings")
+    print(f"\nRetrieved {len(all_sensor_tensors_meta_mem)} sensor records from in-memory storage:")
+    for item in all_sensor_tensors_meta_mem:
         print(f"  Metadata: {item['metadata']}, Tensor shape: {item['tensor'].shape}")
 
     # Query a dataset
-    print("\nQuerying sensor readings with first value > 11.0:")
-    query_result = storage.query(
+    print("\nQuerying in-memory sensor readings with first value > 11.0:")
+    query_result_mem = storage_in_memory.query(
         "sensor_readings",
         lambda tensor, meta: tensor[0].item() > 11.0
     )
-    for item in query_result:
+    for item in query_result_mem:
         print(f"  Metadata: {item['metadata']}, Tensor: {item['tensor']}")
 
-    print("\nQuerying sensor readings from sensor 'XYZ':")
-    query_result_meta = storage.query(
+    # Test list_datasets
+    print("\nListing all datasets in-memory:")
+    all_datasets_mem = storage_in_memory.list_datasets()
+    print(f"  Available datasets: {all_datasets_mem}")
+
+    # Test update_tensor_metadata
+    print(f"\nUpdating metadata for sensor {sensor_id1_mem} in 'sensor_readings' (in-memory):")
+    update_success_mem = storage_in_memory.update_tensor_metadata(
         "sensor_readings",
-        lambda tensor, meta: meta.get("sensor_id") == "XYZ"
+        sensor_id1_mem,
+        {"location": "lab1_updated_mem", "status": "calibrated_mem"}
     )
-    for item in query_result_meta:
-        print(f"  Metadata: {item['metadata']}, Tensor: {item['tensor']}")
+    if update_success_mem:
+        updated_item_mem = storage_in_memory.get_tensor_by_id("sensor_readings", sensor_id1_mem)
+        print(f"  Update successful. New metadata: {updated_item_mem['metadata']}")
 
-
-    # Retrieve by ID
-    print(f"\nRetrieving sensor reading with ID {sensor_id1}:")
-    retrieved_item = storage.get_tensor_by_id("sensor_readings", sensor_id1)
-    if retrieved_item:
-        print(f"  Metadata: {retrieved_item['metadata']}, Tensor: {retrieved_item['tensor']}")
-
-    # Sample the dataset
-    print(f"\nSampling 2 records from sensor_readings:")
-    sampled_items = storage.sample_dataset("sensor_readings", 2)
-    print(f" Got {len(sampled_items)} samples.")
-    for i, item in enumerate(sampled_items):
-         print(f"  Sample {i+1} - Record ID: {item['metadata'].get('record_id')}, Tensor shape: {item['tensor'].shape}")
-
-    print(f"\nSampling 5 records (more than available):")
-    sampled_items_all = storage.sample_dataset("sensor_readings", 5)
-    print(f" Got {len(sampled_items_all)} samples.")
-    for i, item in enumerate(sampled_items_all):
-         print(f"  Sample {i+1} - Record ID: {item['metadata'].get('record_id')}") # Showing IDs to see shuffle
+    # Test delete_tensor
+    print(f"\nDeleting sensor {sensor_id2_mem} from 'sensor_readings' (in-memory):")
+    delete_success_mem = storage_in_memory.delete_tensor("sensor_readings", sensor_id2_mem)
+    print(f"  Deletion successful: {delete_success_mem}")
+    assert storage_in_memory.get_tensor_by_id("sensor_readings", sensor_id2_mem) is None
 
     # Delete a dataset
-    storage.delete_dataset("images")
+    storage_in_memory.delete_dataset("images")
     try:
-        storage.get_dataset("images")
+        storage_in_memory.get_dataset("images")
     except ValueError as e:
-        print(f"\nSuccessfully deleted 'images' dataset: {e}")
+        print(f"\nSuccessfully deleted 'images' dataset (in-memory): {e}")
+
+    print("\n--- All tests completed ---")
+    # Clean up the persistent storage path after tests
+    if Path(persistent_storage_path).exists():
+        import shutil
+        shutil.rmtree(persistent_storage_path)
+        print(f"Cleaned up test directory '{persistent_storage_path}' after all tests.")
 
