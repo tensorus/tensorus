@@ -42,38 +42,72 @@ You can try Tensorus online via Huggingface Spaces:
 
 ```mermaid
 graph TD
-    %% Subgraphs
-    subgraph User_Interaction ["User Interaction"]
-        UI[Streamlit UI - app.py]
+    %% User Interface Layer
+    subgraph UI_Layer ["User Interaction"]
+        UI[Streamlit UI]
     end
-    subgraph Backend_Services ["Backend Services"]
-        API[FastAPI Backend - api.py]
+    
+    %% API Gateway Layer
+    subgraph API_Layer ["Backend Services"]
+        API[FastAPI Backend]
     end
-    subgraph Core_Storage ["Core Storage"]
-        TS[TensorStorage - tensor_storage.py]
+    
+    %% Core Storage with Method Interface
+    subgraph Storage_Layer ["Core Storage - TensorStorage"]
+        TS[TensorStorage Core]
+        subgraph Storage_Methods ["Storage Interface"]
+            TS_insert[insert data metadata]
+            TS_query[query query_fn]
+            TS_get[get_by_id id]
+            TS_sample[sample n]
+            TS_update[update_metadata]
+        end
+        TS --- Storage_Methods
     end
-    subgraph Agents_Group ["Agents"]
-        IA[Ingestion Agent - ingestion_agent.py]
-        NQLA[NQL Agent - nql_agent.py]
-        RLA[RL Agent - rl_agent.py]
-        AutoMLA[AutoML Agent - automl_agent.py]
+    
+    %% Agent Processing Layer
+    subgraph Agent_Layer ["Processing Agents"]
+        IA[Ingestion Agent]
+        NQLA[NQL Agent]
+        RLA[RL Agent]
+        AutoMLA[AutoML Agent]
     end
-    subgraph Tensor_Operations_Library ["Tensor Operations Library"]
-        TOps[TensorOps - tensor_ops.py]
+    
+    %% Tensor Operations Library
+    subgraph Ops_Layer ["Tensor Operations"]
+        TOps[TensorOps Library]
     end
-    %% Data flows
-    UI -->|/predict, /train| API
-    API -->|enqueue raw data| IA
-    IA -->|writes tensors| TS
-    TS -->|reads tensors| NQLA
-    TS -->|reads tensors| RLA
-    TS -->|reads tensors| AutoMLA
-    %% Agents invoking the ops library
-    NQLA -->|vector math| TOps
-    RLA -->|policy eval| TOps
-    AutoMLA -->|model tuning| TOps
-    %% Ops writing back optional
-    TOps -->|save intermediates| TS
+
+    %% Primary UI Flow
+    UI -->|HTTP Requests| API
+
+    %% API Orchestration
+    API -->|Command Dispatch| IA
+    API -->|Command Dispatch| NQLA
+    API -->|Command Dispatch| RLA
+    API -->|Command Dispatch| AutoMLA
+    API -->|Direct Query| TS_query
+
+    %% Agent Storage Interactions
+    IA -->|Data Ingestion| TS_insert
+    
+    NQLA -->|Query Execution| TS_query
+    NQLA -->|Record Retrieval| TS_get
+
+    RLA -->|State Persistence| TS_insert
+    RLA -->|Experience Sampling| TS_sample
+    RLA -->|State Retrieval| TS_get
+    
+    AutoMLA -->|Trial Storage| TS_insert
+    AutoMLA -->|Data Retrieval| TS_query
+
+    %% Computational Operations
+    NQLA -->|Vector Operations| TOps
+    RLA -->|Policy Evaluation| TOps
+    AutoMLA -->|Model Optimization| TOps
+
+    %% Indirect Storage Write-back
+    TOps -.->|Intermediate Results| TS_insert
 ```
 
 ## Getting Started
