@@ -42,65 +42,72 @@ You can try Tensorus online via Huggingface Spaces:
 
 ```mermaid
 graph TD
-    %% Subgraphs
-    subgraph User_Interaction ["User Interaction"]
-        UI[Streamlit UI - app.py]
+    %% User Interface Layer
+    subgraph UI_Layer ["User Interaction"]
+        UI[Streamlit UI]
     end
-    subgraph Backend_Services ["Backend Services"]
-        API[FastAPI Backend - api.py]
+
+    %% API Gateway Layer
+    subgraph API_Layer ["Backend Services"]
+        API[FastAPI Backend]
     end
-    subgraph Core_Storage ["Core Storage / TensorStorage - tensor_storage.py"]
-        TS[TensorStorage]
-        subgraph TS_Interactions ["Example Methods"]
-            direction LR
-            TS_insert["insert(data, metadata)"]
-            TS_query["query(query_fn)"]
-            TS_get["get_by_id(id)"]
-            TS_sample["sample(n)"]
-            TS_update["update_metadata()"]
+
+    %% Core Storage with Method Interface
+    subgraph Storage_Layer ["Core Storage - TensorStorage"]
+        TS[TensorStorage Core]
+        subgraph Storage_Methods ["Storage Interface"]
+            TS_insert[insert data metadata]
+            TS_query[query query_fn]
+            TS_get[get_by_id id]
+            TS_sample[sample n]
+            TS_update[update_metadata]
         end
-        TS --- TS_Interactions
-    end
-    subgraph Agents_Group ["Agents"]
-        IA[Ingestion Agent - ingestion_agent.py]
-        NQLA[NQL Agent - nql_agent.py]
-        RLA[RL Agent - rl_agent.py]
-        AutoMLA[AutoML Agent - automl_agent.py]
-    end
-    subgraph Tensor_Operations_Library ["Tensor Operations Library"]
-        TOps[TensorOps - tensor_ops.py]
+        TS --- Storage_Methods
     end
 
-    %% UI to API
-    UI -->|"/predict", "/train", "/query"| API
+    %% Agent Processing Layer
+    subgraph Agent_Layer ["Processing Agents"]
+        IA[Ingestion Agent]
+        NQLA[NQL Agent]
+        RLA[RL Agent]
+        AutoMLA[AutoML Agent]
+    end
 
-    %% API to Agents & TensorStorage (high level)
-    API -->|control commands| IA
-    API -->|control commands| NQLA
-    API -->|control commands| RLA
-    API -->|control commands| AutoMLA
-    API -->|direct NQL query?| TS_query %% Or API routes NQL to NQLA first
+    %% Tensor Operations Library
+    subgraph Ops_Layer ["Tensor Operations"]
+        TOps[TensorOps Library]
+    end
 
-    %% Agent Interactions with TensorStorage methods
-    IA -->|uses insert()| TS_insert
-    
-    NQLA -->|uses query(), get_dataset()| TS_query
-    NQLA -->|uses query(), get_dataset()| TS_get %% NQL might also fetch specific records if parsed
+    %% Primary UI Flow
+    UI -->|HTTP Requests| API
 
-    RLA -->|stores states/exp with insert()| TS_insert
-    RLA -->|samples experiences with sample()| TS_sample
-    RLA -->|retrieves states with get_by_id()| TS_get
-    
-    AutoMLA -->|stores trial results with insert()| TS_insert
-    AutoMLA -->|may retrieve data via query()| TS_query
+    %% API Orchestration
+    API -->|Command Dispatch| IA
+    API -->|Command Dispatch| NQLA
+    API -->|Command Dispatch| RLA
+    API -->|Command Dispatch| AutoMLA
+    API -->|Direct Query| TS_query
 
-    %% Agents invoking the ops library
-    NQLA -->|vector math| TOps
-    RLA -->|policy eval| TOps
-    AutoMLA -->|model tuning| TOps
+    %% Agent Storage Interactions
+    IA -->|Data Ingestion| TS_insert
 
-    %% Ops writing back (optional)
-    TOps -.->|save intermediates via agent/API| TS_insert %% Clarified that TensorOps doesn't call TS directly
+    NQLA -->|Query Execution| TS_query
+    NQLA -->|Record Retrieval| TS_get
+
+    RLA -->|State Persistence| TS_insert
+    RLA -->|Experience Sampling| TS_sample
+    RLA -->|State Retrieval| TS_get
+
+    AutoMLA -->|Trial Storage| TS_insert
+    AutoMLA -->|Data Retrieval| TS_query
+
+    %% Computational Operations
+    NQLA -->|Vector Operations| TOps
+    RLA -->|Policy Evaluation| TOps
+    AutoMLA -->|Model Optimization| TOps
+
+    %% Indirect Storage Write-back
+    TOps -.->|Intermediate Results| TS_insert
 ```
 
 ## Getting Started
