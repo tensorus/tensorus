@@ -1,6 +1,8 @@
 # Tensorus: Agentic Tensor Database/Data Lake
 
-Tensorus is an experimental platform for managing and querying tensor data, designed with agentic capabilities in mind. It provides a flexible way to store, retrieve, and manipulate tensors, and it's built to integrate with intelligent agents for tasks like data ingestion, reinforcement learning, and AutoML.
+Tensorus is a specialized data platform focused on the management and agent-driven manipulation of tensor data. It offers a streamlined environment for storing, retrieving, and operating on tensors, laying the groundwork for advanced AI and machine learning workflows.
+
+The core purpose of Tensorus is to simplify and enhance how developers and AI agents interact with tensor datasets. By providing dedicated tools for tensor operations and a framework for agentic integration, Tensorus aims to accelerate tasks like automated data ingestion, reinforcement learning from stored experiences, and AutoML processes, ultimately enabling more efficient and intelligent data utilization in AI projects.
 
 ## Key Features
 
@@ -35,6 +37,57 @@ You can try Tensorus online via Huggingface Spaces:
 
 *   **API Documentation:** [Swagger UI](https://tensorus-api.hf.space/docs) | [ReDoc](https://tensorus-api.hf.space/redoc)
 *   **Dashboard UI:** [Streamlit Dashboard](https://tensorus-dashboard.hf.space)
+
+## Tensorus Execution Cycle
+
+```mermaid
+graph TD
+    subgraph "User Interaction"
+        UI[Streamlit UI (app.py)]
+    end
+
+    subgraph "Backend Services"
+        API[FastAPI Backend (api.py)]
+    end
+
+    subgraph "Core Storage"
+        TS[TensorStorage (tensor_storage.py)]
+    end
+
+    subgraph "Agents"
+        IA[Ingestion Agent (ingestion_agent.py)]
+        NQLA[NQL Agent (nql_agent.py)]
+        RLA[RL Agent (rl_agent.py)]
+        AutoMLA[AutoML Agent (automl_agent.py)]
+    end
+
+    subgraph "Tensor Operations Library"
+        TOps[TensorOps (tensor_ops.py)]
+    end
+
+    UI -- HTTP Requests --> API
+    API -- Interacts with --> TS
+    API -- Controls/Manages --> IA
+    API -- Controls/Manages --> NQLA
+    API -- Controls/Manages --> RLA
+    API -- Controls/Manages --> AutoMLA
+
+    IA -- Stores/Retrieves Data --> TS
+    NQLA -- Queries Data from --> TS
+    RLA -- Stores/Retrieves Experiences & States --> TS
+    AutoMLA -- Stores/Retrieves Trial Data --> TS
+
+    IA -- Uses --> TOps
+    RLA -- Uses --> TOps
+    AutoMLA -- Uses --> TOps
+    TS -- May Use (Internally) --> TOps
+
+    style UI fill:#f9f,stroke:#333,stroke-width:2px
+    style API fill:#ccf,stroke:#333,stroke-width:2px
+    style TS fill:#cfc,stroke:#333,stroke-width:2px
+    style Agents fill:#ff9,stroke:#333,stroke-width:2px
+    style TOps fill:#fcf,stroke:#333,stroke-width:2px
+```
 
 ## Getting Started
 
