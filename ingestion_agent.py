@@ -229,8 +229,9 @@ class DataIngestionAgent:
                 if self._validate_data(tensor, metadata):
                     # Ensure tensor is not None before insertion
                     if tensor is not None:
+                        metadata["created_by"] = "IngestionAgent" # Add agent source
                         record_id = self.tensor_storage.insert(self.dataset_name, tensor, metadata)
-                        logger.info(f"Successfully ingested '{file_path}' into dataset '{self.dataset_name}' with record ID: {record_id}")
+                        logger.info(f"Successfully ingested '{file_path}' into dataset '{self.dataset_name}' with record ID: {record_id} (created_by: IngestionAgent)")
                         self.processed_files.add(file_path) # Mark as processed only on success
                     else:
                          # Should have been caught by validation, but as safeguard:

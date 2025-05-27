@@ -1,7 +1,7 @@
 # app.py
 """
 Streamlit frontend application for the Tensorus platform.
-Interacts with the FastAPI backend (api.py).
+New UI structure with top navigation and Nexus Dashboard.
 """
 
 import streamlit as st
@@ -17,14 +17,14 @@ st.set_page_config(
     page_title="Tensorus Platform",
     page_icon="🧊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # Collapse sidebar as nav is now at top
 )
 
 # --- Configure Logging (Optional but good practice) ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Integrated Tensor Utilities ---
+# --- Integrated Tensor Utilities (Preserved) ---
 
 def _validate_tensor_data(data: List[Any], shape: List[int]):
     """
@@ -87,16 +87,15 @@ def tensor_to_list(tensor: torch.Tensor) -> Tuple[List[int], str, List[Any]]:
     data = tensor.tolist()
     return shape, dtype_str, data
 
-# --- Integrated UI Utilities (from former ui_utils.py) ---
+# --- Integrated UI Utilities (Preserved from former ui_utils.py) ---
 
-# Define the base URL of your FastAPI backend
-API_BASE_URL = "http://127.0.0.1:8000" # Make sure this matches where api.py runs
+API_BASE_URL = "http://127.0.0.1:8000"
 
 def get_api_status():
     """Checks if the backend API is reachable."""
     try:
         response = requests.get(f"{API_BASE_URL}/", timeout=2)
-        response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
+        response.raise_for_status()
         return True, response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"API connection error: {e}")
@@ -109,7 +108,7 @@ def get_agent_status():
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error fetching agent status: {e}")
+        # st.error(f"Connection Error fetching agent status: {e}") # Handled by caller
         return None
 
 def start_agent(agent_id: str):
@@ -119,7 +118,7 @@ def start_agent(agent_id: str):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error starting agent {agent_id}: {e}")
+        # st.error(f"Connection Error starting agent {agent_id}: {e}")
         return {"success": False, "message": str(e)}
 
 def stop_agent(agent_id: str):
@@ -129,7 +128,7 @@ def stop_agent(agent_id: str):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error stopping agent {agent_id}: {e}")
+        # st.error(f"Connection Error stopping agent {agent_id}: {e}")
         return {"success": False, "message": str(e)}
 
 def configure_agent(agent_id: str, config: dict):
@@ -143,7 +142,7 @@ def configure_agent(agent_id: str, config: dict):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error configuring agent {agent_id}: {e}")
+        # st.error(f"Connection Error configuring agent {agent_id}: {e}")
         return {"success": False, "message": str(e)}
 
 def post_nql_query(query: str):
@@ -152,12 +151,12 @@ def post_nql_query(query: str):
         response = requests.post(
             f"{API_BASE_URL}/chat/query",
             json={"query": query},
-            timeout=15 # Allow more time for potentially complex queries
+            timeout=15
         )
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error posting NQL query: {e}")
+        # st.error(f"Connection Error posting NQL query: {e}")
         return {"query": query, "response_text": "Error connecting to backend.", "error": str(e)}
 
 def get_datasets():
@@ -168,8 +167,8 @@ def get_datasets():
         data = response.json()
         return data.get("datasets", [])
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error fetching datasets: {e}")
-        return [] # Return empty list on error
+        # st.error(f"Connection Error fetching datasets: {e}")
+        return []
 
 def get_dataset_preview(dataset_name: str, limit: int = 5):
     """Fetches preview data for a specific dataset."""
@@ -178,7 +177,7 @@ def get_dataset_preview(dataset_name: str, limit: int = 5):
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error fetching preview for {dataset_name}: {e}")
+        # st.error(f"Connection Error fetching preview for {dataset_name}: {e}")
         return None
 
 def operate_explorer(dataset: str, operation: str, index: int, params: dict):
@@ -193,214 +192,280 @@ def operate_explorer(dataset: str, operation: str, index: int, params: dict):
         response = requests.post(
             f"{API_BASE_URL}/explorer/operate",
             json=payload,
-            timeout=15 # Allow time for computation
+            timeout=15
         )
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        st.error(f"Connection Error performing operation '{operation}' on {dataset}: {e}")
+        # st.error(f"Connection Error performing operation '{operation}' on {dataset}: {e}")
         return {"success": False, "metadata": {"error": str(e)}, "result_data": None}
 
+# --- Helper functions for dashboard (can be expanded) ---
+def get_total_tensors_placeholder():
+    # In a real app, this would call an API endpoint
+    # e.g., requests.get(f"{API_BASE_URL}/stats/total_tensors").json()['count']
+    return "1,234" # Placeholder
 
-# --- Initialize Session State ---
-if 'agent_status' not in st.session_state:
-    st.session_state.agent_status = None
-if 'datasets' not in st.session_state:
-    st.session_state.datasets = []
-if 'selected_dataset' not in st.session_state:
-    st.session_state.selected_dataset = None
-if 'dataset_preview' not in st.session_state:
-    st.session_state.dataset_preview = None
-if 'explorer_result' not in st.session_state:
-    st.session_state.explorer_result = None
-if 'nql_response' not in st.session_state:
-    st.session_state.nql_response = None
+def get_active_datasets_placeholder():
+    # e.g., requests.get(f"{API_BASE_URL}/stats/active_datasets").json()['count']
+    return "15" # Placeholder
+
+def get_agents_online_placeholder():
+    # e.g., count running agents from get_agent_status()
+    # For now, placeholder:
+    # agent_data = get_agent_status()
+    # if agent_data:
+    #     online = sum(1 for agent in agent_data.values() if agent.get('running'))
+    #     total = len(agent_data)
+    #     return f"{online}/{total} Online"
+    return "3/4 Online" # Placeholder
+
+# --- CSS Styles ---
+# Renaming app.py's specific CSS loader to avoid confusion with the shared one.
+def load_app_specific_css():
+    # This function now only loads styles specific to the Nexus Dashboard content in app.py
+    # General styles (body, .stApp, nav, common-card, etc.) are in pages_shared_utils.load_shared_css()
+    st.markdown("""
+<style>
+    /* Nexus Dashboard Specific Styles */
+    .dashboard-title { /* Custom title for the dashboard */
+        color: #e0e0ff; /* Light purple/blue, matching shared h1 */
+        text-align: center;
+        margin-top: 1rem; /* Standardized margin */
+        margin-bottom: 2rem;
+        font-size: 2.8em; /* Slightly larger for main dashboard title */
+        font-weight: bold;
+    }
+
+    /* Metric Cards Container for Dashboard */
+    .metric-card-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-around; 
+        gap: 20px; 
+        padding: 0 1rem; 
+    }
+    
+    /* Individual Metric Card - inherits from .common-card (defined in shared_utils) */
+    /* This specific .metric-card class is for dashboard cards if they need further specialization */
+    .metric-card { 
+        /* Inherits background, border, padding, shadow, transition from .common-card */
+        flex: 1 1 220px; /* Adjusted flex basis */
+        min-width: 200px; 
+        max-width: 300px;
+        text-align: center;
+    }
+    /* .metric-card:hover is inherited from .common-card:hover */
+    
+    .metric-card .icon { /* Specific styling for icons within dashboard metric cards */
+        font-size: 2.8em; /* Slightly larger icon for dashboard */
+        margin-bottom: 0.5rem; /* Tighter spacing */
+        /* color is inherited from .common-card .icon or can be overridden here */
+    }
+    .metric-card h3 { /* Metric card titles */
+        /* color, font-size, margin-bottom, font-weight inherited from .common-card h3 */
+        /* No specific overrides here unless needed for dashboard metric cards */
+    }
+    .metric-card p.metric-value { /* Specific class for the main value display */
+        font-size: 2em; /* Larger font for the metric value */
+        font-weight: bold;
+        color: #ffffff; /* White color for emphasis */
+        margin-top: 0.25rem; /* Adjust as needed */
+        margin-bottom: 0;
+    }
+
+    /* Specific status icon colors for API status card in dashboard */
+    .metric-card.api-status-connected .icon { color: #50C878; } /* Emerald Green */
+    .metric-card.api-status-disconnected .icon { color: #FF6961; } /* Pastel Red */
+
+    /* Activity Feed Styles for Dashboard */
+    .activity-feed-container { /* Container for the activity feed section */
+        margin-top: 2.5rem;
+        padding: 0 1.5rem; 
+    }
+    /* .activity-feed-container h2 is covered by shared h2 styles */
+    
+    .activity-item { /* Individual item in the feed */
+        background-color: #1e2a47; /* Slightly lighter than common-card, for variety */
+        padding: 0.85rem 1.25rem; /* Adjusted padding */
+        border-radius: 6px;
+        margin-bottom: 0.6rem; /* Slightly more space */
+        font-size: 0.95em;
+        border-left: 4px solid #3a6fbf; /* Accent Blue border */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .activity-item .timestamp { /* Timestamp within an activity item */
+        color: #8080af; /* Muted purple for timestamp */
+        font-weight: bold;
+        font-size: 0.85em; /* Smaller timestamp */
+        margin-right: 0.75em; /* More space after timestamp */
+    }
+    .activity-item strong { /* Agent name or key part of activity */
+        color: #b0b0df; /* Tertiary heading color for emphasis */
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- Page Functions ---
+
+def nexus_dashboard_content():
+    # Uses .dashboard-title for its main heading
+    st.markdown('<h1 class="dashboard-title">Tensorus Nexus</h1>', unsafe_allow_html=True)
+
+    # System Health & Key Metrics
+    # Uses .metric-card-container for the overall layout
+    st.markdown('<div class="metric-card-container">', unsafe_allow_html=True)
+
+    # Card 1: Total Tensors
+    total_tensors = get_total_tensors_placeholder()
+    st.markdown(f"""
+    <div class="common-card metric-card"> {/* Apply common-card and specific metric-card style */}
+        <div class="icon">⚙️</div>
+        <h3>Total Tensors</h3>
+        <p class="metric-value">{total_tensors}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Card 2: Active Datasets
+    active_datasets = get_active_datasets_placeholder()
+    st.markdown(f"""
+    <div class="common-card metric-card">
+        <div class="icon">📚</div>
+        <h3>Active Datasets</h3>
+        <p class="metric-value">{active_datasets}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Card 3: Agents Online
+    agents_online = get_agents_online_placeholder()
+    st.markdown(f"""
+    <div class="common-card metric-card">
+        <div class="icon">🤖</div>
+        <h3>Agents Online</h3>
+        <p class="metric-value">{agents_online}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Card 4: API Status
+    api_ok, _ = get_api_status()
+    api_status_text = "Connected" if api_ok else "Disconnected"
+    # Add specific class for API status icon coloring based on shared status styles
+    api_status_icon_class = "api-status-connected" if api_ok else "api-status-disconnected"
+    api_icon_char = "✔️" if api_ok else "❌"
+    st.markdown(f"""
+    <div class="common-card metric-card {api_status_icon_class}"> {/* Add status class for icon */}
+        <div class="icon">{api_icon_char}</div>
+        <h3>API Status</h3>
+        <p class="metric-value">{api_status_text}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True) # Close metric-card-container
+
+    # Agent Activity Feed
+    # Uses .activity-feed-container and h2 (which is styled by shared CSS)
+    st.markdown('<div class="activity-feed-container">', unsafe_allow_html=True)
+    st.markdown('<h2>Recent Agent Activity</h2>', unsafe_allow_html=True)
+
+    # Placeholder activity items
+    activity_items = [
+        {"timestamp": "2023-10-27 10:05:15", "agent": "IngestionAgent", "action": "added 'img_new.png' to 'raw_images'"},
+        {"timestamp": "2023-10-27 10:02:30", "agent": "RLAgent", "action": "completed training cycle, reward: 75.2"},
+        {"timestamp": "2023-10-27 09:55:48", "agent": "MonitoringAgent", "action": "detected high CPU usage on node 'compute-01'"},
+        {"timestamp": "2023-10-27 09:45:10", "agent": "IngestionAgent", "action": "processed batch of 100 sensor readings"},
+    ]
+
+    for item in activity_items:
+        st.markdown(f"""
+        <div class="activity-item">
+            <span class="timestamp">[{item['timestamp']}]</span>
+            <strong>{item['agent']}:</strong> {item['action']}
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True) # Close activity-feed-container
 
 
-# --- Sidebar ---
-with st.sidebar:
-    st.title("Tensorus Control")
-    st.markdown("---")
+# --- Main Application ---
+# Import the shared CSS loader
+try:
+    from pages.pages_shared_utils import load_css as load_shared_css
+except ImportError:
+    st.error("Failed to import shared CSS loader. Page styling will be incomplete.")
+    def load_shared_css(): pass # Dummy function
 
-    # API Status Check
-    st.subheader("API Status")
-    api_ok, api_info = get_api_status() # Use integrated function
-    if api_ok:
-        st.success(f"Connected to API v{api_info.get('version', 'N/A')}")
-    else:
-        st.error(f"API Connection Failed: {api_info.get('error', 'Unknown error')}")
-        st.warning("Ensure the backend (`uvicorn api:app ...`) is running.")
-        st.stop()
+def main():
+    load_shared_css() # Load shared styles first
+    load_app_specific_css() # Then load app-specific styles (for dashboard)
 
-    st.markdown("---")
-    # Navigation
-    app_mode = st.radio(
-        "Select Feature",
-        ("Dashboard", "Agent Control", "NQL Chat", "Data Explorer")
-    )
-    st.markdown("---")
+    # Initialize session state for current page if not set
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "Nexus Dashboard"
 
+    # --- Top Navigation Bar ---
+    nav_items = {
+        "Nexus Dashboard": "Nexus Dashboard",
+        "Agents": "Agents",
+        "Explorer": "Explorer",
+        "Query Hub": "Query Hub",
+        "API Docs": "API Docs"
+    }
 
-# --- Main Page Content ---
-
-if app_mode == "Dashboard":
-    st.title("📊 Operations Dashboard")
-    st.warning("Live WebSocket dashboard view is best accessed directly via the backend's `/dashboard` HTML page or a dedicated JS frontend. This is a simplified view.")
-    st.markdown(f"Access the basic live dashboard here.", unsafe_allow_html=True) # Link to backend dashboard
-    st.info("This Streamlit view doesn't currently support live WebSocket updates.")
-
-
-elif app_mode == "Agent Control":
-    st.title("🤖 Agent Control Panel")
-
-    if st.button("Refresh Agent Status"):
-        st.session_state.agent_status = get_agent_status() # Use integrated function
-
-    if st.session_state.agent_status:
-        agents = st.session_state.agent_status
-        agent_ids = list(agents.keys())
-
-        if not agent_ids:
-            st.warning("No agents reported by the backend.")
-        else:
-            selected_agent_id = st.selectbox("Select Agent", agent_ids)
-
-            if selected_agent_id:
-                agent_info = agents[selected_agent_id]
-                st.subheader(f"Agent: {agent_info.get('name', selected_agent_id)}")
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Status", "Running" if agent_info.get('running') else "Stopped")
-                    st.write("**Configuration:**")
-                    st.json(agent_info.get('config', {}))
-                with col2:
-                    st.write("**Recent Logs:**")
-                    st.code('\n'.join(agent_info.get('logs', [])), language='log')
-
-                st.write("**Actions:**")
-                btn_col1, btn_col2, btn_col3 = st.columns(3)
-                with btn_col1:
-                    if st.button("Start Agent", key=f"start_{selected_agent_id}", disabled=agent_info.get('running')):
-                        result = start_agent(selected_agent_id) # Use integrated function
-                        st.toast(result.get("message", "Request sent."))
-                        st.session_state.agent_status = get_agent_status() # Refresh status
-                        st.rerun()
-                with btn_col2:
-                    if st.button("Stop Agent", key=f"stop_{selected_agent_id}", disabled=not agent_info.get('running')):
-                        result = stop_agent(selected_agent_id) # Use integrated function
-                        st.toast(result.get("message", "Request sent."))
-                        st.session_state.agent_status = get_agent_status() # Refresh status
-                        st.rerun()
-
-    else:
-        st.info("Click 'Refresh Agent Status' to load agent information.")
-
-
-elif app_mode == "NQL Chat":
-    st.title("💬 Natural Language Query (NQL)")
-    st.info("Ask questions about the data stored in Tensorus (e.g., 'show me tensors from rl_experiences', 'count records in sample_data').")
-
-    user_query = st.text_input("Enter your query:", key="nql_query_input")
-
-    if st.button("Submit Query", key="nql_submit"):
-        if user_query:
-            with st.spinner("Processing query..."):
-                st.session_state.nql_response = post_nql_query(user_query) # Use integrated function
-        else:
-            st.warning("Please enter a query.")
-
-    if st.session_state.nql_response:
-        resp = st.session_state.nql_response
-        st.markdown("---")
-        st.write(f"**Query:** {resp.get('query')}")
-        if resp.get("error"):
-            st.error(f"Error: {resp.get('error')}")
-        else:
-            st.success(f"**Response:** {resp.get('response_text')}")
-            if resp.get("results"):
-                st.write("**Results Preview:**")
-                st.json(resp.get("results"))
-        st.session_state.nql_response = None
-
-
-elif app_mode == "Data Explorer":
-    st.title("🔍 Data Explorer")
-
-    if not st.session_state.datasets or st.button("Refresh Datasets"):
-        st.session_state.datasets = get_datasets() # Use integrated function
-
-    if not st.session_state.datasets:
-        st.warning("No datasets found or failed to fetch from backend.")
-    else:
-        st.session_state.selected_dataset = st.selectbox(
-            "Select Dataset",
-            st.session_state.datasets,
-            index=st.session_state.datasets.index(st.session_state.selected_dataset) if st.session_state.selected_dataset in st.session_state.datasets else 0
+    nav_html_parts = [f'<div class="topnav-container"><span class="logo">🧊 Tensorus</span><nav>']
+    for page_id, page_name in nav_items.items():
+        active_class = "active" if st.session_state.current_page == page_id else ""
+        # Use st.button an invisible character as key to make Streamlit rerun and update session state
+        # This is a common workaround for making nav links update state
+        # We'll use a more robust JavaScript approach if this is problematic, but st.query_params is better
+        
+        # Using query_params for navigation state is more robust
+        # Check if query_params for page is set, if so, it overrides session_state
+        query_params = st.query_params.to_dict()
+        if "page" in query_params and query_params["page"] in nav_items:
+            st.session_state.current_page = query_params["page"]
+            # Clear the query param after use to avoid it sticking on manual refresh
+            # However, for deeplinking, we might want to keep it.
+            # For now, let's allow it to persist. To clear: st.query_params.clear()
+            
+        # Construct the link with query_params
+        nav_html_parts.append(
+            f'<a href="?page={page_id}" class="{active_class}" target="_self">{page_name}</a>'
         )
 
-        if st.session_state.selected_dataset:
-            if st.button("Show Preview", key="preview_btn"):
-                with st.spinner(f"Fetching preview for {st.session_state.selected_dataset}..."):
-                    st.session_state.dataset_preview = get_dataset_preview(st.session_state.selected_dataset) # Use integrated function
+    nav_html_parts.append('</nav></div>')
+    st.markdown("".join(nav_html_parts), unsafe_allow_html=True)
+    
+    # Handle page selection clicks (alternative to query_params if that proves problematic)
+    # This part is tricky with pure st.markdown links.
+    # The query_params approach is generally preferred for web-like navigation.
 
-            if st.session_state.dataset_preview:
-                st.subheader(f"Preview: {st.session_state.dataset_preview.get('dataset')}")
-                st.write(f"Total Records: {st.session_state.dataset_preview.get('record_count')}")
-                st.dataframe(st.session_state.dataset_preview.get('preview', []))
-                st.markdown("---")
+    # --- Content Area ---
+    # The main app.py now acts as a router to other pages or displays dashboard content directly.
+    if st.session_state.current_page == "Nexus Dashboard":
+        nexus_dashboard_content()
+    elif st.session_state.current_page == "Agents":
+        st.switch_page("pages/control_panel_v2.py")
+    elif st.session_state.current_page == "Explorer":
+        st.switch_page("pages/data_explorer_v2.py")
+    elif st.session_state.current_page == "Query Hub":
+        st.switch_page("pages/nql_chatbot_v2.py")
+    elif st.session_state.current_page == "API Docs":
+        st.switch_page("pages/api_playground_v2.py")
+    else:
+        # Default to Nexus Dashboard if current_page is unrecognized
+        st.session_state.current_page = "Nexus Dashboard"
+        nexus_dashboard_content()
+        # It's good practice to trigger a rerun if state was corrected
+        st.rerun()
 
-            st.subheader("Perform Operation")
-            record_count = st.session_state.dataset_preview.get('record_count', 1) if st.session_state.dataset_preview else 1
-            tensor_index = st.number_input("Select Tensor Index", min_value=0, max_value=max(0, record_count - 1), value=0, step=1)
 
-            operations = ["info", "head", "slice", "sum", "mean", "reshape", "transpose"]
-            selected_op = st.selectbox("Select Operation", operations)
-
-            params = {}
-            # Dynamic parameter inputs
-            if selected_op == "head":
-                params['count'] = st.number_input("Count", min_value=1, value=5, step=1)
-            elif selected_op == "slice":
-                params['dim'] = st.number_input("Dimension (dim)", value=0, step=1)
-                params['start'] = st.number_input("Start Index", value=0, step=1)
-                params['end'] = st.number_input("End Index (optional)", value=None, step=1, format="%d")
-                params['step'] = st.number_input("Step (optional)", value=None, step=1, format="%d")
-            elif selected_op in ["sum", "mean"]:
-                dim_input = st.text_input("Dimension(s) (optional, e.g., 0 or 0,1)")
-                if dim_input:
-                    try: params['dim'] = [int(x.strip()) for x in dim_input.split(',')] if ',' in dim_input else int(dim_input)
-                    except ValueError: st.warning("Invalid dimension format.")
-                params['keepdim'] = st.checkbox("Keep Dimensions (keepdim)", value=False)
-            elif selected_op == "reshape":
-                shape_input = st.text_input("Target Shape (comma-separated, e.g., 2,3,5)")
-                if shape_input:
-                    try: params['shape'] = [int(x.strip()) for x in shape_input.split(',')]
-                    except ValueError: st.warning("Invalid shape format.")
-            elif selected_op == "transpose":
-                params['dim0'] = st.number_input("Dimension 0", value=0, step=1)
-                params['dim1'] = st.number_input("Dimension 1", value=1, step=1)
-
-            if st.button("Run Operation", key="run_op_btn"):
-                valid_request = True
-                if selected_op == "reshape" and not params.get('shape'):
-                    st.error("Target Shape is required for reshape.")
-                    valid_request = False
-
-                if valid_request:
-                    with st.spinner(f"Running {selected_op} on {st.session_state.selected_dataset}[{tensor_index}]..."):
-                        st.session_state.explorer_result = operate_explorer( # Use integrated function
-                            st.session_state.selected_dataset,
-                            selected_op,
-                            tensor_index,
-                            params
-                        )
-
-            if st.session_state.explorer_result:
-                st.markdown("---")
-                st.subheader("Operation Result")
-                st.write("**Metadata:**")
-                st.json(st.session_state.explorer_result.get("metadata", {}))
-                st.write("**Result Data:**")
-                st.json(st.session_state.explorer_result.get("result_data", "No data returned."))
-
+if __name__ == "__main__":
+    # --- Initialize Old Session State Keys (to avoid errors if they are still used by preserved code) ---
+    # This should be phased out as those sections are rebuilt.
+    if 'agent_status' not in st.session_state: st.session_state.agent_status = None
+    if 'datasets' not in st.session_state: st.session_state.datasets = []
+    if 'selected_dataset' not in st.session_state: st.session_state.selected_dataset = None
+    if 'dataset_preview' not in st.session_state: st.session_state.dataset_preview = None
+    if 'explorer_result' not in st.session_state: st.session_state.explorer_result = None
+    if 'nql_response' not in st.session_state: st.session_state.nql_response = None
+    
+    main()
