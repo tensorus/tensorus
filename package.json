@@ -1,0 +1,19 @@
+{
+  "name": "tensorus-project-root",
+  "version": "1.0.0",
+  "description": "Root for Tensorus project, including integration tests",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:integration": "jest --testTimeout=30000 tests_integration/test_mcp_integration.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  }
+}
