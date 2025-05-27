@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 # Assuming your FastAPI app instance is named 'app' in 'api.py'
 # and tensor_storage_instance is the global TensorStorage.
-from api import app, tensor_storage_instance
+from tensorus.api import app, tensor_storage_instance
 
 client = TestClient(app)
 

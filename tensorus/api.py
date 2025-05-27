@@ -15,10 +15,10 @@ from pydantic import BaseModel, Field, root_validator
 
 # Import Tensorus modules - Ensure these files exist in your project path
 try:
-    from tensor_storage import TensorStorage
-    from nql_agent import NQLAgent
-    from ingestion_agent import DataIngestionAgent # Added import
-    from tensor_ops import TensorOps
+    from .tensor_storage import TensorStorage
+    from .nql_agent import NQLAgent
+    from .ingestion_agent import DataIngestionAgent # Added import
+    from .tensor_ops import TensorOps
     # from rl_agent import RLAgent
     # from automl_agent import AutoMLAgent
 except ImportError as e:
@@ -1589,9 +1589,9 @@ if __name__ == "__main__":
     # Basic check for required local modules if run directly
     modules_ok = True
     try:
-        from tensor_storage import TensorStorage
-        from nql_agent import NQLAgent
-        from ingestion_agent import DataIngestionAgent # Check this too
+        from .tensor_storage import TensorStorage
+        from .nql_agent import NQLAgent
+        from .ingestion_agent import DataIngestionAgent # Check this too
     except ImportError as import_err:
         print(f"\nERROR: Missing required local modules: {import_err}.")
         print("Please ensure tensor_storage.py, nql_agent.py, and ingestion_agent.py are in the same directory or Python path.\n")

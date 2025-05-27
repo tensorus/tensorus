@@ -3,7 +3,7 @@ import torch
 import shutil
 import os
 from pathlib import Path
-from tensor_storage import TensorStorage # Assuming tensor_storage.py is in the same directory or accessible via PYTHONPATH
+from tensorus.tensor_storage import TensorStorage # Assuming tensor_storage.py is in the same directory or accessible via PYTHONPATH
 
 class TestTensorStorageInMemory(unittest.TestCase):
     def setUp(self):

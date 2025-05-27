@@ -26,7 +26,7 @@ import logging
 import torch
 from typing import List, Dict, Any, Optional, Callable, Tuple
 
-from tensor_storage import TensorStorage # Import our storage module
+from .tensor_storage import TensorStorage # Import our storage module
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
