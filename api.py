@@ -10,19 +10,20 @@ import asyncio # Added for potential background tasks later
 import torch
 import uvicorn
 # Added Query import
-from fastapi import FastAPI, HTTPException, Body, Depends, Path, status, Query
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, Body, Depends, Path, status, Query, APIRouter
+from pydantic import BaseModel, Field, root_validator
 
 # Import Tensorus modules - Ensure these files exist in your project path
 try:
     from tensor_storage import TensorStorage
     from nql_agent import NQLAgent
     from ingestion_agent import DataIngestionAgent # Added import
+    from tensor_ops import TensorOps
     # from rl_agent import RLAgent
     # from automl_agent import AutoMLAgent
 except ImportError as e:
-    print(f"ERROR: Could not import Tensorus modules (TensorStorage, NQLAgent): {e}")
-    print("Please ensure tensor_storage.py and nql_agent.py are in the Python path.")
+    print(f"ERROR: Could not import Tensorus modules (TensorStorage, NQLAgent, TensorOps): {e}")
+    print("Please ensure tensor_storage.py, nql_agent.py, and tensor_ops.py are in the Python path.")
     # Optionally raise the error or exit if these are critical at startup
     raise
 
@@ -262,6 +263,107 @@ class ApiResponse(BaseModel):
     message: str = Field(..., description="A descriptive status message.")
     data: Optional[Any] = Field(None, description="Optional data payload relevant to the operation (e.g., record_id, list of names).")
 
+class UpdateMetadataRequest(BaseModel):
+    new_metadata: Dict[str, Any] = Field(..., description="New metadata to update the tensor record with. This will replace the existing metadata.")
+
+# --- Pydantic Models for Tensor Operations ---
+
+class TensorRef(BaseModel):
+    dataset_name: str = Field(..., description="Name of the dataset containing the tensor.")
+    record_id: str = Field(..., description="Record ID of the tensor within the dataset.")
+
+class TensorInputVal(BaseModel):
+    tensor_ref: Optional[TensorRef] = None
+    scalar_value: Optional[Union[float, int]] = None
+
+    @root_validator(pre=True)
+    def check_one_input_provided(cls, values):
+        if sum(v is not None for v in values.values()) != 1:
+            raise ValueError("Exactly one of 'tensor_ref' or 'scalar_value' must be provided.")
+        return values
+
+class OpsBaseRequest(BaseModel):
+    output_dataset_name: Optional[str] = Field(None, description="Optional name for a new dataset to store the output tensor. If None, a default or existing dataset might be used by the operation.")
+    output_metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata to associate with the output tensor.")
+
+# Specific Unary Operation Parameter Models
+class OpsReshapeRequestParams(BaseModel):
+    new_shape: List[int] = Field(..., description="The new shape for the tensor.")
+
+class OpsPermuteRequestParams(BaseModel):
+    dims: List[int] = Field(..., description="A list of dimensions to permute to.")
+
+class OpsTransposeRequestParams(BaseModel):
+    dim0: int = Field(..., description="The first dimension to transpose.")
+    dim1: int = Field(..., description="The second dimension to transpose.")
+
+class OpsGetSingleDimensionParam(BaseModel):
+    dim: Optional[Union[int, List[int]]] = Field(None, description="Dimension(s) to operate over. If None, operates over all dimensions.")
+    keepdim: bool = Field(False, description="Whether the output tensor has dim retained or not.")
+
+# Unary Operation Request Models
+class OpsUnaryOpRequest(OpsBaseRequest):
+    input_tensor: TensorRef = Field(..., description="Reference to the input tensor.")
+    params: Optional[Dict[str, Any]] = Field(None, description="Parameters for the unary operation.")
+
+class OpsReshapeRequest(OpsBaseRequest):
+    input_tensor: TensorRef = Field(..., description="Reference to the input tensor for reshape.")
+    params: OpsReshapeRequestParams
+
+class OpsPermuteRequest(OpsBaseRequest):
+    input_tensor: TensorRef = Field(..., description="Reference to the input tensor for permute.")
+    params: OpsPermuteRequestParams
+
+class OpsTransposeRequest(OpsBaseRequest):
+    input_tensor: TensorRef = Field(..., description="Reference to the input tensor for transpose.")
+    params: OpsTransposeRequestParams
+
+class OpsReductionRequest(OpsBaseRequest): # For sum, mean
+    input_tensor: TensorRef = Field(..., description="Reference to the input tensor for reduction (sum, mean).")
+    params: OpsGetSingleDimensionParam
+
+class OpsMinMaxRequest(OpsBaseRequest): # For min, max
+    input_tensor: TensorRef = Field(..., description="Reference to the input tensor for min/max.")
+    params: Optional[OpsGetSingleDimensionParam] = None
+
+class OpsLogRequest(OpsBaseRequest):
+    input_tensor: TensorRef = Field(..., description="Reference to the input tensor for logarithm.")
+    # No specific params for basic log, could add base if needed
+
+# Binary Operation Request Models
+class OpsBinaryOpRequest(OpsBaseRequest): # For add, subtract, multiply, divide, matmul, dot
+    input1: TensorRef = Field(..., description="Reference to the first input tensor.")
+    input2: TensorInputVal = Field(..., description="Second input: a reference to another tensor or a scalar value.")
+
+class OpsPowerRequest(OpsBaseRequest):
+    base_tensor: TensorRef = Field(..., description="Reference to the base tensor.")
+    exponent: TensorInputVal = Field(..., description="Exponent: a reference to another tensor or a scalar value.")
+
+# Tensor List Operation Request Models
+class OpsTensorListRequestParams(BaseModel):
+    dim: int = Field(0, description="Dimension along which to concatenate or stack.")
+
+class OpsTensorListRequest(OpsBaseRequest): # For concatenate, stack
+    input_tensors: List[TensorRef] = Field(..., min_items=1, description="List of input tensors to concatenate or stack.")
+    params: OpsTensorListRequestParams
+
+# Einsum Operation Request Model
+class OpsEinsumRequestParams(BaseModel):
+    equation: str = Field(..., description="Einstein summation equation string (e.g., 'ij,jk->ik').")
+
+class OpsEinsumRequest(OpsBaseRequest):
+    input_tensors: List[TensorRef] = Field(..., min_items=1, description="List of input tensors for Einsum.")
+    params: OpsEinsumRequestParams
+
+# Generic Operation Result Response Model
+class OpsResultResponse(BaseModel):
+    success: bool = Field(..., description="Indicates if the tensor operation was successful.")
+    message: str = Field(..., description="A descriptive status message regarding the operation.")
+    output_dataset_name: Optional[str] = Field(None, description="Name of the dataset where the output tensor was stored.")
+    output_record_id: Optional[str] = Field(None, description="Record ID of the output tensor in the output dataset.")
+    output_tensor_details: Optional[TensorOutput] = Field(None, description="Details of the output tensor, if generated and requested.")
+
+
 # --- NEW Pydantic Models for Agents ---
 class AgentInfo(BaseModel):
     id: str = Field(..., description="Unique identifier for the agent (e.g., 'ingestion', 'rl_trainer').")
@@ -490,6 +592,106 @@ async def list_datasets(storage: TensorStorage = Depends(get_tensor_storage)):
     except Exception as e:
          logger.exception(f"Unexpected error listing datasets: {e}")
          raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error while listing datasets.")
+
+@app.get("/datasets/{dataset_name}/tensors/{record_id}", response_model=TensorOutput, tags=["Tensor Management"])
+async def get_tensor_by_id_api(
+    dataset_name: str = Path(..., description="The name of the dataset."),
+    record_id: str = Path(..., description="The unique ID of the tensor record."),
+    storage: TensorStorage = Depends(get_tensor_storage)
+):
+    """
+    Retrieves a specific tensor record by its ID from the specified dataset.
+    """
+    try:
+        record = storage.get_tensor_by_id(dataset_name, record_id)
+        if record is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tensor record '{record_id}' not found in dataset '{dataset_name}'.")
+
+        shape, dtype, data_list = tensor_to_list(record['tensor'])
+        return TensorOutput(
+            record_id=record_id, # or record['metadata'].get('record_id', record_id)
+            shape=shape,
+            dtype=dtype,
+            data=data_list,
+            metadata=record['metadata']
+        )
+    except ValueError as e: # Catch "Dataset not found"
+        logger.warning(f"Dataset not found while trying to get tensor by ID: {dataset_name}, {record_id}. Error: {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error fetching tensor '{record_id}' from dataset '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error fetching tensor.")
+
+@app.delete("/datasets/{dataset_name}", response_model=ApiResponse, tags=["Datasets"])
+async def delete_dataset_api(
+    dataset_name: str = Path(..., description="The name of the dataset to delete."),
+    storage: TensorStorage = Depends(get_tensor_storage)
+):
+    """
+    Deletes an entire dataset and all its associated tensor records.
+    """
+    try:
+        storage.delete_dataset(dataset_name)
+        logger.info(f"Dataset '{dataset_name}' deleted successfully.")
+        return ApiResponse(success=True, message=f"Dataset '{dataset_name}' deleted successfully.")
+    except ValueError as e: # Catch "Dataset not found"
+        logger.warning(f"Attempted to delete non-existent dataset '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error deleting dataset '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error deleting dataset.")
+
+@app.delete("/datasets/{dataset_name}/tensors/{record_id}", response_model=ApiResponse, tags=["Tensor Management"])
+async def delete_tensor_api(
+    dataset_name: str = Path(..., description="The name of the dataset."),
+    record_id: str = Path(..., description="The unique ID of the tensor record to delete."),
+    storage: TensorStorage = Depends(get_tensor_storage)
+):
+    """
+    Deletes a specific tensor record by its ID from the specified dataset.
+    """
+    try:
+        storage.delete_tensor(dataset_name, record_id)
+        logger.info(f"Tensor record '{record_id}' deleted successfully from dataset '{dataset_name}'.")
+        return ApiResponse(success=True, message=f"Tensor record '{record_id}' deleted successfully.")
+    except ValueError as e: # Catch "Dataset not found" or "Tensor not found"
+        logger.warning(f"Error deleting tensor '{record_id}' from '{dataset_name}': {e}")
+        if "Dataset not found" in str(e): # Crude check, better if TensorStorage raises specific errors
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dataset '{dataset_name}' not found.")
+        elif "Tensor not found" in str(e) or "Record ID not found" in str(e):
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tensor record '{record_id}' not found in dataset '{dataset_name}'.")
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error deleting tensor '{record_id}' from dataset '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error deleting tensor.")
+
+@app.put("/datasets/{dataset_name}/tensors/{record_id}/metadata", response_model=ApiResponse, tags=["Tensor Management"])
+async def update_tensor_metadata_api(
+    dataset_name: str = Path(..., description="The name of the dataset."),
+    record_id: str = Path(..., description="The unique ID of the tensor record to update."),
+    update_request: UpdateMetadataRequest = Body(...),
+    storage: TensorStorage = Depends(get_tensor_storage)
+):
+    """
+    Updates the metadata for a specific tensor record.
+    This replaces the entire existing metadata with the new metadata provided.
+    """
+    try:
+        storage.update_tensor_metadata(dataset_name, record_id, update_request.new_metadata)
+        logger.info(f"Metadata for tensor '{record_id}' in dataset '{dataset_name}' updated successfully.")
+        return ApiResponse(success=True, message="Tensor metadata updated successfully.")
+    except ValueError as e: # Catch "Dataset not found" or "Tensor not found"
+        logger.warning(f"Error updating metadata for tensor '{record_id}' in '{dataset_name}': {e}")
+        if "Dataset not found" in str(e):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dataset '{dataset_name}' not found.")
+        elif "Tensor not found" in str(e) or "Record ID not found" in str(e):
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tensor record '{record_id}' not found in dataset '{dataset_name}'.")
+        else: # Other ValueErrors could be due to invalid metadata structure if TensorStorage validates it
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid request: {e}")
+    except Exception as e:
+        logger.exception(f"Error updating metadata for tensor '{record_id}' in dataset '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating tensor metadata.")
 
 # --- Querying Endpoint ---
 @app.post("/query", response_model=NQLResponse, tags=["Querying"])
@@ -993,6 +1195,392 @@ async def read_root():
     """Provides a simple welcome message for the API root."""
     # Useful for health checks or simple verification that the API is running
     return {"message": "Welcome to the Tensorus API! Visit /docs or /redoc for interactive documentation."}
+
+# --- Tensor Operations Router ---
+ops_router = APIRouter(
+    prefix="/ops",
+    tags=["Tensor Operations"],
+    # dependencies=[Depends(get_tensor_storage)], # Optional: Add dependencies for the whole router
+)
+
+DEFAULT_OPS_OUTPUT_DATASET = "tensor_ops_results"
+
+async def _get_tensor_from_ref(tensor_ref: TensorRef, storage: TensorStorage) -> torch.Tensor:
+    """Helper to fetch a tensor from storage using a TensorRef."""
+    try:
+        record = storage.get_tensor_by_id(tensor_ref.dataset_name, tensor_ref.record_id)
+        if record is None:
+            logger.warning(f"Tensor record '{tensor_ref.record_id}' not found in dataset '{tensor_ref.dataset_name}'.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail=f"Input tensor '{tensor_ref.record_id}' not found in dataset '{tensor_ref.dataset_name}'.")
+        if not isinstance(record.get('tensor'), torch.Tensor):
+            logger.error(f"Retrieved object for '{tensor_ref.record_id}' in '{tensor_ref.dataset_name}' is not a tensor. Type: {type(record.get('tensor'))}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                detail=f"Retrieved object for input tensor '{tensor_ref.record_id}' is not a valid tensor.")
+        return record['tensor']
+    except ValueError as e: # Catch "Dataset not found" from storage
+        logger.warning(f"Dataset not found while trying to get tensor by ID: {tensor_ref.dataset_name}, {tensor_ref.record_id}. Error: {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Unexpected error fetching tensor '{tensor_ref.record_id}' from dataset '{tensor_ref.dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Unexpected error fetching input tensor '{tensor_ref.record_id}'.")
+
+async def _store_and_respond_ops(
+    result_tensor: torch.Tensor,
+    op_name: str,
+    request: OpsBaseRequest, # OpsLogRequest, OpsReshapeRequest etc. all inherit from OpsBaseRequest
+    storage: TensorStorage,
+    input_refs: List[TensorRef] # For logging/metadata
+) -> OpsResultResponse:
+    """Helper to store operation result and craft the API response."""
+    output_dataset_name = request.output_dataset_name or DEFAULT_OPS_OUTPUT_DATASET
+    # Ensure the default output dataset exists (TensorStorage.insert should handle this if configured to do so,
+    # or we can explicitly create it here if needed)
+    try:
+        if not storage.dataset_exists(output_dataset_name):
+            storage.create_dataset(output_dataset_name)
+            logger.info(f"Created default output dataset for tensor operations: '{output_dataset_name}'")
+    except Exception as e:
+        logger.error(f"Failed to ensure output dataset '{output_dataset_name}' exists: {e}")
+        # Decide if this should be a critical failure or if TensorStorage.insert will handle it
+        # For now, let's assume insert will fail if dataset is truly needed and not creatable.
+
+    default_metadata = {
+        "operation": op_name,
+        "timestamp": time.time(),
+        "source_tensors": [ref.dict() for ref in input_refs],
+        "source_api_request": request.dict(exclude_none=True) # Log the request for traceability
+    }
+    final_metadata = {**default_metadata, **(request.output_metadata or {})}
+
+    try:
+        record_id = storage.insert(output_dataset_name, result_tensor, final_metadata)
+        logger.info(f"Stored result of '{op_name}' operation in '{output_dataset_name}' with record_id: {record_id}")
+
+        s, d, dl = tensor_to_list(result_tensor)
+        tensor_out_details = TensorOutput(
+            record_id=record_id,
+            shape=s,
+            dtype=d,
+            data=dl,
+            metadata=final_metadata
+        )
+        return OpsResultResponse(
+            success=True,
+            message=f"'{op_name}' operation successful. Result stored in '{output_dataset_name}/{record_id}'.",
+            output_dataset_name=output_dataset_name,
+            output_record_id=record_id,
+            output_tensor_details=tensor_out_details
+        )
+    except ValueError as e: # From storage.insert if dataset not found and not auto-created
+        logger.error(f"Failed to store result for '{op_name}' in '{output_dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Error storing result: {e}")
+    except Exception as e:
+        logger.exception(f"Unexpected error storing result of '{op_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error storing operation result.")
+
+
+@ops_router.post("/log", response_model=OpsResultResponse)
+async def tensor_log(request: OpsLogRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Computes the element-wise natural logarithm of the input tensor."""
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    try:
+        result_tensor = TensorOps.log(input_tensor)
+    except (ValueError, TypeError) as e:
+        logger.error(f"TensorOps.log failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "log", request, storage, [request.input_tensor])
+
+@ops_router.post("/reshape", response_model=OpsResultResponse)
+async def tensor_reshape(request: OpsReshapeRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Reshapes the input tensor to the specified new shape."""
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    try:
+        result_tensor = TensorOps.reshape(input_tensor, request.params.new_shape)
+    except (ValueError, TypeError, RuntimeError) as e: # RuntimeError for invalid reshape dims
+        logger.error(f"TensorOps.reshape failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "reshape", request, storage, [request.input_tensor])
+
+@ops_router.post("/transpose", response_model=OpsResultResponse)
+async def tensor_transpose(request: OpsTransposeRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Transposes the input tensor along the specified dimensions."""
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    try:
+        result_tensor = TensorOps.transpose(input_tensor, request.params.dim0, request.params.dim1)
+    except (ValueError, TypeError, IndexError) as e: # IndexError for invalid dims
+        logger.error(f"TensorOps.transpose failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "transpose", request, storage, [request.input_tensor])
+
+@ops_router.post("/permute", response_model=OpsResultResponse)
+async def tensor_permute(request: OpsPermuteRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Permutes the dimensions of the input tensor according to the specified order."""
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    try:
+        result_tensor = TensorOps.permute(input_tensor, tuple(request.params.dims))
+    except (ValueError, TypeError, RuntimeError) as e: # RuntimeError for invalid permute dims
+        logger.error(f"TensorOps.permute failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "permute", request, storage, [request.input_tensor])
+
+@ops_router.post("/sum", response_model=OpsResultResponse)
+async def tensor_sum(request: OpsReductionRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Computes the sum of elements in the input tensor, optionally along specified dimensions."""
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    try:
+        # Params.dim can be int, List[int], or None. TensorOps.sum handles this.
+        result_tensor = TensorOps.sum(input_tensor, dim=request.params.dim, keepdim=request.params.keepdim)
+    except (ValueError, TypeError, RuntimeError) as e: # RuntimeError for dim issues
+        logger.error(f"TensorOps.sum failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "sum", request, storage, [request.input_tensor])
+
+@ops_router.post("/mean", response_model=OpsResultResponse)
+async def tensor_mean(request: OpsReductionRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Computes the mean of elements in the input tensor, optionally along specified dimensions."""
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    try:
+        # Params.dim can be int, List[int], or None. TensorOps.mean handles this.
+        result_tensor = TensorOps.mean(input_tensor, dim=request.params.dim, keepdim=request.params.keepdim)
+    except (ValueError, TypeError, RuntimeError) as e: # RuntimeError for dim issues
+        logger.error(f"TensorOps.mean failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "mean", request, storage, [request.input_tensor])
+
+@ops_router.post("/min", response_model=OpsResultResponse)
+async def tensor_min(request: OpsMinMaxRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """
+    Finds the minimum value(s) in the input tensor.
+    If 'dim' is specified, returns the minimum values along that dimension.
+    Note: When 'dim' is specified, this endpoint stores only the 'values' tensor, not 'indices'.
+    """
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    message_suffix = ""
+    try:
+        if request.params and request.params.dim is not None:
+            result_tuple = TensorOps.min(input_tensor, dim=request.params.dim, keepdim=request.params.keepdim)
+            result_tensor = result_tuple.values # Store only values
+            message_suffix = " (values tensor stored)"
+        else:
+            result_tensor = TensorOps.min(input_tensor) # No dim, result is a single tensor
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.min failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    
+    response = await _store_and_respond_ops(result_tensor, "min", request, storage, [request.input_tensor])
+    if message_suffix: # Append info about storing only values
+        response.message += message_suffix
+    return response
+
+@ops_router.post("/max", response_model=OpsResultResponse)
+async def tensor_max(request: OpsMinMaxRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """
+    Finds the maximum value(s) in the input tensor.
+    If 'dim' is specified, returns the maximum values along that dimension.
+    Note: When 'dim' is specified, this endpoint stores only the 'values' tensor, not 'indices'.
+    """
+    input_tensor = await _get_tensor_from_ref(request.input_tensor, storage)
+    message_suffix = ""
+    try:
+        if request.params and request.params.dim is not None:
+            result_tuple = TensorOps.max(input_tensor, dim=request.params.dim, keepdim=request.params.keepdim)
+            result_tensor = result_tuple.values # Store only values
+            message_suffix = " (values tensor stored)"
+        else:
+            result_tensor = TensorOps.max(input_tensor) # No dim, result is a single tensor
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.max failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    response = await _store_and_respond_ops(result_tensor, "max", request, storage, [request.input_tensor])
+    if message_suffix: # Append info about storing only values
+        response.message += message_suffix
+    return response
+
+async def _get_input_val(input_val: TensorInputVal, storage: TensorStorage) -> Union[torch.Tensor, float, int]:
+    """Helper to resolve a TensorInputVal to either a torch.Tensor or a scalar."""
+    if input_val.tensor_ref:
+        return await _get_tensor_from_ref(input_val.tensor_ref, storage)
+    elif input_val.scalar_value is not None: # Pydantic validator ensures one is present
+        return input_val.scalar_value
+    else:
+        # This case should ideally be prevented by Pydantic's root_validator on TensorInputVal
+        logger.error("Invalid TensorInputVal: neither tensor_ref nor scalar_value is present.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Internal error: Invalid input value structure.")
+
+@ops_router.post("/add", response_model=OpsResultResponse)
+async def tensor_add(request: OpsBinaryOpRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Adds input2 (tensor or scalar) to input1 (tensor) element-wise."""
+    input1_tensor = await _get_tensor_from_ref(request.input1, storage)
+    input2_val = await _get_input_val(request.input2, storage)
+    source_refs = [request.input1]
+    if request.input2.tensor_ref:
+        source_refs.append(request.input2.tensor_ref)
+    try:
+        result_tensor = TensorOps.add(input1_tensor, input2_val)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.add failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "add", request, storage, source_refs)
+
+@ops_router.post("/subtract", response_model=OpsResultResponse)
+async def tensor_subtract(request: OpsBinaryOpRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Subtracts input2 (tensor or scalar) from input1 (tensor) element-wise."""
+    input1_tensor = await _get_tensor_from_ref(request.input1, storage)
+    input2_val = await _get_input_val(request.input2, storage)
+    source_refs = [request.input1]
+    if request.input2.tensor_ref:
+        source_refs.append(request.input2.tensor_ref)
+    try:
+        result_tensor = TensorOps.subtract(input1_tensor, input2_val)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.subtract failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "subtract", request, storage, source_refs)
+
+@ops_router.post("/multiply", response_model=OpsResultResponse)
+async def tensor_multiply(request: OpsBinaryOpRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Multiplies input1 (tensor) by input2 (tensor or scalar) element-wise."""
+    input1_tensor = await _get_tensor_from_ref(request.input1, storage)
+    input2_val = await _get_input_val(request.input2, storage)
+    source_refs = [request.input1]
+    if request.input2.tensor_ref:
+        source_refs.append(request.input2.tensor_ref)
+    try:
+        result_tensor = TensorOps.multiply(input1_tensor, input2_val)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.multiply failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "multiply", request, storage, source_refs)
+
+@ops_router.post("/divide", response_model=OpsResultResponse)
+async def tensor_divide(request: OpsBinaryOpRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Divides input1 (tensor) by input2 (tensor or scalar) element-wise."""
+    input1_tensor = await _get_tensor_from_ref(request.input1, storage)
+    input2_val = await _get_input_val(request.input2, storage)
+    source_refs = [request.input1]
+    if request.input2.tensor_ref:
+        source_refs.append(request.input2.tensor_ref)
+    try:
+        result_tensor = TensorOps.divide(input1_tensor, input2_val)
+    except (ValueError, TypeError, RuntimeError) as e: # Catches division by zero if it's a RuntimeError or ValueError
+        logger.error(f"TensorOps.divide failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "divide", request, storage, source_refs)
+
+@ops_router.post("/power", response_model=OpsResultResponse)
+async def tensor_power(request: OpsPowerRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Raises the base_tensor to the power of the exponent (tensor or scalar)."""
+    base_tensor_val = await _get_tensor_from_ref(request.base_tensor, storage)
+    exponent_val = await _get_input_val(request.exponent, storage)
+    source_refs = [request.base_tensor]
+    if request.exponent.tensor_ref:
+        source_refs.append(request.exponent.tensor_ref)
+    try:
+        result_tensor = TensorOps.power(base_tensor_val, exponent_val)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.power failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "power", request, storage, source_refs)
+
+@ops_router.post("/matmul", response_model=OpsResultResponse)
+async def tensor_matmul(request: OpsBinaryOpRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Performs matrix multiplication between input1 and input2 (both must be tensors)."""
+    input1_tensor = await _get_tensor_from_ref(request.input1, storage)
+    input2_val = await _get_input_val(request.input2, storage)
+
+    if not isinstance(input2_val, torch.Tensor):
+        logger.error("TensorOps.matmul failed: input2 must be a tensor, not a scalar.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Input2 for matmul must be a tensor, not a scalar.")
+    
+    source_refs = [request.input1, request.input2.tensor_ref] # input2.tensor_ref must exist due to above check
+    
+    try:
+        result_tensor = TensorOps.matmul(input1_tensor, input2_val)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.matmul failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "matmul", request, storage, source_refs)
+
+@ops_router.post("/dot", response_model=OpsResultResponse)
+async def tensor_dot(request: OpsBinaryOpRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Computes the dot product of input1 and input2 (both must be 1D tensors)."""
+    input1_tensor = await _get_tensor_from_ref(request.input1, storage)
+    input2_val = await _get_input_val(request.input2, storage)
+
+    if not isinstance(input2_val, torch.Tensor):
+        logger.error("TensorOps.dot failed: input2 must be a tensor, not a scalar.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Input2 for dot product must be a tensor, not a scalar.")
+    
+    # TensorOps.dot will validate if they are 1D.
+    source_refs = [request.input1, request.input2.tensor_ref] # input2.tensor_ref must exist
+
+    try:
+        result_tensor = TensorOps.dot(input1_tensor, input2_val)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.dot failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "dot", request, storage, source_refs)
+
+@ops_router.post("/concatenate", response_model=OpsResultResponse)
+async def tensor_concatenate(request: OpsTensorListRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Concatenates a list of input tensors along the specified dimension."""
+    input_tensors_resolved = []
+    for tensor_ref in request.input_tensors:
+        tensor = await _get_tensor_from_ref(tensor_ref, storage)
+        input_tensors_resolved.append(tensor)
+    
+    if not input_tensors_resolved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Input tensors list cannot be empty for concatenate.")
+
+    try:
+        result_tensor = TensorOps.concatenate(input_tensors_resolved, dim=request.params.dim)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.concatenate failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "concatenate", request, storage, request.input_tensors)
+
+@ops_router.post("/stack", response_model=OpsResultResponse)
+async def tensor_stack(request: OpsTensorListRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Stacks a list of input tensors along a new dimension."""
+    input_tensors_resolved = []
+    for tensor_ref in request.input_tensors:
+        tensor = await _get_tensor_from_ref(tensor_ref, storage)
+        input_tensors_resolved.append(tensor)
+
+    if not input_tensors_resolved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Input tensors list cannot be empty for stack.")
+
+    try:
+        result_tensor = TensorOps.stack(input_tensors_resolved, dim=request.params.dim)
+    except (ValueError, TypeError, RuntimeError) as e:
+        logger.error(f"TensorOps.stack failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "stack", request, storage, request.input_tensors)
+
+@ops_router.post("/einsum", response_model=OpsResultResponse)
+async def tensor_einsum(request: OpsEinsumRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+    """Applies Einstein summation to the input tensors based on the provided equation."""
+    input_tensors_resolved = []
+    for tensor_ref in request.input_tensors:
+        tensor = await _get_tensor_from_ref(tensor_ref, storage)
+        input_tensors_resolved.append(tensor)
+
+    if not input_tensors_resolved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Input tensors list cannot be empty for einsum.")
+
+    try:
+        result_tensor = TensorOps.einsum(request.params.equation, *input_tensors_resolved)
+    except (ValueError, TypeError, RuntimeError) as e: # Catches invalid equations or tensor mismatches
+        logger.error(f"TensorOps.einsum failed: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await _store_and_respond_ops(result_tensor, "einsum", request, storage, request.input_tensors)
+
+# Include the router in the main app
+app.include_router(ops_router)
 
 # --- Main Execution Block ---
 if __name__ == "__main__":
