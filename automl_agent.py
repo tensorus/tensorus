@@ -255,7 +255,8 @@ class AutoMLAgent:
                 "params": current_params, # Store params dict directly in metadata
                 "score": score, # Store score also in metadata for easier querying
                 "task_type": self.task_type,
-                "search_timestamp_utc": time.time()
+                "search_timestamp_utc": time.time(),
+                "created_by": "AutoMLAgent" # Add agent source
             }
             try:
                  record_id = self.tensor_storage.insert(

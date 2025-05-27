@@ -156,12 +156,14 @@ class RLAgent:
              return
 
         # 1. Store state tensor
-        state_id = self.tensor_storage.insert(self.state_dataset, state.cpu(), metadata={"component": "state"})
+        state_metadata = {"component": "state", "created_by": "RLAgent"}
+        state_id = self.tensor_storage.insert(self.state_dataset, state.cpu(), metadata=state_metadata)
 
         # 2. Store next_state tensor (if not None)
         next_state_id = None
         if next_state is not None:
-            next_state_id = self.tensor_storage.insert(self.state_dataset, next_state.cpu(), metadata={"component": "next_state"})
+            next_state_metadata = {"component": "next_state", "created_by": "RLAgent"}
+            next_state_id = self.tensor_storage.insert(self.state_dataset, next_state.cpu(), metadata=next_state_metadata)
 
         # 3. Create experience metadata
         experience_metadata = {
@@ -169,7 +171,8 @@ class RLAgent:
             "action": action, # Store action directly (assuming discrete & scalar)
             "reward": reward, # Store reward directly
             "next_state_id": next_state_id, # Can be None if done
-            "done": int(done) # Store boolean as int
+            "done": int(done), # Store boolean as int
+            "created_by": "RLAgent" # Mark the experience record itself
         }
 
         # 4. Store placeholder tensor with experience metadata
