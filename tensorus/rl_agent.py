@@ -23,8 +23,8 @@ import logging
 from typing import Tuple, Optional, Dict, Any
 
 # Import necessary Tensorus components
-from tensor_storage import TensorStorage
-from dummy_env import DummyEnv # Import our dummy environment
+from .tensor_storage import TensorStorage
+from .dummy_env import DummyEnv # Import our dummy environment
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

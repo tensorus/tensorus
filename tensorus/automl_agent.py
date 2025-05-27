@@ -25,7 +25,7 @@ import logging
 import time
 from typing import Dict, Any, Callable, Tuple, Optional
 
-from tensor_storage import TensorStorage # Import our storage module
+from .tensor_storage import TensorStorage # Import our storage module
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

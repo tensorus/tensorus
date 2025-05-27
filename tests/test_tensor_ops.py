@@ -4,9 +4,9 @@ import sys
 import os
 
 # Add the root directory to sys.path to allow importing tensor_ops
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) # No longer needed
 
-from tensor_ops import TensorOps
+from tensorus.tensor_ops import TensorOps
 
 class TestTensorOps(unittest.TestCase):
 
