@@ -16,6 +16,7 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 *   **Streamlit UI:** A user-friendly Streamlit frontend for exploring data and controlling agents.
 *   **Tensor Operations:** A comprehensive library of robust tensor operations for common manipulations. See [Basic Tensor Operations](#basic-tensor-operations) for details.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
+*   **Model Context Protocol (MCP) Server:** Provides a standardized interface for AI agents and LLMs to interact with Tensorus capabilities (tensor storage and operations) using the Model Context Protocol. (See [MCP Server Details](#mcp-server-details) below).
 
 ## Project Structure
 
@@ -30,6 +31,9 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 *   `dummy_env.py`: A simple environment for the RL agent.
 *   `ui_utils.py`: Utility functions for the Streamlit UI.
 *   `requirements.txt`: Lists the project's dependencies.
+*   `mcp_tensorus_server/`: Contains the Node.js application for the Model Context Protocol (MCP) server.
+    *   `mcp_tensorus_server/server.js`: The main MCP server implementation.
+    *   `mcp_tensorus_server/package.json`: Node.js project file and dependencies for the MCP server.
 
 ## Huggingface Demo
 
@@ -169,6 +173,39 @@ graph TD
 
     *   Access the UI in your browser at the URL provided by Streamlit (usually `http://localhost:8501`).
 
+### Running the MCP Server
+
+The Tensorus MCP Server is a Node.js application that acts as a bridge to the Python backend, exposing Tensorus capabilities as "tools" via the Model Context Protocol.
+
+**Prerequisites (MCP Server):**
+
+*   Node.js (v16 or later recommended) and npm.
+*   The Python FastAPI backend (`api.py`) must be running (see [Running the API](#running-the-api)).
+
+**Setup & Installation (MCP Server):**
+
+1.  Navigate to the MCP server directory:
+    ```bash
+    cd mcp_tensorus_server
+    ```
+2.  Install Node.js dependencies:
+    ```bash
+    npm install
+    ```
+
+**Starting the MCP Server:**
+
+1.  Ensure the Python FastAPI backend is running.
+2.  From the `mcp_tensorus_server` directory, run:
+    ```bash
+    node server.js
+    ```
+    Or, if a start script is added to `mcp_tensorus_server/package.json` (e.g., `"start": "node server.js"`):
+    ```bash
+    npm start
+    ```
+3.  The MCP server will connect via stdio by default. MCP clients will communicate with this server process through its standard input and output.
+
 ### Running the Agents (Examples)
 
 You can run the example agents directly from their respective files:
@@ -268,25 +305,7 @@ The Streamlit UI provides a user-friendly interface for:
     *   `task_type`: Type of task ('regression' or 'classification').
     *   `results_dataset`: Dataset name for storing results.
 
-## Future Work
-
-*   **Enhanced NQL:** Integrate a local or remote LLM for more robust natural language understanding.
-*   **Advanced Agents:** Develop more sophisticated agents for specific tasks.
-*   **Persistent Storage:** Replace in-memory TensorStorage with a persistent backend (e.g., database, cloud storage).
-*   **Scalability:** Implement chunking and other optimizations for handling very large tensors.
-*   **Security:** Add authentication and authorization.
-*   **Real-World Data:** Integrate with real-world data sources and environments.
-*   **Advanced Search:** Implement more advanced hyperparameter search algorithms (Bayesian Optimization, Hyperband).
-*   **Model Management:** Add capabilities for saving and loading trained models.
-*   **Streaming Data:** Support for streaming data sources.
-*   **Schema Validation:** Implement schema validation for datasets.
-*   **Resource Management:** Add controls for managing agent resource usage.
-
-## Contributing
-
-Contributions are welcome! Please feel free to open issues or submit pull requests.
-
-### Basic Tensor Operations
+## Basic Tensor Operations
 
 This section details the core tensor manipulation functionalities provided by `tensor_ops.py`. These operations are designed to be robust, with built-in type and shape checking where appropriate.
 
@@ -323,6 +342,92 @@ This section details the core tensor manipulation functionalities provided by `t
 #### Advanced Operations
 
 *   `einsum(equation, *tensors)`: Applies Einstein summation convention to the input tensors based on the provided equation string.
+
+## MCP Server Details
+
+The Tensorus Model Context Protocol (MCP) Server allows external AI agents, LLM-based applications, and other MCP-compatible clients to interact with Tensorus functionalities in a standardized way. It acts as a bridge, translating MCP requests into calls to the Tensorus Python API.
+
+### Overview
+
+*   **Protocol:** Implements the [Model Context Protocol](https://modelcontextprotocol.io/introduction).
+*   **Language:** Node.js, using the `@modelcontextprotocol/sdk`.
+*   **Communication:** Typically uses stdio for communication with a single client.
+*   **Interface:** Exposes Tensorus capabilities as a set of "tools" that an MCP client can list and call.
+
+### Available Tools
+
+The MCP server provides tools for various Tensorus functionalities. Below is an overview. For detailed input schemas and descriptions, an MCP client can call the standard `tools/list` method on the server, or you can inspect the `toolDefinitions` array within `mcp_tensorus_server/server.js`.
+
+*   **Dataset Management:**
+    *   `tensorus_list_datasets`: Lists all available datasets.
+    *   `tensorus_create_dataset`: Creates a new dataset.
+    *   `tensorus_delete_dataset`: Deletes an existing dataset.
+*   **Tensor Management:**
+    *   `tensorus_ingest_tensor`: Ingests a new tensor (with data provided as JSON) into a dataset.
+    *   `tensorus_get_tensor_details`: Retrieves the data and metadata for a specific tensor.
+    *   `tensorus_delete_tensor`: Deletes a specific tensor from a dataset.
+    *   `tensorus_update_tensor_metadata`: Updates the metadata of a specific tensor.
+*   **Tensor Operations:** These tools allow applying operations from the `TensorOps` library to tensors stored in Tensorus.
+    *   `tensorus_apply_unary_operation`: Applies operations like `log`, `reshape`, `transpose`, `permute`, `sum`, `mean`, `min`, `max`.
+    *   `tensorus_apply_binary_operation`: Applies operations like `add`, `subtract`, `multiply`, `divide`, `power`, `matmul`, `dot`.
+    *   `tensorus_apply_list_operation`: Applies operations like `concatenate` and `stack` that take a list of input tensors.
+    *   `tensorus_apply_einsum`: Applies Einstein summation.
+
+*Note on Tensor Operations via MCP:* Input tensors are referenced by their `dataset_name` and `record_id`. The result is typically stored as a new tensor, and the MCP tool returns details of this new result tensor (like its `record_id`).
+
+### Example Client Interaction (Conceptual)
+
+```javascript
+// Conceptual MCP client-side JavaScript
+// Assuming 'client' is an initialized MCP client connected to the Tensorus MCP Server
+
+async function example() {
+  // List available tools
+  const { tools } = await client.request({ method: 'tools/list' }, {});
+  console.log("Available Tensorus Tools:", tools.map(t => t.name)); // Log only names for brevity
+
+  // Create a new dataset
+  const createResponse = await client.request({ method: 'tools/call' }, {
+    name: 'tensorus_create_dataset',
+    arguments: { dataset_name: 'my_mcp_dataset' }
+  });
+  console.log(JSON.parse(createResponse.content[0].text).message);
+
+  // Ingest a tensor
+  const ingestResponse = await client.request({ method: 'tools/call' }, {
+    name: 'tensorus_ingest_tensor',
+    arguments: {
+      dataset_name: 'my_mcp_dataset',
+      tensor_shape: [2, 2],
+      tensor_dtype: 'float32',
+      tensor_data: [[1.0, 2.0], [3.0, 4.0]],
+      metadata: { source: 'mcp_client_example' }
+    }
+  });
+  // Assuming the Python API returns { success, message, data: { record_id, ... } }
+  // And MCP server stringifies this whole object in the text content
+  const ingestData = JSON.parse(ingestResponse.content[0].text);
+  console.log("Ingest success:", ingestData.success, "Record ID:", ingestData.data.record_id);
+}
+```
+
+## Future Work
+
+*   **Enhanced NQL:** Integrate a local or remote LLM for more robust natural language understanding.
+*   **Advanced Agents:** Develop more sophisticated agents for specific tasks.
+*   **Persistent Storage:** Replace in-memory TensorStorage with a persistent backend (e.g., database, cloud storage).
+*   **Scalability:** Implement chunking and other optimizations for handling very large tensors.
+*   **Security:** Add authentication and authorization.
+*   **Real-World Data:** Integrate with real-world data sources and environments.
+*   **Advanced Search:** Implement more advanced hyperparameter search algorithms (Bayesian Optimization, Hyperband).
+*   **Model Management:** Add capabilities for saving and loading trained models.
+*   **Streaming Data:** Support for streaming data sources.
+*   **Schema Validation:** Implement schema validation for datasets.
+*   **Resource Management:** Add controls for managing agent resource usage.
+
+## Contributing
+
+Contributions are welcome! Please feel free to open issues or submit pull requests.
 
 ## License
 
