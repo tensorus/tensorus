@@ -404,6 +404,6 @@ if __name__ == "__main__":
     # import shutil
     # shutil.rmtree(source_dir)
 
-        logger.info("--- Ingestion Agent Example Finished ---")
-    else:
-        logger.info("--- Ingestion Agent Example SKIPPED (RUN_INGESTION_AGENT_EXAMPLE not set to 'true') ---")
+    logger.info("--- Ingestion Agent Example Finished ---")
+else:
+    logger.info("--- Ingestion Agent Example SKIPPED (RUN_INGESTION_AGENT_EXAMPLE not set to 'true') ---")
