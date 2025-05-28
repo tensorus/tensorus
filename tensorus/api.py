@@ -1582,39 +1582,9 @@ async def tensor_einsum(request: OpsEinsumRequest, storage: TensorStorage = Depe
 # Include the router in the main app
 app.include_router(ops_router)
 
-# --- Main Execution Block ---
-if __name__ == "__main__":
-    # This block allows running the API directly using `python api.py`
-
-    # Basic check for required local modules if run directly
-    modules_ok = True
-    try:
-        from .tensor_storage import TensorStorage
-        from .nql_agent import NQLAgent
-        from .ingestion_agent import DataIngestionAgent # Check this too
-    except ImportError as import_err:
-        print(f"\nERROR: Missing required local modules: {import_err}.")
-        print("Please ensure tensor_storage.py, nql_agent.py, and ingestion_agent.py are in the same directory or Python path.\n")
-        modules_ok = False
-        # exit(1) # Exit if modules are absolutely critical for startup
-
-    if modules_ok:
-        # Updated server start message
-        print(f"--- Starting Tensorus API Server (v{app.version} with Live Ingestion Agent and Placeholders) ---")
-        print(f"--- Logging level set to: {logging.getLevelName(logger.getEffectiveLevel())} ---")
-        print(f"--- Access API documentation at http://127.0.0.1:8000/docs ---")
-        print(f"--- Alternative documentation at http://127.0.0.1:8000/redoc ---")
-        print("--- Press CTRL+C to stop ---")
-
-        # Use uvicorn to run the app
-        uvicorn.run(
-            "api:app", # Points to the 'app' instance in the 'api.py' file
-            host="127.0.0.1",
-            port=8000,
-            reload=True, # Enable auto-reload for development (watches for file changes)
-            log_level=logging.getLevelName(logger.getEffectiveLevel()).lower(), # Sync uvicorn log level
-            # Use workers > 1 only if your app is stateless or handles state carefully
-            # workers=1
-        )
-    else:
-        print("--- API Server NOT started due to missing modules. ---")
+# --- Root Endpoint ---
+@app.get("/", include_in_schema=False)
+async def read_root():
+    """Provides a simple welcome message for the API root."""
+    # Useful for health checks or simple verification that the API is running
+    return {"message": "Welcome to the Tensorus API! Visit /docs or /redoc for interactive documentation."}
