@@ -4,6 +4,14 @@ Streamlit frontend application for the Tensorus platform.
 New UI structure with top navigation and Nexus Dashboard.
 """
 
+import sys
+import os
+
+# Add the project root to sys.path to allow importing from the 'pages' directory
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import streamlit as st
 import json
 import time
@@ -388,7 +396,7 @@ def nexus_dashboard_content():
 # --- Main Application ---
 # Import the shared CSS loader
 try:
-    from ..pages.pages_shared_utils import load_css as load_shared_css
+    from pages.pages_shared_utils import load_css as load_shared_css
 except ImportError:
     st.error("Failed to import shared CSS loader. Page styling will be incomplete.")
     def load_shared_css(): pass # Dummy function
