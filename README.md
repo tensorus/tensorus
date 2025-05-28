@@ -411,19 +411,42 @@ async function example() {
 }
 ```
 
-## Future Work
+## Completed Features
+
+*   **Tensor Storage:** Efficiently stores and retrieves PyTorch tensors with associated metadata, including in-memory and optional file-based persistence. Supports dataset creation, tensor ingestion, querying, sampling, and metadata updates.
+*   **Natural Query Language (NQL):** Provides a basic regex-based natural language interface for querying tensor data, supporting retrieval and simple filtering.
+*   **Agent Framework:** Includes several operational agents:
+    *   **Data Ingestion Agent:** Monitors local directories for CSV and image files, preprocesses them, and ingests them into TensorStorage.
+    *   **RL Agent:** Implements a DQN agent that learns from experiences (stored in TensorStorage) in a dummy environment.
+    *   **AutoML Agent:** Performs random search hyperparameter optimization for a dummy MLP model, storing trial results in TensorStorage.
+*   **API-Driven:** A comprehensive FastAPI backend offers RESTful endpoints for dataset management, NQL querying, tensor operations, and agent control (live for Ingestion Agent, simulated for RL/AutoML).
+*   **Streamlit UI:** A multi-page user interface for dashboard overview, agent control, NQL interaction, data exploration, and API interaction.
+*   **Tensor Operations:** A library of robust tensor operations (arithmetic, matrix ops, reductions, reshaping, etc.) accessible via the API.
+*   **Model Context Protocol (MCP) Server:** A Node.js server exposes Tensorus capabilities (storage and operations) as tools via the Model Context Protocol, bridging to the Python API.
+*   **Extensible Design:** The project is structured with modular components, facilitating future extensions.
+
+## Future Implementation
 
 *   **Enhanced NQL:** Integrate a local or remote LLM for more robust natural language understanding.
-*   **Advanced Agents:** Develop more sophisticated agents for specific tasks.
-*   **Persistent Storage:** Replace in-memory TensorStorage with a persistent backend (e.g., database, cloud storage).
-*   **Scalability:** Implement chunking and other optimizations for handling very large tensors.
-*   **Security:** Add authentication and authorization.
-*   **Real-World Data:** Integrate with real-world data sources and environments.
-*   **Advanced Search:** Implement more advanced hyperparameter search algorithms (Bayesian Optimization, Hyperband).
-*   **Model Management:** Add capabilities for saving and loading trained models.
-*   **Streaming Data:** Support for streaming data sources.
-*   **Schema Validation:** Implement schema validation for datasets.
-*   **Resource Management:** Add controls for managing agent resource usage.
+*   **Advanced Agents:** Develop more sophisticated agents for specific tasks (e.g., anomaly detection, forecasting).
+*   **Persistent Storage Backend:** Replace/augment current file-based persistence with more robust database or cloud storage solutions (e.g., PostgreSQL, S3, MinIO).
+*   **Scalability & Performance:**
+    *   Implement tensor chunking for very large tensors.
+    *   Optimize query performance with indexing.
+    *   Asynchronous operations for agents and API calls.
+*   **Security:** Implement authentication and authorization mechanisms for the API and UI.
+*   **Real-World Integration:**
+    *   Connect Ingestion Agent to more data sources (e.g., cloud storage, databases, APIs).
+    *   Integrate RL Agent with real-world environments or more complex simulations.
+*   **Advanced AutoML:**
+    *   Implement sophisticated search algorithms (e.g., Bayesian Optimization, Hyperband).
+    *   Support for diverse model architectures and custom models.
+*   **Model Management:** Add capabilities for saving, loading, versioning, and deploying trained models (from RL/AutoML).
+*   **Streaming Data Support:** Enhance Ingestion Agent to handle real-time streaming data.
+*   **Dataset Schema Validation:** Introduce mechanisms for defining and enforcing schemas for datasets in TensorStorage.
+*   **Resource Management:** Add tools and controls for monitoring and managing the resource consumption (CPU, memory) of agents.
+*   **Improved UI/UX:** Continuously refine the Streamlit UI for better usability and richer visualizations.
+*   **Comprehensive Testing:** Expand unit, integration, and end-to-end tests.
 
 ## Contributing
 
