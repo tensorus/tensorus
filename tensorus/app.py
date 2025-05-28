@@ -319,7 +319,7 @@ def nexus_dashboard_content():
     # Card 1: Total Tensors
     total_tensors = get_total_tensors_placeholder()
     st.markdown(f"""
-    <div class="common-card metric-card"> {/* Apply common-card and specific metric-card style */}
+    <div class="common-card metric-card">
         <div class="icon">⚙️</div>
         <h3>Total Tensors</h3>
         <p class="metric-value">{total_tensors}</p>
