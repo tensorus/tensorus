@@ -1,17 +1,90 @@
 # api.py
 
 import logging
-from typing import List, Dict, Any, Optional, Tuple, Union
-import random # For simulating logs/status
-import time # For simulating timestamps
-import math # For simulating metrics
-import asyncio # Added for potential background tasks later
+from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Awaitable
+import random  # For simulating logs/status
+import time  # For simulating timestamps
+import math  # For simulating metrics
+import asyncio  # For async operations
+from datetime import datetime
 
 import torch
 import uvicorn
-# Added Query import
-from fastapi import FastAPI, HTTPException, Body, Depends, Path, status, Query, APIRouter
-from pydantic import BaseModel, Field, root_validator
+from fastapi import (
+    FastAPI, HTTPException, Body, Depends, Path, status, 
+    Query, APIRouter, Request, Response, status as http_status
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, root_validator, ValidationError
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+# Custom exceptions
+class APIError(Exception):
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+        super().__init__(detail)
+
+class NotFoundError(APIError):
+    def __init__(self, detail: str = "Resource not found"):
+        super().__init__(status_code=404, detail=detail)
+
+class ValidationError(APIError):
+    def __init__(self, detail: str = "Validation error"):
+        super().__init__(status_code=400, detail=detail)
+
+# Custom middleware for logging
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        start_time = time.time()
+        
+        # Log request
+        logger.info(f"Request: {request.method} {request.url}")
+        if request.method in ["POST", "PUT", "PATCH"]:
+            body = await request.body()
+            if body and len(body) < 1000:  # Log body if not too large
+                logger.debug(f"Request body: {body.decode()}")
+        
+        # Process request
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.error(f"Request failed: {str(exc)}", exc_info=True)
+            if not isinstance(exc, APIError):
+                exc = APIError(status_code=500, detail="Internal server error")
+            response = JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail}
+            )
+        
+        # Log response
+        process_time = (time.time() - start_time) * 1000
+        logger.info(
+            f"Response: {request.method} {request.url} - "
+            f"Status: {response.status_code} - {process_time:.2f}ms"
+        )
+        
+        return response
+
+# Security headers middleware
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    return response
 
 # Import Tensorus modules - Ensure these files exist in your project path
 try:
@@ -397,8 +470,64 @@ class DashboardMetrics(BaseModel):
 # --- FastAPI App Instance ---
 app = FastAPI(
     title="Tensorus API",
-    description="API for interacting with the Tensorus Agentic Tensor Database/Data Lake. Includes dataset management, NQL querying, and agent control placeholders.",
-    version="0.2.1", # Incremented version for fixes
+    description=(
+        "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
+        "Includes dataset management, NQL querying, and agent control."
+    ),
+    version="0.2.1",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
+
+# Add middleware
+app.add_middleware(LoggingMiddleware)
+app.middleware("http")(add_security_headers)
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Trusted hosts
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"],  # In production, specify trusted hosts
+)
+
+# Exception handlers
+@app.exception_handler(APIError)
+async def api_error_handler(request: Request, exc: APIError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "The requested resource was not found"},
+    )
+
+@app.exception_handler(500)
+async def server_error_handler(request: Request, exc: Exception):
+    logger.error(f"Internal server error: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
     # Add contact, license info if desired
     # contact={
     #     "name": "API Support",
@@ -408,18 +537,29 @@ app = FastAPI(
     # license_info={
     #     "name": "Apache 2.0",
     #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
-    # },
+    # }
 )
 
 # --- Dependency Functions ---
 async def get_tensor_storage() -> TensorStorage:
-    """Dependency function to get the global TensorStorage instance."""
-    # In a more complex app, this might involve connection pooling or session management
-    return tensor_storage_instance
+    """Get the global TensorStorage instance with error handling."""
+    try:
+        if not hasattr(get_tensor_storage, '_instance'):
+            get_tensor_storage._instance = tensor_storage_instance
+        return get_tensor_storage._instance
+    except Exception as e:
+        logger.error(f"Failed to get TensorStorage instance: {e}", exc_info=True)
+        raise APIError(status_code=500, detail="Failed to initialize storage")
 
 async def get_nql_agent() -> NQLAgent:
-    """Dependency function to get the global NQLAgent instance."""
-    return nql_agent_instance
+    """Get the global NQLAgent instance with error handling."""
+    try:
+        if not hasattr(get_nql_agent, '_instance'):
+            get_nql_agent._instance = nql_agent_instance
+        return get_nql_agent._instance
+    except Exception as e:
+        logger.error(f"Failed to get NQLAgent instance: {e}", exc_info=True)
+        raise APIError(status_code=500, detail="Failed to initialize query agent")
 
 
 # --- API Endpoints ---
