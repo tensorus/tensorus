@@ -169,7 +169,6 @@ class TensorStorage:
 
         # Ensure metadata consistency if not provided
         if metadata is None:
-        if metadata is None:
             metadata = {}
         else:
             # Make a copy to avoid modifying the caller's dictionary
