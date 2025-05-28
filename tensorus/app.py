@@ -388,7 +388,7 @@ def nexus_dashboard_content():
 # --- Main Application ---
 # Import the shared CSS loader
 try:
-    from pages.pages_shared_utils import load_css as load_shared_css
+    from ..pages.pages_shared_utils import load_css as load_shared_css
 except ImportError:
     st.error("Failed to import shared CSS loader. Page styling will be incomplete.")
     def load_shared_css(): pass # Dummy function
