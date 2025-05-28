@@ -477,7 +477,16 @@ app = FastAPI(
     version="0.2.1",
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
+    # contact={
+    #     "name": "API Support",
+    #     "url": "http://example.com/support",
+    #     "email": "support@example.com",
+    # },
+    # license_info={
+    #     "name": "Apache 2.0",
+    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    # }
 )
 
 # Add middleware
@@ -528,17 +537,7 @@ async def server_error_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": "Internal server error"},
     )
-    # Add contact, license info if desired
-    # contact={
-    #     "name": "API Support",
-    #     "url": "http://example.com/support",
-    #     "email": "support@example.com",
-    # },
-    # license_info={
-    #     "name": "Apache 2.0",
-    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
-    # }
-)
+
 
 # --- Dependency Functions ---
 async def get_tensor_storage() -> TensorStorage:
