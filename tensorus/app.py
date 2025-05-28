@@ -451,13 +451,13 @@ def main():
     if st.session_state.current_page == "Nexus Dashboard":
         nexus_dashboard_content()
     elif st.session_state.current_page == "Agents":
-        st.switch_page("../pages/control_panel_v2.py")
+        st.switch_page("pages/control_panel_v2.py")
     elif st.session_state.current_page == "Explorer":
-        st.switch_page("../pages/data_explorer_v2.py")
+        st.switch_page("pages/data_explorer_v2.py")
     elif st.session_state.current_page == "Query Hub":
-        st.switch_page("../pages/nql_chatbot_v2.py")
+        st.switch_page("pages/nql_chatbot_v2.py")
     elif st.session_state.current_page == "API Docs":
-        st.switch_page("../pages/api_playground_v2.py")
+        st.switch_page("pages/api_playground_v2.py")
     else:
         # Default to Nexus Dashboard if current_page is unrecognized
         st.session_state.current_page = "Nexus Dashboard"
