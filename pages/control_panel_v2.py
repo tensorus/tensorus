@@ -292,11 +292,9 @@ with tab2: # Agent Interaction Visualizer Tab
     except Exception as e:
         # Handle potential errors if Graphviz is not installed or there's an issue with the DOT code.
         st.error(f"Could not render Graphviz chart: {e}")
-        st.markdown("Please ensure Graphviz is installed and accessible in your environment's PATH (e.g., `sudo apt-get install graphviz` on Debian/Ubuntu).")
+    st.markdown("Please ensure Graphviz is installed and accessible in your environment's PATH (e.g., `sudo apt-get install graphviz` on Debian/Ubuntu).")
 
 # Initialize session state key if not already present for this page.
 # This helps prevent errors if the page is loaded before the cache is populated.
 if 'agent_statuses_cache_control_panel_v2' not in st.session_state:
     st.session_state.agent_statuses_cache_control_panel_v2 = None
-
-```
