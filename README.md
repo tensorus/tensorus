@@ -142,7 +142,7 @@ graph TD
     ```bash
     python3 -m venv venv
     source venv/bin/activate  # On Linux/macOS
-    venv\Scripts\activate  # On Windows
+    venv\Scriptsctivate  # On Windows
     ```
 
 3.  Install dependencies:
@@ -151,15 +151,18 @@ graph TD
     pip install -r requirements.txt
     ```
 
-### Running the API
+### Running the API Server
 
-1.  Navigate to the project root directory.
-2.  Start the FastAPI backend:
+1.  Navigate to the project root directory (the directory containing the `tensorus` folder and `pyproject.toml`).
+2.  Ensure your virtual environment is activated if you are using one.
+3.  Start the FastAPI backend server using:
 
     ```bash
-    uvicorn api:app --reload --host 127.0.0.1 --port 8000
+    python -m uvicorn tensorus.api:app --reload --host 127.0.0.1 --port 8000
     ```
 
+    *   The `python -m uvicorn` command ensures that Python runs Uvicorn as a module, and `tensorus.api:app` correctly points to the `app` instance within your `tensorus/api.py` file.
+    *   `--reload` enables auto-reload for development.
     *   Access the API documentation at `http://127.0.0.1:8000/docs` or `http://127.0.0.1:8000/redoc`.
 
 ### Running the Streamlit UI
@@ -180,7 +183,7 @@ The Tensorus MCP Server is a Node.js application that acts as a bridge to the Py
 **Prerequisites (MCP Server):**
 
 *   Node.js (v16 or later recommended) and npm.
-*   The Python FastAPI backend (`api.py`) must be running (see [Running the API](#running-the-api)).
+*   The Python FastAPI backend (`api.py`) must be running (see [Running the API Server](#running-the-api-server)).
 
 **Setup & Installation (MCP Server):**
 
