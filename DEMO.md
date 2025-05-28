@@ -131,7 +131,52 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
         ```
     *   **Attractive Element:** Emphasize that this allows *other* AI agents or LLMs to programmatically use Tensorus as a modular component in a larger intelligent system, promoting interoperability.
 
-### Scenario 5: Dashboard Overview
+### Scenario 5: Financial Time Series Forecasting with ARIMA
+
+**Goal:** Demonstrate end-to-end time series forecasting using generated financial data, Tensorus for storage, an ARIMA model for prediction, and visualization within a dedicated UI page.
+
+**Prerequisites Specific to this Demo:**
+*   Ensure `statsmodels` is installed (it was added to `requirements.txt`). If you haven't updated dependencies: `pip install statsmodels>=0.13.0`.
+
+**Steps:**
+
+1.  **Navigate to the Demo Page:**
+    *   Open the Streamlit UI (e.g., `http://localhost:8501`).
+    *   From the top navigation bar (or sidebar if the UI structure varies), find and click on the "Financial Forecast Demo" page (it might be titled "📈 Financial Forecast Demo" or similar).
+
+2.  **Generate and Ingest Data:**
+    *   On the "Financial Forecast Demo" page, locate the section "1. Data Generation & Ingestion."
+    *   Click the button labeled **"Generate & Ingest Sample Financial Data"**.
+    *   Wait for the spinner to complete. You should see:
+        *   A success message indicating data ingestion into a dataset like `financial_raw_data` in Tensorus.
+        *   A sample DataFrame (head) of the generated data (Date, Close, Volume).
+        *   A Plotly chart displaying the historical 'Close' prices that were just generated and ingested.
+    *   **Attractive Element:** Observe the immediate visualization of the generated time series.
+
+3.  **Configure and Run ARIMA Prediction:**
+    *   Go to the "3. ARIMA Model Prediction" section on the page.
+    *   You can adjust the ARIMA order (p, d, q) and the number of future predictions if you wish. Default values (e.g., p=5, d=1, q=0, predictions=30) are provided.
+    *   Click the button labeled **"Run ARIMA Prediction"**.
+    *   Wait for the spinner to complete. This step involves:
+        *   Loading the historical data from Tensorus.
+        *   Training/fitting the ARIMA model.
+        *   Generating future predictions.
+        *   Storing these predictions back into Tensorus (e.g., into `financial_predictions` dataset).
+
+4.  **View Prediction Results:**
+    *   Once the prediction is complete, scroll to the "4. Prediction Results" section.
+    *   You should see:
+        *   A Plotly chart displaying the original historical data with the ARIMA predictions plotted alongside/extending from it.
+        *   A table or list showing the actual predicted values for future dates.
+    *   **Attractive Element:** The clear visual comparison of the forecast against the historical data, showcasing the model's predictive attempt. The interactivity of Plotly charts (zoom, pan) enhances this.
+
+5.  **Interpretation (What this demonstrates):**
+    *   **Data Flow:** Generation -> Tensorus Storage (Raw Data) -> Retrieval for Modeling -> Prediction -> Tensorus Storage (Predictions) -> UI Visualization.
+    *   **Ease of Use:** A user-friendly interface to perform a complex task like time series forecasting.
+    *   **Modularity:** Integration of data generation, storage (Tensorus), modeling (statsmodels), and UI (Streamlit) components.
+    *   **Revised UI:** Notice the potentially improved layout and charting capabilities on this dedicated demo page.
+
+### Scenario 6: Dashboard Overview
 
 **Goal:** Show the main dashboard providing a system overview.
 
