@@ -1,4 +1,4 @@
-# pages/3_💬_NQL_Chatbot.py
+# pages/3_NQL_Chatbot.py
 
 import streamlit as st
 from ui_utils import execute_nql_query
