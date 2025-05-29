@@ -319,7 +319,7 @@ def nexus_dashboard_content():
     # Card 1: Total Tensors
     total_tensors = get_total_tensors_placeholder()
     st.markdown(f"""
-    <div class="common-card metric-card"> {/* Apply common-card and specific metric-card style */}
+    <div class="common-card metric-card">
         <div class="icon">⚙️</div>
         <h3>Total Tensors</h3>
         <p class="metric-value">{total_tensors}</p>
@@ -353,7 +353,7 @@ def nexus_dashboard_content():
     api_status_icon_class = "api-status-connected" if api_ok else "api-status-disconnected"
     api_icon_char = "✔️" if api_ok else "❌"
     st.markdown(f"""
-    <div class="common-card metric-card {api_status_icon_class}"> {/* Add status class for icon */}
+    <div class="common-card metric-card {api_status_icon_class}">
         <div class="icon">{api_icon_char}</div>
         <h3>API Status</h3>
         <p class="metric-value">{api_status_text}</p>
