@@ -6,6 +6,7 @@ Copied/adapted from app.py to avoid complex import issues.
 import streamlit as st
 import requests
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
