@@ -20,20 +20,29 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 
 ## Project Structure
 
-*   `api.py`: The FastAPI application that serves as the backend API.
-*   `app.py`: The Streamlit frontend application.
-*   `tensor_storage.py`: The core TensorStorage implementation.
-*   `nql_agent.py`: The Natural Query Language (NQL) agent.
-*   `ingestion_agent.py`: The Data Ingestion agent.
-*   `rl_agent.py`: The Reinforcement Learning (DQN) agent.
-*   `automl_agent.py`: The AutoML agent.
-*   `tensor_ops.py`: A library of tensor operations.
-*   `dummy_env.py`: A simple environment for the RL agent.
-*   `ui_utils.py`: Utility functions for the Streamlit UI.
-*   `requirements.txt`: Lists the project's dependencies.
-*   `mcp_tensorus_server/`: Contains the Node.js application for the Model Context Protocol (MCP) server.
+*   `app.py`: The main Streamlit frontend application (located at the project root).
+*   `pages/`: Directory containing individual Streamlit page scripts and shared UI utilities for the dashboard.
+    *   `pages/ui_utils.py`: Utility functions specifically for the Streamlit UI.
+    *   *(Other page scripts like `01_dashboard.py`, `02_control_panel.py`, etc., define the different views of the dashboard)*
+*   `tensorus/`: Directory containing the core `tensorus` library modules (this is the main installable package).
+    *   `tensorus/__init__.py`: Makes `tensorus` a Python package.
+    *   `tensorus/api.py`: The FastAPI application providing the backend API for Tensorus.
+    *   `tensorus/tensor_storage.py`: Core TensorStorage implementation for managing tensor data.
+    *   `tensorus/tensor_ops.py`: Library of functions for tensor manipulations.
+    *   `tensorus/nql_agent.py`: Agent for processing Natural Query Language queries.
+    *   `tensorus/ingestion_agent.py`: Agent for ingesting data from various sources.
+    *   `tensorus/rl_agent.py`: Agent for Reinforcement Learning tasks.
+    *   `tensorus/automl_agent.py`: Agent for AutoML processes.
+    *   `tensorus/dummy_env.py`: A simple environment for the RL agent demonstration.
+    *   *(Other Python files within `tensorus/` are part of the core library.)*
+*   `requirements.txt`: Lists the project's Python dependencies for development and local execution.
+*   `pyproject.toml`: Project metadata, dependencies for distribution, and build system configuration (e.g., for PyPI).
+*   `mcp_tensorus_server/`: Directory for the Node.js Model Context Protocol (MCP) server.
     *   `mcp_tensorus_server/server.js`: The main MCP server implementation.
-    *   `mcp_tensorus_server/package.json`: Node.js project file and dependencies for the MCP server.
+    *   `mcp_tensorus_server/package.json`: Node.js project file for the MCP server.
+*   `README.md`: This file.
+*   `LICENSE`: Project license file.
+*   `.gitignore`: Specifies intentionally untracked files that Git should ignore.
 
 ## Huggingface Demo
 
@@ -142,7 +151,7 @@ graph TD
     ```bash
     python3 -m venv venv
     source venv/bin/activate  # On Linux/macOS
-    venv\Scriptsctivate  # On Windows
+    venv\Scripts\activate  # On Windows
     ```
 
 3.  Install dependencies:
@@ -216,22 +225,22 @@ You can run the example agents directly from their respective files:
 *   **RL Agent:**
 
     ```bash
-    python rl_agent.py
+    python tensorus/rl_agent.py
     ```
 
 *   **AutoML Agent:**
 
     ```bash
-    python automl_agent.py
+    python tensorus/automl_agent.py
     ```
 
 *   **Ingestion Agent:**
 
     ```bash
-    python ingestion_agent.py
+    python tensorus/ingestion_agent.py
     ```
 
-    *   Note: The Ingestion Agent will monitor the `temp_ingestion_source` directory (created automatically) for new files.
+    *   Note: The Ingestion Agent will monitor the `temp_ingestion_source` directory (created automatically if it doesn't exist in the project root) for new files.
 
 ## Using Tensorus
 
