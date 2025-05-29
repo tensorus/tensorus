@@ -6,7 +6,6 @@ Copied/adapted from app.py to avoid complex import issues.
 import streamlit as st
 import requests
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -493,3 +492,5 @@ def post_nql_query(query: str) -> dict:
     except Exception as e:
         logger.exception(f"Unexpected error in post_nql_query (pages_shared_utils): {e}")
         return {"query": query, "response_text": "An unexpected error occurred.", "error": str(e), "results": None}
+
+```
