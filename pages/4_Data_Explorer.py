@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from ui_utils import list_datasets, fetch_dataset_data
+from .ui_utils import list_datasets, fetch_dataset_data # MODIFIED
 import torch # Needed if we want to recreate tensors for inspection/plotting
 
 st.set_page_config(page_title="Data Explorer", layout="wide")
