@@ -1,4 +1,4 @@
-# pages/4_explorador_Data_Explorer.py
+# pages/4_Data_Explorer.py
 
 import streamlit as st
 import pandas as pd
