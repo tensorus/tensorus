@@ -2,7 +2,7 @@
 
 import streamlit as st
 import streamlit.components.v1 as components
-from ui_utils import TENSORUS_API_URL, get_api_status # Import base URL and status check
+from .ui_utils import TENSORUS_API_URL, get_api_status # MODIFIED
 
 st.set_page_config(page_title="API Playground", layout="wide")
 
