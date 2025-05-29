@@ -1,4 +1,4 @@
-# pages/2_🕹️_Control_Panel.py (Modifications for Step 3)
+# pages/2_Control_Panel.py (Modifications for Step 3)
 
 import streamlit as st
 import time
