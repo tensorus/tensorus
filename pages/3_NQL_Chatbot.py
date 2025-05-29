@@ -1,7 +1,8 @@
 # pages/3_NQL_Chatbot.py
 
 import streamlit as st
-from ui_utils import execute_nql_query
+from .ui_utils import execute_nql_query # MODIFIED
+import pandas as pd # Added import for pandas
 
 st.set_page_config(page_title="NQL Chatbot", layout="wide")
 
@@ -17,7 +18,7 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if "results" in message and message["results"]:
+        if "results" in message and message["results"] is not None and not message["results"].empty: # Check if DataFrame is not None and not empty
             st.dataframe(message["results"], use_container_width=True) # Display results as dataframe
         elif "error" in message:
             st.error(message["error"])
@@ -82,7 +83,7 @@ if prompt := st.chat_input("Enter your query (e.g., 'get all data from my_datase
     message_data = {"role": "assistant", "content": response_content}
     with st.chat_message("assistant"):
         st.markdown(response_content)
-        if results_df is not None:
+        if results_df is not None and not results_df.empty: # Check if DataFrame is not None and not empty
              st.dataframe(results_df, use_container_width=True)
              message_data["results"] = results_df # Store for history display if needed (might be large)
         elif error_msg:
