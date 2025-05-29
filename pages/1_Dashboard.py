@@ -6,7 +6,7 @@ import numpy as np
 import plotly.express as px
 import time
 # Updated imports to use API-backed functions
-from ui_utils import get_dashboard_metrics, list_all_agents, get_agent_status
+from .ui_utils import get_dashboard_metrics, list_all_agents, get_agent_status # MODIFIED
 
 st.set_page_config(page_title="Tensorus Dashboard", layout="wide")
 
