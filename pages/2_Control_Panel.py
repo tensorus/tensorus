@@ -3,7 +3,7 @@
 import streamlit as st
 import time
 # Use the updated API-backed functions
-from ui_utils import list_all_agents, get_agent_status, get_agent_logs, start_agent, stop_agent
+from .ui_utils import list_all_agents, get_agent_status, get_agent_logs, start_agent, stop_agent # MODIFIED
 
 st.set_page_config(page_title="Agent Control Panel", layout="wide")
 
