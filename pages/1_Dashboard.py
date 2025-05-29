@@ -1,4 +1,4 @@
-# pages/1_📊_Dashboard.py (Modifications for Step 3)
+# pages/1_Dashboard.py (Modifications for Step 3)
 
 import streamlit as st
 import pandas as pd
