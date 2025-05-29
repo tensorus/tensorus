@@ -1,4 +1,4 @@
-# pages/5_🚀_API_Playground.py
+# pages/5_API_Playground.py
 
 import streamlit as st
 import streamlit.components.v1 as components
