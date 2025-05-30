@@ -11,6 +11,9 @@ import requests # Needed for ui_utils functions if integrated
 import logging # Needed for ui_utils functions if integrated
 import torch # Needed for integrated tensor utils
 from typing import List, Dict, Any, Optional, Union, Tuple # Needed for integrated tensor utils
+import multiprocessing
+import uvicorn
+from tensorus.api import app as fastapi_app
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -385,6 +388,12 @@ def nexus_dashboard_content():
     st.markdown('</div>', unsafe_allow_html=True) # Close activity-feed-container
 
 
+# --- FastAPI Server Process ---
+def run_fastapi_server():
+    """Runs the FastAPI server using Uvicorn."""
+    uvicorn.run(fastapi_app, host="127.0.0.1", port=8000, log_level="info")
+
+
 # --- Main Application ---
 # Import the shared CSS loader
 try:
@@ -467,5 +476,10 @@ if __name__ == "__main__":
     if 'dataset_preview' not in st.session_state: st.session_state.dataset_preview = None
     if 'explorer_result' not in st.session_state: st.session_state.explorer_result = None
     if 'nql_response' not in st.session_state: st.session_state.nql_response = None
+
+    # Start FastAPI server in a separate process
+    fastapi_process = multiprocessing.Process(target=run_fastapi_server)
+    fastapi_process.daemon = True
+    fastapi_process.start()
     
     main()
