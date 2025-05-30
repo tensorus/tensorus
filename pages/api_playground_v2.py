@@ -169,5 +169,3 @@ with tab2:
 
 st.divider() # Visual separator.
 st.caption("Note: The API backend must be running and accessible to fully utilize the interactive documentation.")
-
-```
