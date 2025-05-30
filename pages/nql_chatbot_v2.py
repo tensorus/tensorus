@@ -166,5 +166,3 @@ else: # This block runs when the page loads or if the chat input is empty.
     # Show a welcome/instruction message if the chat history is empty.
     if not st.session_state.nql_messages_v2: 
         st.info("Ask me anything about your data! For example: 'list datasets' or 'show tensors from dataset XYZ limit 5'.")
-
-```
