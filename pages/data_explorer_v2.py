@@ -222,4 +222,3 @@ if selected_dataset_name:
 else:
     st.info("Select a dataset to start exploring.")
 
-```
