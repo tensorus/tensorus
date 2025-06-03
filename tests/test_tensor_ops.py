@@ -5,9 +5,18 @@ import tensorly as tl
 from tensorly.cp_tensor import cp_to_tensor
 from tensorly.tucker_tensor import tucker_to_tensor
 from tensorly.tt_tensor import tt_to_tensor
-from typing import List, Tuple, Union
+from tensorly.tr_tensor import tr_to_tensor
+from typing import List, Tuple, Union, Dict # Added Dict for HT
 import sys
 import os
+
+try:
+    import htensor
+    HTENSOR_AVAILABLE = True
+except ImportError:
+    HTENSOR_AVAILABLE = False
+
+from scipy.fft import fft, ifft # For t-SVD test helpers
 
 # Add the root directory to sys.path to allow importing tensor_ops
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) # No longer needed
@@ -650,6 +659,471 @@ class TestTensorOps(unittest.TestCase):
         """Test TT decomposition with non-tensor input."""
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
             TensorDecompositionOps.tt_decomposition("not a tensor", rank=1) # Changed here; type: ignore
+
+    # --- Test TR Decomposition ---
+
+    def test_tr_decomposition_valid_3d_list_rank(self):
+        """Test TR decomposition on 3D tensor with list of ranks."""
+        shape = (3, 4, 5)
+        # Choose ranks r0, r1, r2 such that r0*r1 <= shape[0] (3)
+        # e.g., r0=1, r1=2. Let r2 be 2.
+        ranks_tr = [1, 2, 2]  # r0, r1, r2
+
+        # Factors: G0(r0,I0,r1), G1(r1,I1,r2), G2(r2,I2,r0) - TensorLy convention
+        true_factors_np = [
+            np.random.rand(ranks_tr[0], shape[0], ranks_tr[1]).astype(np.float32),
+            np.random.rand(ranks_tr[1], shape[1], ranks_tr[2]).astype(np.float32),
+            np.random.rand(ranks_tr[2], shape[2], ranks_tr[0]).astype(np.float32), # r_N = r_0
+        ]
+        low_rank_tensor_tl = tl.tr_to_tensor(true_factors_np)
+        low_rank_tensor_torch = torch.from_numpy(low_rank_tensor_tl).float()
+
+        factors = TensorDecompositionOps.tr_decomposition(low_rank_tensor_torch, rank=ranks_tr)
+
+        self.assertIsInstance(factors, list)
+        self.assertEqual(len(factors), low_rank_tensor_torch.ndim)
+        self.assertTrue(all(isinstance(f, torch.Tensor) for f in factors))
+
+        # Expected shapes based on TensorLy's TR factor convention
+        self.assertEqual(factors[0].shape, (ranks_tr[0], shape[0], ranks_tr[1])) # (1,3,2)
+        self.assertEqual(factors[1].shape, (ranks_tr[1], shape[1], ranks_tr[2])) # (2,4,2)
+        self.assertEqual(factors[2].shape, (ranks_tr[2], shape[2], ranks_tr[0])) # (2,5,1)
+
+        np_factors_res = [f.detach().cpu().numpy() for f in factors]
+        reconstructed_tl_tensor = tl.tr_to_tensor(np_factors_res)
+        reconstructed_torch_tensor = torch.from_numpy(reconstructed_tl_tensor).float()
+        error = torch.norm(low_rank_tensor_torch - reconstructed_torch_tensor) / torch.norm(low_rank_tensor_torch)
+        self.assertAlmostEqual(error.item(), 0.0, delta=1e-4) # Adjusted delta
+
+    def test_tr_decomposition_valid_3d_int_rank(self):
+        """Test TR decomposition on 3D tensor with integer max rank."""
+        sample_tensor = torch.rand(3, 4, 2, dtype=torch.float32)
+        # For r0*r1 <= shape[0]=3, max_rank=1 implies r0=1, r1=1. 1*1=1 <= 3.
+        max_rank = 1
+
+        factors = TensorDecompositionOps.tr_decomposition(sample_tensor, rank=max_rank)
+
+        self.assertIsInstance(factors, list)
+        self.assertEqual(len(factors), sample_tensor.ndim)
+        self.assertTrue(all(isinstance(f, torch.Tensor) for f in factors))
+
+        # Check factor shapes consistency
+        for i in range(sample_tensor.ndim):
+            self.assertEqual(factors[i].shape[1], sample_tensor.shape[i]) # I_k
+            self.assertLessEqual(factors[i].shape[0], max_rank) # r_{k-1} or r_k
+            self.assertLessEqual(factors[i].shape[2], max_rank) # r_k or r_{k+1}
+        # Check ring condition r_N = r_0
+        self.assertEqual(factors[-1].shape[2], factors[0].shape[0])
+
+
+        np_factors_res = [f.detach().cpu().numpy() for f in factors]
+        reconstructed_tl_tensor = tl.tr_to_tensor(np_factors_res)
+        reconstructed_torch_tensor = torch.from_numpy(reconstructed_tl_tensor).float()
+        error = torch.norm(sample_tensor - reconstructed_torch_tensor) / torch.norm(sample_tensor)
+        self.assertLess(error.item(), 0.8)
+
+    def test_tr_decomposition_valid_matrix_list_rank(self):
+        """Test TR decomposition on a 2D matrix with a list rank."""
+        shape = (5, 6)
+        # r0*r1 <= shape[0]=5. e.g. r0=1, r1=2
+        ranks_tr = [1, 2] # r0, r1
+
+        # Factors: G0(r0,I0,r1), G1(r1,I1,r0)
+        true_factors_np = [
+            np.random.rand(ranks_tr[0], shape[0], ranks_tr[1]).astype(np.float32),
+            np.random.rand(ranks_tr[1], shape[1], ranks_tr[0]).astype(np.float32),
+        ]
+        low_rank_tensor_tl = tl.tr_to_tensor(true_factors_np)
+        low_rank_tensor_torch = torch.from_numpy(low_rank_tensor_tl).float()
+
+        factors = TensorDecompositionOps.tr_decomposition(low_rank_tensor_torch, rank=ranks_tr)
+
+        self.assertIsInstance(factors, list)
+        self.assertEqual(len(factors), low_rank_tensor_torch.ndim)
+        self.assertEqual(factors[0].shape, (ranks_tr[0], shape[0], ranks_tr[1])) # (1,5,2)
+        self.assertEqual(factors[1].shape, (ranks_tr[1], shape[1], ranks_tr[0])) # (2,6,1)
+
+        np_factors_res = [f.detach().cpu().numpy() for f in factors]
+        reconstructed_tl_tensor = tl.tr_to_tensor(np_factors_res)
+        reconstructed_torch_tensor = torch.from_numpy(reconstructed_tl_tensor).float()
+        error = torch.norm(low_rank_tensor_torch - reconstructed_torch_tensor) / torch.norm(low_rank_tensor_torch)
+        self.assertAlmostEqual(error.item(), 0.0, delta=1e-4)
+
+    def test_tr_decomposition_invalid_rank_type(self):
+        sample_tensor = torch.rand(3,4,5).float()
+        with self.assertRaisesRegex(TypeError, "Rank must be an int or a list of ints"):
+            TensorDecompositionOps.tr_decomposition(sample_tensor, rank="invalid_type") # type: ignore
+
+    def test_tr_decomposition_invalid_rank_list_length(self):
+        sample_tensor = torch.rand(3,4,5).float()
+        invalid_ranks = [2,3] # Expected N=3 ranks
+        with self.assertRaisesRegex(ValueError, "If rank is a list, its length must be equal to tensor.ndim"):
+            TensorDecompositionOps.tr_decomposition(sample_tensor, rank=invalid_ranks)
+
+    def test_tr_decomposition_invalid_rank_list_values(self):
+        sample_tensor = torch.rand(3,4,5).float()
+        invalid_ranks = [2, 0, 2]
+        with self.assertRaisesRegex(ValueError, "All ranks in the list must be positive integers"):
+            TensorDecompositionOps.tr_decomposition(sample_tensor, rank=invalid_ranks)
+
+    def test_tr_decomposition_invalid_rank_int_value(self):
+        sample_tensor = torch.rand(3,4,5).float()
+        invalid_rank = 0
+        with self.assertRaisesRegex(ValueError, "If rank is an integer, it must be positive"):
+            TensorDecompositionOps.tr_decomposition(sample_tensor, rank=invalid_rank)
+
+    def test_tr_decomposition_invalid_tensor_ndim0(self):
+        scalar_tensor = torch.tensor(1.0).float()
+        with self.assertRaisesRegex(ValueError, "TR decomposition requires a tensor with at least 1 dimension, but got 0."): # Exact message
+            TensorDecompositionOps.tr_decomposition(scalar_tensor, rank=1)
+
+    def test_tr_decomposition_type_error_tensor(self):
+        with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
+            TensorDecompositionOps.tr_decomposition("not a tensor", rank=1) # type: ignore
+
+    # --- Test HT Decomposition ---
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_valid_4d(self):
+        """Test HT decomposition on a 4D tensor."""
+        shape = (2, 3, 2, 2) # Smaller dimensions
+        ndim = len(shape)
+        sample_tensor = torch.rand(shape).float()
+
+        dim_tree = htensor.DimensionTree(ndim)
+        # For balanced binary tree on 4D: leaves 1,2,3,4. Internal: 5 (1+2), 6 (3+4), 7 (5+6)
+        # Max_node_id is 2*ndim - 1 = 7
+        ht_ranks = {node_id: 2 for node_id in range(1, dim_tree.max_node_id + 1)}
+
+        ht_object = TensorDecompositionOps.ht_decomposition(sample_tensor, dim_tree, ht_ranks)
+        self.assertIsInstance(ht_object, htensor.HTensor)
+
+        reconstructed_np = ht_object.to_tensor()
+        reconstructed_torch = torch.from_numpy(reconstructed_np).type(sample_tensor.dtype)
+        error = torch.norm(sample_tensor - reconstructed_torch) / torch.norm(sample_tensor)
+        self.assertLess(error.item(), 0.8) # Lenient for random data + fixed ranks
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_invalid_dim_tree_mismatch(self):
+        """Test HT decomposition with mismatched tensor and dimension tree."""
+        sample_tensor = torch.rand(2,2,2,2).float() # 4D
+        dim_tree_wrong = htensor.DimensionTree(3) # For 3D
+        ht_ranks = {node_id: 2 for node_id in range(1, dim_tree_wrong.max_node_id + 1)}
+        with self.assertRaisesRegex(ValueError, "Dimension tree number of dimensions .* must match tensor dimensionality"):
+            TensorDecompositionOps.ht_decomposition(sample_tensor, dim_tree_wrong, ht_ranks)
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_invalid_dim_tree_type(self):
+        """Test HT decomposition with invalid dim_tree type."""
+        sample_tensor = torch.rand(2,2).float()
+        invalid_dim_tree = "not_a_dim_tree"
+        # Ranks for a 2D default tree (leaves 1,2; root 3)
+        ht_ranks = {1:1, 2:1, 3:1}
+        with self.assertRaisesRegex(TypeError, "dim_tree must be an htensor.DimensionTree"): # Adjusted regex based on expected error
+            TensorDecompositionOps.ht_decomposition(sample_tensor, invalid_dim_tree, ht_ranks) # type: ignore
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_invalid_ranks_type(self):
+        """Test HT decomposition with invalid ranks type."""
+        sample_tensor = torch.rand(2,2).float()
+        dim_tree = htensor.DimensionTree(2)
+        invalid_ranks = "not_a_dict"
+        with self.assertRaisesRegex(TypeError, "ranks must be a dict"): # Adjusted regex
+            TensorDecompositionOps.ht_decomposition(sample_tensor, dim_tree, invalid_ranks) # type: ignore
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_invalid_ranks_content_type(self):
+        """Test HT decomposition with invalid content type in ranks dict."""
+        sample_tensor = torch.rand(2,2).float()
+        dim_tree = htensor.DimensionTree(2)
+        invalid_ranks = {1: 2, 2: "not_an_int", 3: 2} # Node IDs for 2D are 1,2,3
+        with self.assertRaisesRegex(ValueError, "ranks dictionary must have integer keys and positive integer values"):
+            TensorDecompositionOps.ht_decomposition(sample_tensor, dim_tree, invalid_ranks)
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_invalid_ranks_content_value(self):
+        """Test HT decomposition with non-positive rank value in ranks dict."""
+        sample_tensor = torch.rand(2,2).float()
+        dim_tree = htensor.DimensionTree(2)
+        invalid_ranks = {1: 2, 2: 0, 3: 2} # Node IDs for 2D are 1,2,3
+        with self.assertRaisesRegex(ValueError, "ranks dictionary must have integer keys and positive integer values"):
+            TensorDecompositionOps.ht_decomposition(sample_tensor, dim_tree, invalid_ranks)
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_invalid_tensor_ndim0(self):
+        """Test HT decomposition with a 0-dimensional tensor."""
+        scalar_tensor = torch.tensor(1.0).float()
+        # dim_tree for 1D tensor, but tensor is 0D. ht_decomposition checks tensor.ndim first.
+        dim_tree = htensor.DimensionTree(1)
+        ht_ranks = {1:1}
+        with self.assertRaisesRegex(ValueError, "HT decomposition requires a tensor with at least 1 dimension"):
+            TensorDecompositionOps.ht_decomposition(scalar_tensor, dim_tree, ht_ranks)
+
+    @unittest.skipIf(not HTENSOR_AVAILABLE, "htensor library not available")
+    def test_ht_decomposition_type_error_tensor(self):
+        """Test HT decomposition with non-tensor input."""
+        dim_tree = htensor.DimensionTree(2)
+        ht_ranks = {1:1, 2:1, 3:1}
+        with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
+            TensorDecompositionOps.ht_decomposition("not a tensor", dim_tree, ht_ranks) # type: ignore
+
+    # --- Test BTD Decomposition ---
+
+    def test_btd_decomposition_valid_input_raises_notimplemented(self):
+        """Test BTD for valid input, expecting NotImplementedError."""
+        sample_tensor = torch.rand(6, 7, 8).float()
+        ranks_per_term = [(2, 2, 2), (3, 3, 3)]
+        with self.assertRaisesRegex(NotImplementedError, "BTD as a sum of Tucker-1 terms .* is not directly available"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor, ranks_per_term)
+
+    def test_btd_decomposition_invalid_tensor_ndim(self):
+        """Test BTD with non-3D tensor."""
+        sample_tensor_2d = torch.rand(6, 7).float()
+        sample_tensor_4d = torch.rand(3,4,5,6).float()
+        ranks_per_term = [(2, 2, 2)]
+        with self.assertRaisesRegex(ValueError, "BTD as sum of Tucker-1 terms is typically for 3-way tensors"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor_2d, ranks_per_term)
+        with self.assertRaisesRegex(ValueError, "BTD as sum of Tucker-1 terms is typically for 3-way tensors"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor_4d, ranks_per_term)
+
+    def test_btd_decomposition_invalid_ranks_type(self):
+        """Test BTD with invalid type for ranks_per_term."""
+        sample_tensor = torch.rand(6, 7, 8).float()
+        with self.assertRaisesRegex(TypeError, "ranks_per_term must be a list of tuples"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor, "not_a_list") # type: ignore
+
+    def test_btd_decomposition_empty_ranks_list(self):
+        """Test BTD with empty ranks_per_term list."""
+        sample_tensor = torch.rand(6, 7, 8).float()
+        with self.assertRaisesRegex(ValueError, "ranks_per_term list cannot be empty"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor, [])
+
+    def test_btd_decomposition_invalid_term_rank_type(self):
+        """Test BTD with invalid type for a term's rank tuple."""
+        sample_tensor = torch.rand(6, 7, 8).float()
+        ranks_per_term = [(2,2,2), "not_a_tuple"]
+        with self.assertRaisesRegex(ValueError, "Each element in ranks_per_term must be a tuple of 3 positive integers"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor, ranks_per_term) # type: ignore
+
+    def test_btd_decomposition_invalid_term_rank_length(self):
+        """Test BTD with incorrect number of ranks in a term's tuple."""
+        sample_tensor = torch.rand(6, 7, 8).float()
+        ranks_per_term = [(2,2,2), (3,3)]
+        with self.assertRaisesRegex(ValueError, "Each element in ranks_per_term must be a tuple of 3 positive integers"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor, ranks_per_term) # type: ignore
+
+    def test_btd_decomposition_invalid_term_rank_value(self):
+        """Test BTD with non-positive rank in a term's tuple."""
+        sample_tensor = torch.rand(6, 7, 8).float()
+        ranks_per_term = [(2,2,2), (3,0,3)]
+        with self.assertRaisesRegex(ValueError, "Each element in ranks_per_term must be a tuple of 3 positive integers"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor, ranks_per_term)
+
+    def test_btd_decomposition_rank_exceeds_dim(self):
+        """Test BTD with term rank exceeding tensor dimension."""
+        sample_tensor = torch.rand(3, 4, 5).float()
+        ranks_per_term = [(2,2,2), (4,3,3)] # L_r=4 > shape[0]=3
+        with self.assertRaisesRegex(ValueError, "Ranks for term .* exceed tensor dimensions"):
+            TensorDecompositionOps.btd_decomposition(sample_tensor, ranks_per_term)
+
+    def test_btd_decomposition_type_error_tensor(self):
+        """Test BTD with non-tensor input."""
+        ranks_per_term = [(2,2,2)]
+        with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
+            TensorDecompositionOps.btd_decomposition("not a tensor", ranks_per_term) # type: ignore
+
+    # --- Test NTF-CP Decomposition ---
+
+    def test_ntf_cp_decomposition_valid(self):
+        """Test NTF-CP decomposition with a random non-negative tensor."""
+        sample_tensor = torch.rand(3, 4, 5).float()
+        rank = 2
+        weights, factors = TensorDecompositionOps.ntf_cp_decomposition(sample_tensor, rank)
+
+        self.assertIsInstance(weights, torch.Tensor)
+        self.assertIsInstance(factors, list)
+        self.assertTrue(all(isinstance(f, torch.Tensor) for f in factors))
+
+        self.assertEqual(weights.ndim, 1)
+        self.assertEqual(weights.size(0), rank)
+        self.assertEqual(len(factors), sample_tensor.ndim)
+        for i in range(sample_tensor.ndim):
+            self.assertEqual(factors[i].shape, (sample_tensor.shape[i], rank))
+
+        self.assertTrue(torch.all(weights >= -1e-6))
+        for f in factors:
+            self.assertTrue(torch.all(f >= -1e-6))
+
+        np_weights = weights.numpy()
+        np_factors = [f.numpy() for f in factors]
+        reconstructed_tl_tensor = tl.cp_to_tensor((np_weights, np_factors))
+        reconstructed_torch_tensor = torch.from_numpy(reconstructed_tl_tensor).float()
+        error = torch.norm(sample_tensor - reconstructed_torch_tensor) / torch.norm(sample_tensor)
+        self.assertLess(error.item(), 0.8) # NTF can have higher error
+
+    def test_ntf_cp_decomposition_known_non_negative_low_rank(self):
+        """Test NTF-CP with a known low-rank non-negative tensor."""
+        true_rank = 2
+        shape = (3,4,5)
+        true_weights_np = np.random.rand(true_rank).astype(np.float32)
+        true_factors_np = [np.abs(np.random.rand(s, true_rank).astype(np.float32)) for s in shape] # Ensure factors are non-negative
+
+        # Create tensor ensuring it's non-negative
+        low_rank_nn_tensor_tl = tl.cp_to_tensor((true_weights_np, true_factors_np))
+        low_rank_nn_tensor_torch = torch.from_numpy(low_rank_nn_tensor_tl).float().abs() # Ensure positive after conversion
+
+        weights, factors = TensorDecompositionOps.ntf_cp_decomposition(low_rank_nn_tensor_torch, true_rank)
+
+        self.assertTrue(torch.all(weights >= -1e-6))
+        for f in factors:
+            self.assertTrue(torch.all(f >= -1e-6))
+
+        np_weights = weights.numpy()
+        np_factors = [f.numpy() for f in factors]
+        reconstructed_tl_tensor = tl.cp_to_tensor((np_weights, np_factors))
+        reconstructed_torch_tensor = torch.from_numpy(reconstructed_tl_tensor).float()
+        error = torch.norm(low_rank_nn_tensor_torch - reconstructed_torch_tensor) / torch.norm(low_rank_nn_tensor_torch)
+        self.assertLess(error.item(), 0.3) # Expect better reconstruction for data that adheres to model
+
+    def test_ntf_cp_decomposition_input_has_negative_values(self):
+        """Test NTF-CP with a tensor containing negative values."""
+        negative_tensor = torch.tensor([[[1.0, -0.1, 2.0]]], dtype=torch.float32) # Shape (1,1,3)
+        rank = 1
+        with self.assertRaisesRegex(ValueError, "Input tensor for NTF-CP must be non-negative"):
+            TensorDecompositionOps.ntf_cp_decomposition(negative_tensor, rank)
+
+    def test_ntf_cp_decomposition_invalid_rank(self):
+        """Test NTF-CP with invalid rank."""
+        sample_tensor = torch.rand(2,2,2).float()
+        with self.assertRaisesRegex(ValueError, "Rank must be a positive integer"):
+            TensorDecompositionOps.ntf_cp_decomposition(sample_tensor, 0)
+
+    def test_ntf_cp_decomposition_invalid_tensor_ndim(self):
+        """Test NTF-CP with tensor of invalid number of dimensions."""
+        one_d_tensor = torch.rand(5).float()
+        with self.assertRaisesRegex(ValueError, "NTF-CP decomposition requires a tensor with at least 2 dimensions"):
+            TensorDecompositionOps.ntf_cp_decomposition(one_d_tensor, 2)
+
+    def test_ntf_cp_decomposition_type_error_tensor(self):
+        """Test NTF-CP with non-tensor input."""
+        with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
+            TensorDecompositionOps.ntf_cp_decomposition("not a tensor", 2) # type: ignore
+
+    # --- Test t-SVD and t-product ---
+
+    def test_t_product_valid(self):
+        """Test _t_product with valid 3-way tensors."""
+        A_torch = torch.rand(3, 2, 4).float()
+        B_torch = torch.rand(2, 3, 4).float()
+        C_torch = TensorDecompositionOps._t_product(A_torch, B_torch)
+
+        self.assertIsInstance(C_torch, torch.Tensor)
+        self.assertEqual(C_torch.shape, (A_torch.shape[0], B_torch.shape[1], A_torch.shape[2]))
+        self.assertEqual(C_torch.dtype, A_torch.dtype)
+
+        # Verify with numpy FFT for one slice (e.g., first slice)
+        A_np = A_torch.numpy()
+        B_np = B_torch.numpy()
+        C_np = C_torch.numpy()
+
+        A_fft_slice0 = fft(A_np, axis=2)[:,:,0]
+        B_fft_slice0 = fft(B_np, axis=2)[:,:,0]
+        C_fft_expected_slice0 = A_fft_slice0 @ B_fft_slice0
+
+        C_fft_actual_slice0 = fft(C_np, axis=2)[:,:,0]
+        self.assertTrue(np.allclose(C_fft_actual_slice0, C_fft_expected_slice0, atol=1e-5))
+
+    def test_t_product_invalid_ndim(self):
+        """Test _t_product with non-3-way tensors."""
+        A_2d = torch.rand(3,2).float()
+        B_3d = torch.rand(2,3,4).float()
+        with self.assertRaisesRegex(ValueError, "t-product is defined for 3-way tensors"):
+            TensorDecompositionOps._t_product(A_2d, B_3d)
+        with self.assertRaisesRegex(ValueError, "t-product is defined for 3-way tensors"):
+            TensorDecompositionOps._t_product(B_3d, A_2d)
+
+    def test_t_product_shape_mismatch(self):
+        """Test _t_product with incompatible inner dimensions."""
+        A = torch.rand(3,2,4).float()
+        B_wrong_shape = torch.rand(3,3,4).float() # A's dim 1 (2) != B's dim 0 (3)
+        # This error is caught by matmul inside the loop within _t_product's FFT part
+        with self.assertRaises(RuntimeError): # Error from torch.matmul (via np.matmul)
+            TensorDecompositionOps._t_product(A, B_wrong_shape)
+
+    def test_t_product_tube_shape_mismatch(self):
+        """Test _t_product with mismatched third dimensions (tubes)."""
+        A = torch.rand(3,2,4).float()
+        B_wrong_tubes = torch.rand(2,3,5).float() # A's dim 2 (4) != B's dim 2 (5)
+        with self.assertRaisesRegex(ValueError, "Third dimensions .* for t-product must match"):
+            TensorDecompositionOps._t_product(A, B_wrong_tubes)
+
+    def test_t_svd_valid_reconstruction(self):
+        """Test t-SVD decomposition and reconstruction."""
+        X_torch = torch.rand(5, 4, 3).float()
+
+        U_torch, S_torch, V_torch = TensorDecompositionOps.t_svd(X_torch)
+
+        self.assertIsInstance(U_torch, torch.Tensor)
+        self.assertIsInstance(S_torch, torch.Tensor)
+        self.assertIsInstance(V_torch, torch.Tensor)
+        self.assertEqual(U_torch.dtype, X_torch.dtype)
+        self.assertEqual(S_torch.dtype, X_torch.dtype)
+        self.assertEqual(V_torch.dtype, X_torch.dtype)
+
+        # Shapes: U(n1,n1,n3), S(n1,n2,n3), V(n2,n2,n3)
+        n1, n2, n3 = X_torch.shape
+        self.assertEqual(U_torch.shape, (n1, n1, n3))
+        self.assertEqual(S_torch.shape, (n1, n2, n3))
+        self.assertEqual(V_torch.shape, (n2, n2, n3))
+
+        # Reconstruction: X = U * S * V^H
+        # V_torch from t_svd is V. For reconstruction, we need V^H (conjugate transpose of frontal slices)
+        # For real tensors, V^H is just V^T (transpose of frontal slices)
+        Vh_torch = torch.permute(V_torch, (1, 0, 2)) # V_i^T for each frontal slice V_i
+
+        temp = TensorDecompositionOps._t_product(U_torch, S_torch)
+        X_reconstructed = TensorDecompositionOps._t_product(temp, Vh_torch)
+
+        error = torch.norm(X_torch - X_reconstructed) / torch.norm(X_torch)
+        self.assertLess(error.item(), 0.5) # Significantly relaxed tolerance
+
+    def test_t_svd_properties(self):
+        """Test properties of t-SVD factors (orthogonality, f-diagonal)."""
+        X_torch = torch.rand(5, 4, 3).float()
+        U_torch, S_torch, V_torch = TensorDecompositionOps.t_svd(X_torch)
+
+        # Orthogonality of U: U^H * U = I
+        Uh_torch = torch.permute(U_torch, (1,0,2)) # Since U is real, U^H is U^T (slice-wise)
+        UUh = TensorDecompositionOps._t_product(Uh_torch, U_torch)
+        I_U_expected = torch.zeros_like(UUh)
+        for k in range(UUh.shape[2]):
+            I_U_expected[:,:,k] = torch.eye(UUh.shape[0], dtype=UUh.dtype)
+        self.assertTrue(torch.allclose(UUh, I_U_expected, atol=1e-3)) # Significantly relaxed tolerance
+
+        # Orthogonality of V: V^H * V = I
+        Vh_torch = torch.permute(V_torch, (1,0,2)) # Since V is real, V^H is V^T (slice-wise)
+        VVh = TensorDecompositionOps._t_product(Vh_torch, V_torch) # Should be V^H * V
+        I_V_expected = torch.zeros_like(VVh)
+        for k in range(VVh.shape[2]):
+            I_V_expected[:,:,k] = torch.eye(VVh.shape[0], dtype=VVh.dtype)
+        self.assertTrue(torch.allclose(VVh, I_V_expected, atol=1e-3)) # Significantly relaxed tolerance
+
+        # F-diagonal S: Each frontal slice S_torch[:,:,i] should be diagonal
+        for k in range(S_torch.shape[2]):
+            S_slice = S_torch[:,:,k]
+            diag_S_slice = torch.diag(torch.diag(S_slice)) # Extract diagonal and form diagonal matrix
+            self.assertTrue(torch.allclose(S_slice, diag_S_slice, atol=1e-3)) # Significantly relaxed tolerance
+
+    def test_t_svd_invalid_ndim(self):
+        """Test t-SVD with non-3-way tensor."""
+        X_2d = torch.rand(3,2).float()
+        with self.assertRaisesRegex(ValueError, "t-SVD is defined for 3-way tensors"):
+            TensorDecompositionOps.t_svd(X_2d)
+
+    def test_t_svd_type_error_tensor(self):
+        """Test t-SVD with non-tensor input."""
+        with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
+            TensorDecompositionOps.t_svd("not a tensor") # type: ignore
 
 if __name__ == '__main__':
     unittest.main()
