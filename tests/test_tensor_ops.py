@@ -13,6 +13,7 @@ import os
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) # No longer needed
 
 from tensorus.tensor_ops import TensorOps
+from tensorus.tensor_decompositions import TensorDecompositionOps # Added import
 
 class TestTensorOps(unittest.TestCase):
 
@@ -201,7 +202,7 @@ class TestTensorOps(unittest.TestCase):
         low_rank_tensor_tl = tl.cp_to_tensor((true_weights_np, true_factors_np))
         low_rank_tensor_torch = torch.from_numpy(low_rank_tensor_tl).float()
 
-        weights, factors = TensorOps.cp_decomposition(low_rank_tensor_torch, rank)
+        weights, factors = TensorDecompositionOps.cp_decomposition(low_rank_tensor_torch, rank) # Changed here
 
         self.assertIsInstance(weights, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -229,7 +230,7 @@ class TestTensorOps(unittest.TestCase):
         sample_tensor = torch.rand(3, 4, 5, dtype=torch.float32)
         rank = 3
 
-        weights, factors = TensorOps.cp_decomposition(sample_tensor, rank)
+        weights, factors = TensorDecompositionOps.cp_decomposition(sample_tensor, rank) # Changed here
 
         self.assertIsInstance(weights, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -257,7 +258,7 @@ class TestTensorOps(unittest.TestCase):
         matrix_data = torch.rand(6, 7, dtype=torch.float32)
         rank = 2
 
-        weights, factors = TensorOps.cp_decomposition(matrix_data, rank)
+        weights, factors = TensorDecompositionOps.cp_decomposition(matrix_data, rank) # Changed here
 
         self.assertIsInstance(weights, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -281,26 +282,26 @@ class TestTensorOps(unittest.TestCase):
         """Test CP decomposition with invalid ranks."""
         sample_tensor = torch.rand(2, 2, 2, dtype=torch.float32)
         with self.assertRaisesRegex(ValueError, "Rank must be a positive integer"):
-            TensorOps.cp_decomposition(sample_tensor, 0)
+            TensorDecompositionOps.cp_decomposition(sample_tensor, 0) # Changed here
         with self.assertRaisesRegex(ValueError, "Rank must be a positive integer"):
-            TensorOps.cp_decomposition(sample_tensor, -1)
+            TensorDecompositionOps.cp_decomposition(sample_tensor, -1) # Changed here
         with self.assertRaisesRegex(ValueError, "Rank must be a positive integer"):
-            TensorOps.cp_decomposition(sample_tensor, 1.5) # type: ignore
+            TensorDecompositionOps.cp_decomposition(sample_tensor, 1.5) # Changed here; type: ignore
 
     def test_cp_decomposition_invalid_tensor_ndim(self):
         """Test CP decomposition with tensor of invalid number of dimensions."""
         one_d_tensor = torch.rand(5, dtype=torch.float32)
         with self.assertRaisesRegex(ValueError, "CP decomposition requires a tensor with at least 2 dimensions"):
-            TensorOps.cp_decomposition(one_d_tensor, 2)
+            TensorDecompositionOps.cp_decomposition(one_d_tensor, 2) # Changed here
 
     def test_cp_decomposition_type_error(self):
         """Test CP decomposition with non-tensor input."""
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
-            TensorOps.cp_decomposition("not a tensor", 2) # type: ignore
+            TensorDecompositionOps.cp_decomposition("not a tensor", 2) # Changed here; type: ignore
 
         # Test with list of numbers (should also fail _check_tensor)
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
-            TensorOps.cp_decomposition([1,2,3], 2) # type: ignore
+            TensorDecompositionOps.cp_decomposition([1,2,3], 2) # Changed here; type: ignore
 
     # --- Test Tucker Decomposition ---
 
@@ -316,7 +317,7 @@ class TestTensorOps(unittest.TestCase):
         low_rank_tensor_tl = tl.tucker_to_tensor((true_core_np, true_factors_np))
         low_rank_tensor_torch = torch.from_numpy(low_rank_tensor_tl).float()
 
-        core, factors = TensorOps.tucker_decomposition(low_rank_tensor_torch, ranks)
+        core, factors = TensorDecompositionOps.tucker_decomposition(low_rank_tensor_torch, ranks) # Changed here
 
         self.assertIsInstance(core, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -342,7 +343,7 @@ class TestTensorOps(unittest.TestCase):
         sample_tensor = torch.rand(4, 5, 6, dtype=torch.float32)
         ranks = [2, 3, 3]
 
-        core, factors = TensorOps.tucker_decomposition(sample_tensor, ranks)
+        core, factors = TensorDecompositionOps.tucker_decomposition(sample_tensor, ranks) # Changed here
 
         self.assertIsInstance(core, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -372,7 +373,7 @@ class TestTensorOps(unittest.TestCase):
         low_rank_matrix_tl = tl.tucker_to_tensor((true_core_np, true_factors_np))
         low_rank_matrix_torch = torch.from_numpy(low_rank_matrix_tl).float()
 
-        core, factors = TensorOps.tucker_decomposition(low_rank_matrix_torch, ranks)
+        core, factors = TensorDecompositionOps.tucker_decomposition(low_rank_matrix_torch, ranks) # Changed here
 
         self.assertIsInstance(core, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -395,14 +396,14 @@ class TestTensorOps(unittest.TestCase):
         sample_tensor = torch.rand(3, 4, 5, dtype=torch.float32)
         invalid_ranks = [2, 2] # Length 2, tensor ndim 3
         with self.assertRaisesRegex(ValueError, "Length of ranks list .* must match tensor dimensionality"):
-            TensorOps.tucker_decomposition(sample_tensor, invalid_ranks)
+            TensorDecompositionOps.tucker_decomposition(sample_tensor, invalid_ranks) # Changed here
 
     def test_tucker_decomposition_invalid_rank_value_type(self):
         """Test Tucker decomposition with non-integer rank in list."""
         sample_tensor = torch.rand(3, 4, 5, dtype=torch.float32)
         invalid_ranks = [2, 2.5, 2] # type: ignore
         with self.assertRaisesRegex(ValueError, "Ranks must be a list of positive integers"):
-             TensorOps.tucker_decomposition(sample_tensor, invalid_ranks)
+             TensorDecompositionOps.tucker_decomposition(sample_tensor, invalid_ranks) # Changed here
 
 
     def test_tucker_decomposition_invalid_rank_value_zero(self):
@@ -410,22 +411,22 @@ class TestTensorOps(unittest.TestCase):
         sample_tensor = torch.rand(3, 4, 5, dtype=torch.float32)
         invalid_ranks = [2, 0, 2]
         with self.assertRaisesRegex(ValueError, "Ranks must be a list of positive integers"):
-            TensorOps.tucker_decomposition(sample_tensor, invalid_ranks)
+            TensorDecompositionOps.tucker_decomposition(sample_tensor, invalid_ranks) # Changed here
 
     def test_tucker_decomposition_invalid_rank_value_exceeds_dim(self):
         """Test Tucker decomposition with a rank value exceeding tensor dimension."""
         sample_tensor = torch.rand(3, 4, 5, dtype=torch.float32)
         invalid_ranks = [2, 5, 2] # Rank 5 for mode 1 (size 4)
         with self.assertRaisesRegex(ValueError, "Rank for mode 1 .* is out of valid range"):
-            TensorOps.tucker_decomposition(sample_tensor, invalid_ranks)
+            TensorDecompositionOps.tucker_decomposition(sample_tensor, invalid_ranks) # Changed here
 
     def test_tucker_decomposition_type_error(self):
         """Test Tucker decomposition with non-tensor input."""
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
-            TensorOps.tucker_decomposition("not a tensor", [2,2]) # type: ignore
+            TensorDecompositionOps.tucker_decomposition("not a tensor", [2,2]) # Changed here; type: ignore
 
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
-            TensorOps.tucker_decomposition([1,2,3], [1]) # type: ignore
+            TensorDecompositionOps.tucker_decomposition([1,2,3], [1]) # Changed here; type: ignore
 
     # --- Test HOSVD ---
 
@@ -433,7 +434,7 @@ class TestTensorOps(unittest.TestCase):
         """Test HOSVD on a 3D tensor."""
         sample_tensor = torch.rand(3, 4, 2, dtype=torch.float32) # Using smaller dim for factor construction
 
-        core, factors = TensorOps.hosvd(sample_tensor)
+        core, factors = TensorDecompositionOps.hosvd(sample_tensor) # Changed here
 
         self.assertIsInstance(core, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -460,7 +461,7 @@ class TestTensorOps(unittest.TestCase):
         """Test HOSVD on a 2D tensor (matrix)."""
         sample_tensor = torch.rand(5, 3, dtype=torch.float32) # Using smaller dim for factor construction
 
-        core, factors = TensorOps.hosvd(sample_tensor)
+        core, factors = TensorDecompositionOps.hosvd(sample_tensor) # Changed here
 
         self.assertIsInstance(core, torch.Tensor)
         self.assertIsInstance(factors, list)
@@ -486,7 +487,7 @@ class TestTensorOps(unittest.TestCase):
     def test_hosvd_type_error(self):
         """Test HOSVD with non-tensor input."""
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
-            TensorOps.hosvd("not a tensor") # type: ignore
+            TensorDecompositionOps.hosvd("not a tensor") # Changed here; type: ignore
 
     def test_hosvd_input_tensor_constraints(self):
         """Test HOSVD with 0-dim (scalar) and 1-dim (vector) tensors."""
@@ -494,10 +495,10 @@ class TestTensorOps(unittest.TestCase):
         vector_tensor = torch.rand(7, dtype=torch.float32) # 1-dim
 
         with self.assertRaisesRegex(ValueError, "HOSVD requires a tensor with at least 2 dimensions"):
-            TensorOps.hosvd(scalar_tensor)
+            TensorDecompositionOps.hosvd(scalar_tensor) # Changed here
 
         with self.assertRaisesRegex(ValueError, "HOSVD requires a tensor with at least 2 dimensions"):
-            TensorOps.hosvd(vector_tensor)
+            TensorDecompositionOps.hosvd(vector_tensor) # Changed here
 
     # --- Test TT Decomposition ---
 
@@ -517,7 +518,7 @@ class TestTensorOps(unittest.TestCase):
         low_rank_tensor_tl = tl.tt_to_tensor(true_factors_np)
         low_rank_tensor_torch = torch.from_numpy(low_rank_tensor_tl).float()
 
-        factors = TensorOps.tt_decomposition(low_rank_tensor_torch, rank=internal_ranks)
+        factors = TensorDecompositionOps.tt_decomposition(low_rank_tensor_torch, rank=internal_ranks) # Changed here
 
         self.assertIsInstance(factors, list)
         self.assertEqual(len(factors), low_rank_tensor_torch.ndim)
@@ -540,7 +541,7 @@ class TestTensorOps(unittest.TestCase):
         sample_tensor = torch.rand(3, 4, 2, dtype=torch.float32) # Smaller dimensions
         max_rank = 2
 
-        factors = TensorOps.tt_decomposition(sample_tensor, rank=max_rank)
+        factors = TensorDecompositionOps.tt_decomposition(sample_tensor, rank=max_rank) # Changed here
 
         self.assertIsInstance(factors, list)
         self.assertEqual(len(factors), sample_tensor.ndim)
@@ -578,7 +579,7 @@ class TestTensorOps(unittest.TestCase):
         low_rank_tensor_tl = tl.tt_to_tensor(true_factors_np)
         low_rank_tensor_torch = torch.from_numpy(low_rank_tensor_tl).float()
 
-        factors = TensorOps.tt_decomposition(low_rank_tensor_torch, rank=internal_ranks)
+        factors = TensorDecompositionOps.tt_decomposition(low_rank_tensor_torch, rank=internal_ranks) # Changed here
 
         self.assertIsInstance(factors, list)
         self.assertEqual(len(factors), low_rank_tensor_torch.ndim)
@@ -598,31 +599,31 @@ class TestTensorOps(unittest.TestCase):
         # The implementation of tt_decomposition passes rank=1 (int) to tensor_train for 1D tensors.
         # Based on previous findings, this specific call fails inside TensorLy in the test env.
         with self.assertRaisesRegex(RuntimeError, "TT decomposition failed"):
-            TensorOps.tt_decomposition(tensor_1d, rank=1)
+            TensorDecompositionOps.tt_decomposition(tensor_1d, rank=1) # Changed here
 
         # Also test with user rank = []
         with self.assertRaisesRegex(RuntimeError, "TT decomposition failed"):
-            TensorOps.tt_decomposition(tensor_1d, rank=[])
+            TensorDecompositionOps.tt_decomposition(tensor_1d, rank=[]) # Changed here
 
 
     def test_tt_decomposition_invalid_rank_type(self):
         """Test TT decomposition with invalid rank type."""
         sample_tensor = torch.rand(3,4,5).float()
         with self.assertRaisesRegex(TypeError, "Rank must be an int or a list of ints"):
-            TensorOps.tt_decomposition(sample_tensor, rank="invalid_rank_type") # type: ignore
+            TensorDecompositionOps.tt_decomposition(sample_tensor, rank="invalid_rank_type") # Changed here; type: ignore
 
     def test_tt_decomposition_invalid_rank_list_length(self):
         """Test TT decomposition with incorrect length of rank list for N>1D tensor."""
         sample_tensor = torch.rand(3,4,5).float() # ndim=3, expects N-1=2 internal ranks
         invalid_ranks_list = [2,3,4] # Too long
         with self.assertRaisesRegex(ValueError, "Rank list length must be tensor.ndim - 1"):
-            TensorOps.tt_decomposition(sample_tensor, rank=invalid_ranks_list)
+            TensorDecompositionOps.tt_decomposition(sample_tensor, rank=invalid_ranks_list) # Changed here
 
         # Test for 1D tensor where rank list must be empty
         tensor_1d = torch.rand(5).float()
         invalid_ranks_for_1d = [1] # Should be empty list for user input to mean default rank=1
         with self.assertRaisesRegex(ValueError, "For a 1D tensor, rank list must be empty for user input"):
-             TensorOps.tt_decomposition(tensor_1d, rank=invalid_ranks_for_1d)
+             TensorDecompositionOps.tt_decomposition(tensor_1d, rank=invalid_ranks_for_1d) # Changed here
 
 
     def test_tt_decomposition_invalid_rank_list_values(self):
@@ -630,25 +631,25 @@ class TestTensorOps(unittest.TestCase):
         sample_tensor = torch.rand(3,4,5).float()
         invalid_ranks_list = [2, 0] # Zero rank
         with self.assertRaisesRegex(ValueError, "All ranks in the list must be positive integers"):
-            TensorOps.tt_decomposition(sample_tensor, rank=invalid_ranks_list)
+            TensorDecompositionOps.tt_decomposition(sample_tensor, rank=invalid_ranks_list) # Changed here
 
     def test_tt_decomposition_invalid_rank_int_value(self):
         """Test TT decomposition with non-positive integer rank."""
         sample_tensor = torch.rand(3,4,5).float()
         invalid_rank_int = 0
         with self.assertRaisesRegex(ValueError, "If rank is an integer, it must be positive"):
-            TensorOps.tt_decomposition(sample_tensor, rank=invalid_rank_int)
+            TensorDecompositionOps.tt_decomposition(sample_tensor, rank=invalid_rank_int) # Changed here
 
     def test_tt_decomposition_invalid_tensor_ndim0(self):
         """Test TT decomposition with a 0-dimensional (scalar) tensor."""
         scalar_tensor = torch.tensor(1.0).float()
         with self.assertRaisesRegex(ValueError, "TT decomposition requires a tensor with at least 1 dimension"):
-            TensorOps.tt_decomposition(scalar_tensor, rank=1)
+            TensorDecompositionOps.tt_decomposition(scalar_tensor, rank=1) # Changed here
 
     def test_tt_decomposition_type_error_tensor(self):
         """Test TT decomposition with non-tensor input."""
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
-            TensorOps.tt_decomposition("not a tensor", rank=1) # type: ignore
+            TensorDecompositionOps.tt_decomposition("not a tensor", rank=1) # Changed here; type: ignore
 
 if __name__ == '__main__':
     unittest.main()
