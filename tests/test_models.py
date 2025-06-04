@@ -9,6 +9,8 @@ from tensorus.models.logistic_regression import LogisticRegressionModel
 from tensorus.models.ridge_regression import RidgeRegressionModel
 from tensorus.models.lasso_regression import LassoRegressionModel
 from tensorus.models.decision_tree_classifier import DecisionTreeClassifierModel
+from tensorus.models.svm_classifier import SVMClassifierModel
+from tensorus.models.svr import SVRModel
 from tensorus.models.kmeans import KMeansClusteringModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
@@ -93,3 +95,11 @@ def test_sklearn_models(tmp_path):
     km.fit(Xk)
     labels = km.predict(Xk)
     assert set(labels) == {0, 1}
+
+    svc = SVMClassifierModel(kernel="linear", C=1.0)
+    svc.fit(Xc, yc)
+    assert np.array_equal(svc.predict(Xc), yc)
+
+    svr = SVRModel(kernel="linear", C=1.0, epsilon=0.0)
+    svr.fit(X, y)
+    assert np.allclose(svr.predict(X), y, atol=1e-1)

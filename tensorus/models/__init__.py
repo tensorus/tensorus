@@ -7,6 +7,8 @@ from .logistic_regression import LogisticRegressionModel
 from .ridge_regression import RidgeRegressionModel
 from .lasso_regression import LassoRegressionModel
 from .decision_tree_classifier import DecisionTreeClassifierModel
+from .svm_classifier import SVMClassifierModel
+from .svr import SVRModel
 from .kmeans import KMeansClusteringModel
 from .utils import load_xy_from_storage, store_predictions
 
@@ -19,6 +21,8 @@ __all__ = [
     "RidgeRegressionModel",
     "LassoRegressionModel",
     "DecisionTreeClassifierModel",
+    "SVMClassifierModel",
+    "SVRModel",
     "KMeansClusteringModel",
     "load_xy_from_storage",
     "store_predictions",
