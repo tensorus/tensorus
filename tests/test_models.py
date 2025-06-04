@@ -12,6 +12,7 @@ from tensorus.models.decision_tree_classifier import DecisionTreeClassifierModel
 from tensorus.models.svm_classifier import SVMClassifierModel
 from tensorus.models.svr import SVRModel
 from tensorus.models.kmeans import KMeansClusteringModel
+from tensorus.models.knn_classifier import KNNClassifierModel
 from tensorus.models.random_forest_classifier import RandomForestClassifierModel
 from tensorus.models.random_forest_regressor import RandomForestRegressorModel
 from tensorus.tensor_storage import TensorStorage
@@ -101,6 +102,10 @@ def test_sklearn_models(tmp_path):
     svc = SVMClassifierModel(kernel="linear", C=1.0)
     svc.fit(Xc, yc)
     assert np.array_equal(svc.predict(Xc), yc)
+
+    knn = KNNClassifierModel(n_neighbors=1)
+    knn.fit(Xc, yc)
+    assert np.array_equal(knn.predict(Xc), yc)
 
     svr = SVRModel(kernel="linear", C=1.0, epsilon=0.0)
     svr.fit(X, y)
