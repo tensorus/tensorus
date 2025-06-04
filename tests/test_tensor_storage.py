@@ -1,5 +1,6 @@
 import unittest
 import pytest
+import logging
 
 pytest.importorskip("torch")
 import torch

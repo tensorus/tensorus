@@ -6,6 +6,10 @@ import torch
 
 from tensorus.models.linear_regression import LinearRegressionModel
 from tensorus.models.logistic_regression import LogisticRegressionModel
+from tensorus.models.ridge_regression import RidgeRegressionModel
+from tensorus.models.lasso_regression import LassoRegressionModel
+from tensorus.models.decision_tree_classifier import DecisionTreeClassifierModel
+from tensorus.models.kmeans import KMeansClusteringModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
 
@@ -64,3 +68,28 @@ def test_linear_regression_with_tensor_storage(tmp_path):
     assert len(stored) == 1
     assert torch.allclose(stored[0]["tensor"], preds)
     assert stored[0]["metadata"]["record_id"] == rec_id
+
+
+def test_sklearn_models(tmp_path):
+    X = np.array([[1.0], [2.0], [3.0], [4.0]])
+    y = np.array([3.0, 5.0, 7.0, 9.0])
+
+    ridge = RidgeRegressionModel(alpha=0.1)
+    ridge.fit(X, y)
+    assert np.allclose(ridge.predict(X), y, atol=1e-1)
+
+    lasso = LassoRegressionModel(alpha=0.01)
+    lasso.fit(X, y)
+    assert np.allclose(lasso.predict(X), y, atol=1e-1)
+
+    tree = DecisionTreeClassifierModel()
+    Xc = np.array([[0.0], [1.0], [2.0], [3.0]])
+    yc = np.array([0, 0, 1, 1])
+    tree.fit(Xc, yc)
+    assert np.array_equal(tree.predict(Xc), yc)
+
+    km = KMeansClusteringModel(n_clusters=2, random_state=42)
+    Xk = np.array([[0.0], [0.1], [1.0], [1.1]])
+    km.fit(Xk)
+    labels = km.predict(Xk)
+    assert set(labels) == {0, 1}
