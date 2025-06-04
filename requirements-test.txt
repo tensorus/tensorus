@@ -1,0 +1,7 @@
+# requirements-test.txt
+# Python dependencies needed to run the test suite
+
+pytest
+pytest-asyncio
+httpx
+scipy
