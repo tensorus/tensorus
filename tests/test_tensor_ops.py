@@ -249,6 +249,22 @@ class TestTensorOps(unittest.TestCase):
         self.assertTrue(torch.allclose(TensorOps.frobenius_norm(t), torch.linalg.norm(t, "fro")))
         self.assertTrue(torch.allclose(TensorOps.l1_norm(t), torch.sum(torch.abs(t))))
 
+    def test_std_default(self):
+        t = torch.tensor([[1., 2.], [3., 4.]])
+        expected = torch.std(t, unbiased=False)
+        result = TensorOps.std(t)
+        self.assertTrue(torch.allclose(result, expected))
+
+    def test_std_dim_unbiased_keepdim(self):
+        t = torch.tensor([[1., 2.], [3., 4.]])
+        expected = torch.std(t, dim=0, unbiased=True, keepdim=True)
+        result = TensorOps.std(t, dim=0, unbiased=True, keepdim=True)
+        self.assertTrue(torch.allclose(result, expected))
+
+    def test_std_type_error(self):
+        with self.assertRaises(TypeError):
+            TensorOps.std("not_a_tensor")  # type: ignore
+
     # --- Test CP Decomposition ---
 
     def test_cp_decomposition_valid_low_rank(self):

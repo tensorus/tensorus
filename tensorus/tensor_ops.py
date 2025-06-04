@@ -429,6 +429,13 @@ class TensorOps:
         return torch.var(tensor.float(), dim=dim, unbiased=unbiased, keepdim=keepdim)
 
     @staticmethod
+    def std(tensor: torch.Tensor, dim: Optional[Union[int, Tuple[int, ...]]] = None,
+            unbiased: bool = False, keepdim: bool = False) -> torch.Tensor:
+        """Standard deviation of tensor elements."""
+        TensorOps._check_tensor(tensor)
+        return torch.std(tensor.float(), dim=dim, unbiased=unbiased, keepdim=keepdim)
+
+    @staticmethod
     def covariance(matrix_X: torch.Tensor, matrix_Y: Optional[torch.Tensor] = None,
                    rowvar: bool = True, bias: bool = False, ddof: Optional[int] = None) -> torch.Tensor:
         """Estimate covariance matrix of the given variables."""
