@@ -1066,12 +1066,26 @@ class TestTensorOps(unittest.TestCase):
 
     # --- Test BTD Decomposition ---
 
-    def test_btd_decomposition_valid_input_raises_notimplemented(self):
-        """Test BTD for valid input, expecting NotImplementedError."""
+    def test_btd_decomposition_valid_structure(self):
+        """Test BTD decomposition returns cores and factors with expected shapes."""
         sample_tensor = torch.rand(6, 7, 8).float()
-        ranks_per_term = [(2, 2, 2), (3, 3, 3)]
-        with self.assertRaisesRegex(NotImplementedError, "BTD as a sum of Tucker-1 terms .* is not directly available"):
-            TensorDecompositionOps.btd_decomposition(sample_tensor, ranks_per_term)
+        ranks_per_term = [(2, 2, 2), (1, 3, 2)]
+
+        terms = TensorDecompositionOps.btd_decomposition(sample_tensor, ranks_per_term)
+
+        self.assertIsInstance(terms, list)
+        self.assertEqual(len(terms), len(ranks_per_term))
+
+        for term, ranks in zip(terms, ranks_per_term):
+            core, factors = term
+            self.assertIsInstance(core, torch.Tensor)
+            self.assertEqual(core.shape, ranks)
+            self.assertIsInstance(factors, list)
+            self.assertEqual(len(factors), sample_tensor.ndim)
+            self.assertTrue(all(isinstance(f, torch.Tensor) for f in factors))
+            self.assertEqual(factors[0].shape, (sample_tensor.shape[0], ranks[0]))
+            self.assertEqual(factors[1].shape, (sample_tensor.shape[1], ranks[1]))
+            self.assertEqual(factors[2].shape, (sample_tensor.shape[2], ranks[2]))
 
     def test_btd_decomposition_invalid_tensor_ndim(self):
         """Test BTD with non-3D tensor."""

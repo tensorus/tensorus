@@ -386,29 +386,81 @@ class TensorDecompositionOps:
 
     @staticmethod
     def btd_decomposition(tensor: torch.Tensor, ranks_per_term: List[Tuple[int, int, int]]) -> List[Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """Block Term Decomposition (BTD) using a sequential Tucker-1 approach.
+
+        Each term is computed via :func:`tensorly.decomposition.partial_tucker`
+        on the current residual tensor. The list ``ranks_per_term`` defines the
+        core sizes for each term as ``[(L_1, M_1, N_1), (L_2, M_2, N_2), ...]``.
+
+        Args:
+            tensor: Input 3-way tensor to decompose.
+            ranks_per_term: List of tuples specifying core ranks for every term.
+                ``ranks_per_term[i]`` corresponds to the shape ``(L_i, M_i, N_i)``
+                of the ``i``\-th core and, consequently, to the number of columns
+                of the factor matrices returned for that term.
+
+        Returns:
+            A list ``[(core_1, [A_1, B_1, C_1]), (core_2, [A_2, B_2, C_2]), ...]``
+            where each ``core_r`` is a tensor of shape ``(L_r, M_r, N_r)`` and the
+            factor matrices have shapes ``(I, L_r)``, ``(J, M_r)``, ``(K, N_r)`` for
+            an input tensor of shape ``(I, J, K)``.
+        """
+
         TensorOps._check_tensor(tensor)
         if tensor.ndim != 3:
-            raise ValueError(f"BTD as sum of Tucker-1 terms is typically for 3-way tensors, but got {tensor.ndim} dimensions.")
+            raise ValueError(
+                f"BTD as sum of Tucker-1 terms is typically for 3-way tensors, but got {tensor.ndim} dimensions."
+            )
         if not isinstance(ranks_per_term, list):
             raise TypeError(f"ranks_per_term must be a list of tuples, but got {type(ranks_per_term)}.")
         if not ranks_per_term:
             raise ValueError("ranks_per_term list cannot be empty.")
         for i, term_ranks in enumerate(ranks_per_term):
-            if not (isinstance(term_ranks, tuple) and len(term_ranks) == 3 and \
-                    all(isinstance(r, int) and r > 0 for r in term_ranks)):
-                raise ValueError(f"Each element in ranks_per_term must be a tuple of 3 positive integers, but term {i} is {term_ranks}.")
-            if not (term_ranks[0] <= tensor.shape[0] and \
-                    term_ranks[1] <= tensor.shape[1] and \
-                    term_ranks[2] <= tensor.shape[2]):
-                raise ValueError(f"Ranks for term {i} {term_ranks} exceed tensor dimensions {tensor.shape}.")
-        logging.info(f"Performing BTD with ranks_per_term {ranks_per_term} on tensor of shape {tensor.shape}")
-        raise NotImplementedError(
-            "BTD as a sum of Tucker-1 terms (returning list of (core, factors) tuples) "
-            "via a single `block_term_tensor(tensor, rank=[(L1,M1,N1),...])` call "
-            "is not directly available in standard TensorLy. "
-            "Consider using `tensorly.decomposition.partial_tucker` in a loop for a custom implementation, "
-            "or `tensorly.decomposition.block_tensor_decomposition` if a sum of CP-like terms is intended."
+            if not (
+                isinstance(term_ranks, tuple)
+                and len(term_ranks) == 3
+                and all(isinstance(r, int) and r > 0 for r in term_ranks)
+            ):
+                raise ValueError(
+                    f"Each element in ranks_per_term must be a tuple of 3 positive integers, but term {i} is {term_ranks}."
+                )
+            if not (
+                term_ranks[0] <= tensor.shape[0]
+                and term_ranks[1] <= tensor.shape[1]
+                and term_ranks[2] <= tensor.shape[2]
+            ):
+                raise ValueError(
+                    f"Ranks for term {i} {term_ranks} exceed tensor dimensions {tensor.shape}."
+                )
+
+        logging.info(
+            f"Performing BTD with ranks_per_term {ranks_per_term} on tensor of shape {tensor.shape}"
         )
+
+        residual = tensor.float().clone()
+        terms: List[Tuple[torch.Tensor, List[torch.Tensor]]] = []
+
+        for term_idx, ranks in enumerate(ranks_per_term):
+            try:
+                tl_tensor = tl.tensor(residual.numpy())
+                (core_np, factors_np), _ = partial_tucker(tl_tensor, rank=list(ranks))
+                torch_core = torch.from_numpy(core_np.copy()).type(torch.float32)
+                torch_factors = [torch.from_numpy(f.copy()).type(torch.float32) for f in factors_np]
+                terms.append((torch_core, torch_factors))
+
+                # Subtract reconstructed term from residual for sequential fit
+                reconstructed_np = tucker_to_tensor((core_np, factors_np))
+                residual = residual - torch.from_numpy(reconstructed_np).type(residual.dtype)
+                logging.info(
+                    f"BTD term {term_idx} extracted with core shape {torch_core.shape}"
+                )
+            except Exception as e:
+                logging.error(
+                    f"Error extracting BTD term {term_idx}: {e}. Tensor shape: {tensor.shape}, ranks: {ranks}"
+                )
+                raise RuntimeError(f"BTD decomposition failed at term {term_idx}. Original error: {e}")
+
+        return terms
 
     @staticmethod
     def t_svd(tensor: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
