@@ -115,47 +115,17 @@ class TensorStorage:
         dataset_names = list(self.datasets.keys())
         logging.info(f"Available datasets: {dataset_names}")
         return dataset_names
+ 
+    def dataset_exists(self, name: str) -> bool:
+        """Check whether a dataset exists either in memory or on disk."""
+        if name in self.datasets:
+            return True
+        if self.storage_path:
+            file_path = self.storage_path / f"{name}.pt"
+            return file_path.exists()
+        return False
 
-diff --git a/tensorus/tensor_storage.py b/tensorus/tensor_storage.py
-index dc87679f253168423ad7163d9bca3cac8c12be55..c2dac92ce9e34c7c73122a707d51f7cc597a0bfb 100644
---- a/tensorus/tensor_storage.py
-+++ b/tensorus/tensor_storage.py
-@@ -94,50 +94,59 @@ class TensorStorage:
-             try:
-                 loaded_data = torch.load(file_path)
-                 # Basic validation of the loaded data structure
-                 if isinstance(loaded_data, dict) and "tensors" in loaded_data and "metadata" in loaded_data:
-                     self.datasets[dataset_name] = {
-                         "tensors": loaded_data["tensors"],
-                         "metadata": loaded_data["metadata"]
-                     }
-                     logging.info(f"Dataset '{dataset_name}' loaded successfully from {file_path}")
-                 else:
-                     logging.warning(f"File {file_path} does not appear to be a valid dataset file (missing keys or wrong format). Skipping.")
-             except Exception as e: # Catch errors during file loading or deserialization
-                 logging.error(f"Error loading dataset from {file_path}: {e}. The file might be corrupted or not a PyTorch file.")
- 
-     def list_datasets(self) -> List[str]:
-         """
-         Lists the names of all datasets currently stored.
- 
-         Returns:
-             List[str]: A list of dataset names.
-         """
-         dataset_names = list(self.datasets.keys())
-         logging.info(f"Available datasets: {dataset_names}")
-         return dataset_names
- 
-+    def dataset_exists(self, name: str) -> bool:
-+        """Check whether a dataset exists either in memory or on disk."""
-+        if name in self.datasets:
-+            return True
-+        if self.storage_path:
-+            file_path = self.storage_path / f"{name}.pt"
-+            return file_path.exists()
-+        return False
-+
-     def create_dataset(self, name: str) -> None:
+    def create_dataset(self, name: str) -> None:
          """
          Creates a new, empty dataset.
  
@@ -173,33 +143,6 @@ index dc87679f253168423ad7163d9bca3cac8c12be55..c2dac92ce9e34c7c73122a707d51f7cc
          logging.info(f"Dataset '{name}' created successfully.")
          self._save_dataset(name) # Save after creation
  
-     def insert(self, name: str, tensor: torch.Tensor, metadata: Optional[Dict[str, Any]] = None) -> str:
-         """
-         Inserts a tensor into a specified dataset.
- 
-         The method generates a unique `record_id` and a `version` number for the
-         tensor. User-provided `metadata` is copied and can include custom fields.
-         If `record_id` is present in the user-provided `metadata`, it will be
-
-
-    def create_dataset(self, name: str) -> None:
-        """
-        Creates a new, empty dataset.
-
-        Args:
-            name (str): The unique name for the new dataset.
-
-        Raises:
-            ValueError: If a dataset with the same name already exists.
-        """
-        if name in self.datasets:
-            logging.warning(f"Attempted to create dataset '{name}' which already exists.")
-            raise ValueError(f"Dataset '{name}' already exists.")
-
-        self.datasets[name] = {"tensors": [], "metadata": []}
-        logging.info(f"Dataset '{name}' created successfully.")
-        self._save_dataset(name) # Save after creation
-
     def insert(self, name: str, tensor: torch.Tensor, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Inserts a tensor into a specified dataset.
