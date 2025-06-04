@@ -12,6 +12,8 @@ from tensorus.models.decision_tree_classifier import DecisionTreeClassifierModel
 from tensorus.models.svm_classifier import SVMClassifierModel
 from tensorus.models.svr import SVRModel
 from tensorus.models.kmeans import KMeansClusteringModel
+from tensorus.models.random_forest_classifier import RandomForestClassifierModel
+from tensorus.models.random_forest_regressor import RandomForestRegressorModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
 
@@ -103,3 +105,29 @@ def test_sklearn_models(tmp_path):
     svr = SVRModel(kernel="linear", C=1.0, epsilon=0.0)
     svr.fit(X, y)
     assert np.allclose(svr.predict(X), y, atol=1e-1)
+
+
+def test_random_forest_models(tmp_path):
+    X = np.array([[1.0], [2.0], [3.0], [4.0]])
+    y_reg = np.array([3.0, 5.0, 7.0, 9.0])
+    y_clf = np.array([0, 0, 1, 1])
+
+    clf = RandomForestClassifierModel(n_estimators=10, random_state=42)
+    clf.fit(X, y_clf)
+    preds_clf = clf.predict(X)
+    assert len(preds_clf) == len(y_clf)
+    save_clf = tmp_path / "rf_clf.joblib"
+    clf.save(str(save_clf))
+    clf2 = RandomForestClassifierModel()
+    clf2.load(str(save_clf))
+    assert np.array_equal(clf2.predict(X), preds_clf)
+
+    reg = RandomForestRegressorModel(n_estimators=10, random_state=42)
+    reg.fit(X, y_reg)
+    preds_reg = reg.predict(X)
+    assert len(preds_reg) == len(y_reg)
+    save_reg = tmp_path / "rf_reg.joblib"
+    reg.save(str(save_reg))
+    reg2 = RandomForestRegressorModel()
+    reg2.load(str(save_reg))
+    assert np.allclose(reg2.predict(X), preds_reg)
