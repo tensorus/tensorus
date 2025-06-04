@@ -327,11 +327,16 @@ This section details the core tensor manipulation functionalities provided by `t
 *   `subtract(t1, t2)`: Element-wise subtraction of two tensors, or a tensor and a scalar.
 *   `multiply(t1, t2)`: Element-wise multiplication of two tensors, or a tensor and a scalar.
 *   `divide(t1, t2)`: Element-wise division of two tensors, or a tensor and a scalar. Includes checks for division by zero.
+*   `power(t1, t2)`: Raises each element in `t1` to the power of `t2`. Supports tensor or scalar exponents.
+*   `log(tensor)`: Element-wise natural logarithm with warnings for non-positive values.
 
 #### Matrix and Dot Operations
 
 *   `matmul(t1, t2)`: Matrix multiplication of two tensors, supporting various dimensionalities (e.g., 2D matrices, batched matrix multiplication).
 *   `dot(t1, t2)`: Computes the dot product of two 1D tensors.
+*   `matrix_eigendecomposition(matrix_A)`: Returns eigenvalues and eigenvectors of a square matrix.
+*   `matrix_trace(matrix_A)`: Computes the trace of a 2-D matrix.
+*   `tensor_trace(tensor_A, axis1=0, axis2=1)`: Trace of a tensor along two axes.
 
 #### Reduction Operations
 
@@ -339,6 +344,9 @@ This section details the core tensor manipulation functionalities provided by `t
 *   `mean(tensor, dim=None, keepdim=False)`: Computes the mean of tensor elements over specified dimensions. Tensor is cast to float for calculation.
 *   `min(tensor, dim=None, keepdim=False)`: Finds the minimum value in a tensor, optionally along a dimension. Returns values and indices if `dim` is specified.
 *   `max(tensor, dim=None, keepdim=False)`: Finds the maximum value in a tensor, optionally along a dimension. Returns values and indices if `dim` is specified.
+*   `variance(tensor, dim=None, unbiased=False, keepdim=False)`: Variance of tensor elements.
+*   `covariance(matrix_X, matrix_Y=None, rowvar=True, bias=False, ddof=None)`: Covariance matrix estimation.
+*   `correlation(matrix_X, matrix_Y=None, rowvar=True)`: Correlation coefficient matrix.
 
 #### Reshaping and Slicing
 
@@ -354,6 +362,12 @@ This section details the core tensor manipulation functionalities provided by `t
 #### Advanced Operations
 
 *   `einsum(equation, *tensors)`: Applies Einstein summation convention to the input tensors based on the provided equation string.
+*   `compute_gradient(func, tensor)`: Returns the gradient of a scalar `func` with respect to `tensor`.
+*   `compute_jacobian(func, tensor)`: Computes the Jacobian matrix of a vector function.
+*   `convolve_1d(signal_x, kernel_w, mode='valid')`: 1‑D convolution using `torch.nn.functional.conv1d`.
+*   `convolve_2d(image_I, kernel_K, mode='valid')`: 2‑D convolution using `torch.nn.functional.conv2d`.
+*   `frobenius_norm(tensor)`: Calculates the Frobenius norm.
+*   `l1_norm(tensor)`: Calculates the L1 norm (sum of absolute values).
 
 ## MCP Server Details
 
