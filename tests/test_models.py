@@ -1,8 +1,13 @@
 import numpy as np
+import pytest
+
+pytest.importorskip("torch")
 import torch
 
 from tensorus.models.linear_regression import LinearRegressionModel
 from tensorus.models.logistic_regression import LogisticRegressionModel
+from tensorus.tensor_storage import TensorStorage
+from tensorus.models.utils import load_xy_from_storage, store_predictions
 
 
 def test_linear_regression_fit_predict(tmp_path):
@@ -35,3 +40,27 @@ def test_logistic_regression_fit_predict(tmp_path):
     model2.load(str(save_path))
     pred2 = model2.predict(X)
     assert torch.equal(pred, pred2)
+
+
+def test_linear_regression_with_tensor_storage(tmp_path):
+    storage = TensorStorage(storage_path=tmp_path / "storage")
+    ds_name = "train_ds"
+    storage.create_dataset(ds_name)
+
+    X_np = np.array([[1.0], [2.0], [3.0], [4.0]])
+    y_np = np.array([3.0, 5.0, 7.0, 9.0])
+    for x, y in zip(X_np, y_np):
+        storage.insert(ds_name, torch.tensor(x), {"label": float(y)})
+
+    X, y = load_xy_from_storage(storage, ds_name, target_field="label")
+    model = LinearRegressionModel()
+    model.fit(X, y)
+    preds = model.predict(X)
+
+    preds_ds = "predictions_ds"
+    rec_id = store_predictions(storage, preds_ds, preds, model_name="LinearRegressionModel")
+    stored = storage.get_dataset_with_metadata(preds_ds)
+
+    assert len(stored) == 1
+    assert torch.allclose(stored[0]["tensor"], preds)
+    assert stored[0]["metadata"]["record_id"] == rec_id
