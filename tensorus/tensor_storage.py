@@ -116,6 +116,15 @@ class TensorStorage:
         logging.info(f"Available datasets: {dataset_names}")
         return dataset_names
 
+    def dataset_exists(self, name: str) -> bool:
+        """Check whether a dataset exists either in memory or on disk."""
+        if name in self.datasets:
+            return True
+        if self.storage_path:
+            file_path = self.storage_path / f"{name}.pt"
+            return file_path.exists()
+        return False
+
     def create_dataset(self, name: str) -> None:
         """
         Creates a new, empty dataset.
