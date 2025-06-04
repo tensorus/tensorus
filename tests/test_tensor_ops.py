@@ -1206,6 +1206,88 @@ class TestTensorOps(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "Input at index 0 is not a torch.Tensor"):
             TensorDecompositionOps.ntf_cp_decomposition("not a tensor", 2) # type: ignore
 
+    # --- Test Non-Negative Tucker Decomposition ---
+
+    def test_non_negative_tucker_valid(self):
+        sample_tensor = torch.rand(3, 4, 5).float()
+        ranks = [2, 3, 2]
+        core, factors = TensorDecompositionOps.non_negative_tucker(sample_tensor, ranks)
+
+        self.assertIsInstance(core, torch.Tensor)
+        self.assertIsInstance(factors, list)
+        self.assertEqual(core.shape, tuple(ranks))
+        self.assertEqual(len(factors), sample_tensor.ndim)
+        for i in range(sample_tensor.ndim):
+            self.assertEqual(factors[i].shape, (sample_tensor.shape[i], ranks[i]))
+            self.assertTrue(torch.all(factors[i] >= -1e-6))
+        self.assertTrue(torch.all(core >= -1e-6))
+
+        np_core = core.numpy()
+        np_factors = [f.numpy() for f in factors]
+        reconstructed = tl.tucker_to_tensor((np_core, np_factors))
+        recon_torch = torch.from_numpy(reconstructed).float()
+        error = torch.norm(sample_tensor - recon_torch) / torch.norm(sample_tensor)
+        self.assertLess(error.item(), 0.8)
+
+    def test_non_negative_tucker_negative_input(self):
+        tensor = torch.tensor([[[-1.0, 0.5]]])
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            TensorDecompositionOps.non_negative_tucker(tensor, [1,1,1])
+
+    # --- Test Partial Tucker (HOOI) ---
+
+    def test_partial_tucker_valid(self):
+        sample_tensor = torch.rand(3, 4, 5).float()
+        ranks = [2, 3, 2]
+        core, factors = TensorDecompositionOps.partial_tucker(sample_tensor, ranks)
+
+        self.assertEqual(core.shape, tuple(ranks))
+        self.assertEqual(len(factors), sample_tensor.ndim)
+        for i in range(sample_tensor.ndim):
+            self.assertEqual(factors[i].shape, (sample_tensor.shape[i], ranks[i]))
+
+        np_core = core.numpy()
+        np_factors = [f.numpy() for f in factors]
+        reconstructed = tl.tucker_to_tensor((np_core, np_factors))
+        recon_torch = torch.from_numpy(reconstructed).float()
+        error = torch.norm(sample_tensor - recon_torch) / torch.norm(sample_tensor)
+        self.assertLess(error.item(), 0.7)
+
+    def test_partial_tucker_invalid_rank_length(self):
+        tensor = torch.rand(3, 4, 5).float()
+        with self.assertRaisesRegex(ValueError, "Length of ranks list"):
+            TensorDecompositionOps.partial_tucker(tensor, [2, 2])
+
+    # --- Test TT-SVD Decomposition ---
+
+    def test_tt_svd_valid_low_rank(self):
+        shape = (3, 4, 5)
+        internal_ranks = [2, 3]
+        full_ranks = [1] + internal_ranks + [1]
+        true_factors_np = [
+            np.random.rand(full_ranks[0], shape[0], full_ranks[1]).astype(np.float32),
+            np.random.rand(full_ranks[1], shape[1], full_ranks[2]).astype(np.float32),
+            np.random.rand(full_ranks[2], shape[2], full_ranks[3]).astype(np.float32),
+        ]
+        tensor = torch.from_numpy(tl.tt_to_tensor(true_factors_np)).float()
+
+        factors = TensorDecompositionOps.tt_svd(tensor, internal_ranks)
+
+        self.assertEqual(len(factors), tensor.ndim)
+        for i in range(len(factors)):
+            self.assertEqual(factors[i].shape, (full_ranks[i], shape[i], full_ranks[i+1]))
+
+        np_factors_res = [f.detach().cpu().numpy() for f in factors]
+        reconstructed = tl.tt_to_tensor(np_factors_res)
+        recon_torch = torch.from_numpy(reconstructed).float()
+        error = torch.norm(tensor - recon_torch) / torch.norm(tensor)
+        self.assertAlmostEqual(error.item(), 0.0, delta=1e-4)
+
+    def test_tt_svd_invalid_rank_type(self):
+        tensor = torch.rand(3, 4, 5).float()
+        with self.assertRaisesRegex(TypeError, "Rank must be an int or a list of ints"):
+            TensorDecompositionOps.tt_svd(tensor, "bad")  # type: ignore
+
     # --- Test t-SVD and t-product ---
 
     def test_t_product_valid(self):

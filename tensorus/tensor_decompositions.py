@@ -12,8 +12,13 @@ from typing import List, Tuple, Union, Optional, Dict
 from tensorus.tensor_ops import TensorOps
 import logging
 from tensorly.decomposition import (
-    parafac, tucker, tensor_train, tensor_ring,
-    non_negative_parafac
+    parafac,
+    tucker,
+    tensor_train,
+    tensor_ring,
+    non_negative_parafac,
+    non_negative_tucker,
+    partial_tucker,
     # block_term_decomposition removed as it's not found
 )
 from tensorly.cp_tensor import cp_to_tensor
@@ -130,6 +135,31 @@ class TensorDecompositionOps:
             raise RuntimeError(f"NTF-CP decomposition failed. Original error: {e}")
 
     @staticmethod
+    def non_negative_tucker(tensor: torch.Tensor, ranks: List[int]) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        """Non-negative Tucker decomposition using tensorly's non_negative_tucker."""
+        TensorOps._check_tensor(tensor)
+        if not isinstance(ranks, list) or not all(isinstance(r, int) and r > 0 for r in ranks):
+            raise ValueError(f"Ranks must be a list of positive integers, but got {ranks}.")
+        if len(ranks) != tensor.ndim:
+            raise ValueError(f"Length of ranks list ({len(ranks)}) must match tensor dimensionality ({tensor.ndim}).")
+        for i, r_val in enumerate(ranks):
+            if not (1 <= r_val <= tensor.shape[i]):
+                raise ValueError(f"Rank for mode {i} ({r_val}) is out of valid range [1, {tensor.shape[i]}].")
+        if torch.any(tensor < 0):
+            raise ValueError("Input tensor for non-negative Tucker must be non-negative.")
+
+        logging.info(f"Performing non-negative Tucker decomposition with ranks {ranks} on tensor of shape {tensor.shape}")
+        try:
+            tl_tensor = tl.tensor(tensor.float().numpy())
+            core_np, factors_np = non_negative_tucker(tl_tensor, rank=ranks)
+            torch_core = torch.from_numpy(core_np.copy()).type(torch.float32)
+            torch_factors = [torch.from_numpy(f.copy()).type(torch.float32) for f in factors_np]
+            return torch_core, torch_factors
+        except Exception as e:
+            logging.error(f"Error during non-negative Tucker decomposition: {e}. Tensor shape: {tensor.shape}, Ranks: {ranks}")
+            raise RuntimeError(f"Non-negative Tucker decomposition failed. Original error: {e}")
+
+    @staticmethod
     def tucker_decomposition(tensor: torch.Tensor, ranks: List[int]) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         TensorOps._check_tensor(tensor)
         if not isinstance(ranks, list) or not all(isinstance(r, int) and r > 0 for r in ranks):
@@ -152,6 +182,33 @@ class TensorDecompositionOps:
         except Exception as e:
             logging.error(f"Error during Tucker decomposition: {e}. Tensor shape: {tensor.shape}, Ranks: {ranks}")
             raise RuntimeError(f"Tucker decomposition failed. Original error: {e}")
+
+    @staticmethod
+    def partial_tucker(tensor: torch.Tensor, ranks: List[int]) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        """Higher-Order Orthogonal Iteration (HOOI) via tensorly.partial_tucker."""
+        TensorOps._check_tensor(tensor)
+        if not isinstance(ranks, list) or not all(isinstance(r, int) and r > 0 for r in ranks):
+            raise ValueError(f"Ranks must be a list of positive integers, but got {ranks}.")
+        if len(ranks) != tensor.ndim:
+            raise ValueError(f"Length of ranks list ({len(ranks)}) must match tensor dimensionality ({tensor.ndim}).")
+        for i, r_val in enumerate(ranks):
+            if not (1 <= r_val <= tensor.shape[i]):
+                raise ValueError(f"Rank for mode {i} ({r_val}) is out of valid range [1, {tensor.shape[i]}].")
+
+        logging.info(f"Performing partial Tucker (HOOI) with ranks {ranks} on tensor of shape {tensor.shape}")
+        try:
+            tl_tensor = tl.tensor(tensor.float().numpy())
+            result = partial_tucker(tl_tensor, rank=ranks)
+            if isinstance(result[0], tuple):
+                core_np, factors_np = result[0]
+            else:
+                core_np, factors_np = result
+            torch_core = torch.from_numpy(core_np.copy()).type(torch.float32)
+            torch_factors = [torch.from_numpy(f.copy()).type(torch.float32) for f in factors_np]
+            return torch_core, torch_factors
+        except Exception as e:
+            logging.error(f"Error during partial Tucker decomposition: {e}. Tensor shape: {tensor.shape}, Ranks: {ranks}")
+            raise RuntimeError(f"Partial Tucker decomposition failed. Original error: {e}")
 
     @staticmethod
     def hosvd(tensor: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
@@ -221,6 +278,51 @@ class TensorDecompositionOps:
         except Exception as e:
             logging.error(f"Error during TT decomposition: {e}. Tensor shape: {tensor.shape}, Rank(s): {rank}")
             raise RuntimeError(f"TT decomposition failed. Original error: {e}")
+
+    @staticmethod
+    def tt_svd(tensor: torch.Tensor, rank: Union[int, List[int]]) -> List[torch.Tensor]:
+        """Tensor Train decomposition using SVD initialization."""
+        TensorOps._check_tensor(tensor)
+        if tensor.ndim == 0:
+            raise ValueError("TT decomposition requires a tensor with at least 1 dimension, but got 0.")
+
+        param_for_tensor_train: Union[int, List[int]]
+        if isinstance(rank, int):
+            if rank <= 0:
+                raise ValueError(f"If rank is an integer, it must be positive, but got {rank}.")
+            param_for_tensor_train = 1 if tensor.ndim == 1 else [1] + [rank] * (tensor.ndim - 1) + [1]
+        elif isinstance(rank, list):
+            if tensor.ndim == 1:
+                if rank:
+                    raise ValueError(f"For a 1D tensor, rank list must be empty for user input, but got {rank}.")
+                param_for_tensor_train = 1
+            else:
+                if len(rank) != tensor.ndim - 1:
+                    raise ValueError(f"Rank list length must be tensor.ndim - 1 ({tensor.ndim - 1}), but got {len(rank)} for tensor of shape {tensor.shape}.")
+                if not all(isinstance(r, int) and r > 0 for r in rank):
+                    raise ValueError(f"All ranks in the list must be positive integers, but got {rank}.")
+                param_for_tensor_train = [1] + rank + [1]
+        else:
+            raise TypeError(f"Rank must be an int or a list of ints, but got {type(rank)}.")
+
+        logging.info(f"Performing TT-SVD with TensorLy rank parameter {param_for_tensor_train} (user input {rank}) on tensor of shape {tensor.shape}")
+        try:
+            tl_tensor = tl.tensor(tensor.float().numpy())
+            result_tl = tensor_train(tl_tensor, rank=param_for_tensor_train, svd='truncated_svd')
+            factors_np: List[tl.ndarray]
+            if hasattr(result_tl, 'factors'):
+                factors_np = result_tl.factors
+            elif isinstance(result_tl, list):
+                factors_np = result_tl
+            elif tensor.ndim == 1 and isinstance(result_tl, tl.ndarray):
+                factors_np = [result_tl]
+            else:
+                raise RuntimeError(f"TensorLy's tensor_train returned an unexpected type: {type(result_tl)}. Value: {result_tl}")
+            torch_factors = [torch.from_numpy(f.copy()).type(torch.float32) for f in factors_np]
+            return torch_factors
+        except Exception as e:
+            logging.error(f"Error during TT-SVD decomposition: {e}. Tensor shape: {tensor.shape}, Rank(s): {rank}")
+            raise RuntimeError(f"TT-SVD decomposition failed. Original error: {e}")
 
     @staticmethod
     def tr_decomposition(tensor: torch.Tensor, rank: Union[int, List[int]]) -> List[torch.Tensor]:
