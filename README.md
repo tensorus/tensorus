@@ -358,9 +358,20 @@ managing models directly within Tensorus. The framework consists of:
 * **Model registry** accessed via `register_model` and `get_model` for looking
   up models by name.
 * **Built-in models** implemented with PyTorch, NumPy and scikit-learn:
-  `LinearRegressionModel`, `LogisticRegressionModel`,
-  `RidgeRegressionModel`, `LassoRegressionModel`,
-  `DecisionTreeClassifierModel` and `KMeansClusteringModel`.
+    * `LinearRegressionModel` - standard linear regression.
+    * `LogisticRegressionModel` - logistic regression classifier.
+    * `RidgeRegressionModel` - linear regression with L2 regularization.
+    * `LassoRegressionModel` - linear regression with L1 regularization.
+    * `DecisionTreeClassifierModel` - decision tree classifier.
+    * `KMeansClusteringModel` - k-means clustering algorithm.
+    * `SVMClassifierModel` - support vector machine classifier.
+    * `SVRModel` - support vector regression.
+    * `RandomForestClassifierModel` - ensemble of trees for classification.
+    * `RandomForestRegressorModel` - ensemble of trees for regression.
+    * `KNNClassifierModel` - k-nearest neighbors classifier.
+    * `PCADecompositionModel` - principal component analysis.
+    * `TSNEEmbeddingModel` - t-SNE dimensionality reduction.
+    * `MLPClassifierModel` - simple neural network classifier.
 
 Models can easily load their training data from a dataset and write prediction
 results back to `TensorStorage` using the helper functions in
