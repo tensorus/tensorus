@@ -357,8 +357,10 @@ managing models directly within Tensorus. The framework consists of:
   methods.
 * **Model registry** accessed via `register_model` and `get_model` for looking
   up models by name.
-* **Built-in models** implemented with PyTorch and NumPy:
-  `LinearRegressionModel` and `LogisticRegressionModel`.
+* **Built-in models** implemented with PyTorch, NumPy and scikit-learn:
+  `LinearRegressionModel`, `LogisticRegressionModel`,
+  `RidgeRegressionModel`, `LassoRegressionModel`,
+  `DecisionTreeClassifierModel` and `KMeansClusteringModel`.
 
 Models can easily load their training data from a dataset and write prediction
 results back to `TensorStorage` using the helper functions in

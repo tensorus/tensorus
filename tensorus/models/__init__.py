@@ -4,6 +4,10 @@ from .base import TensorusModel
 from .registry import register_model, get_model
 from .linear_regression import LinearRegressionModel
 from .logistic_regression import LogisticRegressionModel
+from .ridge_regression import RidgeRegressionModel
+from .lasso_regression import LassoRegressionModel
+from .decision_tree_classifier import DecisionTreeClassifierModel
+from .kmeans import KMeansClusteringModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -12,6 +16,10 @@ __all__ = [
     "get_model",
     "LinearRegressionModel",
     "LogisticRegressionModel",
+    "RidgeRegressionModel",
+    "LassoRegressionModel",
+    "DecisionTreeClassifierModel",
+    "KMeansClusteringModel",
     "load_xy_from_storage",
     "store_predictions",
 ]
