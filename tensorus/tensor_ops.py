@@ -506,6 +506,33 @@ class TensorOps:
         result = F.conv2d(img, ker, padding=padding)
         return result.squeeze(0).squeeze(0)
 
+    @staticmethod
+    def convolve_3d(volume: torch.Tensor, kernel: torch.Tensor, mode: str = "valid") -> torch.Tensor:
+        """3D convolution implemented with `torch.nn.functional.conv3d`."""
+        import torch.nn.functional as F
+        TensorOps._check_tensor(volume, kernel)
+        if volume.ndim != 3 or kernel.ndim != 3:
+            raise ValueError("Inputs must be 3D tensors")
+
+        vol = volume.unsqueeze(0).unsqueeze(0)
+        ker = kernel.flip(0, 1, 2).unsqueeze(0).unsqueeze(0)
+
+        if mode == "full":
+            padding = (kernel.shape[0] - 1,
+                       kernel.shape[1] - 1,
+                       kernel.shape[2] - 1)
+        elif mode == "same":
+            padding = (kernel.shape[0] // 2,
+                       kernel.shape[1] // 2,
+                       kernel.shape[2] // 2)
+        elif mode == "valid":
+            padding = (0, 0, 0)
+        else:
+            raise ValueError("mode must be one of 'full', 'same', or 'valid'")
+
+        result = F.conv3d(vol, ker, padding=padding)
+        return result.squeeze(0).squeeze(0)
+
     # --- Statistical Operations ---
 
     @staticmethod

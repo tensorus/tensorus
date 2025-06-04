@@ -262,6 +262,20 @@ class TestTensorOps(unittest.TestCase):
         conv2d_same = TensorOps.convolve_2d(img, k, mode="same")
         self.assertEqual(conv2d_same.shape, img.shape)
 
+    def test_convolve_3d(self):
+        vol = torch.arange(27.).reshape(3, 3, 3)
+        ker = torch.ones((2, 2, 2))
+        expected = torch.nn.functional.conv3d(
+            vol.unsqueeze(0).unsqueeze(0),
+            ker.flip(0, 1, 2).unsqueeze(0).unsqueeze(0),
+        ).squeeze(0).squeeze(0)
+        result = TensorOps.convolve_3d(vol, ker, mode="valid")
+        self.assertTrue(torch.allclose(result, expected))
+
+        ker_same = torch.ones((3, 3, 3))
+        conv_same = TensorOps.convolve_3d(vol, ker_same, mode="same")
+        self.assertEqual(conv_same.shape, vol.shape)
+
     def test_statistics(self):
         t = torch.tensor([[1., 2.], [3., 4.]])
         self.assertTrue(torch.allclose(TensorOps.variance(t), torch.var(t, unbiased=False)))
