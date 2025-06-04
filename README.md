@@ -378,8 +378,35 @@ This section details the core tensor manipulation functionalities provided by `t
 *   `compute_jacobian(func, tensor)`: Computes the Jacobian matrix of a vector function.
 *   `convolve_1d(signal_x, kernel_w, mode='valid')`: 1‑D convolution using `torch.nn.functional.conv1d`.
 *   `convolve_2d(image_I, kernel_K, mode='valid')`: 2‑D convolution using `torch.nn.functional.conv2d`.
-*   `frobenius_norm(tensor)`: Calculates the Frobenius norm.
-*   `l1_norm(tensor)`: Calculates the L1 norm (sum of absolute values).
+ *   `frobenius_norm(tensor)`: Calculates the Frobenius norm.
+ *   `l1_norm(tensor)`: Calculates the L1 norm (sum of absolute values).
+
+## Tensor Decomposition Operations
+
+Tensorus includes a library of higher‑order tensor factorizations in
+`tensor_decompositions.py`. These operations mirror the algorithms
+available in TensorLy and related libraries.
+
+* **CP Decomposition** – Canonical Polyadic factorization returning
+  weights and factor matrices.
+* **NTF‑CP Decomposition** – Non‑negative CP using
+  `non_negative_parafac`.
+* **Tucker Decomposition** – Standard Tucker factorization for specified
+  ranks.
+* **Non‑negative Tucker / Partial Tucker** – Variants with HOOI and
+  non‑negative constraints.
+* **HOSVD** – Higher‑order SVD (Tucker with full ranks).
+* **Tensor Train (TT)** – Sequence of TT cores representing the tensor.
+* **TT‑SVD** – TT factorization via SVD initialization.
+* **Tensor Ring (TR)** – Circular variant of TT.
+* **Hierarchical Tucker (HT)** – Decomposition using a dimension tree.
+* **Block Term Decomposition (BTD)** – Sum of Tucker‑1 terms for 3‑way
+  tensors.
+* **t‑SVD** – Tensor singular value decomposition based on the
+  t‑product.
+
+Examples of how to call these methods are provided in
+[`tensorus/tensor_decompositions.py`](tensorus/tensor_decompositions.py).
 
 ## MCP Server Details
 
