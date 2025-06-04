@@ -1,7 +1,7 @@
 # api.py
 
 import logging
-from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Awaitable
+from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Awaitable, TYPE_CHECKING
 import random  # For simulating logs/status
 import time  # For simulating timestamps
 import math  # For simulating metrics
@@ -90,7 +90,6 @@ async def add_security_headers(request: Request, call_next):
 try:
     from .tensor_storage import TensorStorage
     from .nql_agent import NQLAgent
-    from .ingestion_agent import DataIngestionAgent # Added import
     from .tensor_ops import TensorOps
     # from rl_agent import RLAgent
     # from automl_agent import AutoMLAgent
@@ -99,6 +98,10 @@ except ImportError as e:
     print("Please ensure tensor_storage.py, nql_agent.py, and tensor_ops.py are in the Python path.")
     # Optionally raise the error or exit if these are critical at startup
     raise
+
+if TYPE_CHECKING:
+    # Import for type checking only to avoid heavy dependency during runtime
+    from .ingestion_agent import DataIngestionAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -161,13 +164,14 @@ agent_registry = {
      },
 }
 
-live_agents: Dict[str, DataIngestionAgent] = {} # Stores live agent instances, key is agent_id
+live_agents: Dict[str, "DataIngestionAgent"] = {}  # Stores live agent instances, key is agent_id
 
-def _get_or_create_ingestion_agent() -> DataIngestionAgent:
+def _get_or_create_ingestion_agent() -> "DataIngestionAgent":
     """
     Retrieves the existing DataIngestionAgent instance or creates a new one
     if it doesn't exist. Ensures its source directory is created.
     """
+    from .ingestion_agent import DataIngestionAgent
     global live_agents
     if "ingestion" not in live_agents:
         if "ingestion" not in agent_registry:
