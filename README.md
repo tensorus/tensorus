@@ -154,11 +154,14 @@ graph TD
     venv\Scripts\activate  # On Windows
     ```
 
-3.  Install dependencies:
+3.  Install dependencies using the provided setup script:
 
     ```bash
-    pip install -r requirements.txt
+    ./setup.sh
     ```
+    This installs Python requirements from `requirements.txt` and
+    `requirements-test.txt` and runs `npm install` in
+    `mcp_tensorus_server` (needed for integration tests).
 
 ### Running the API Server
 
