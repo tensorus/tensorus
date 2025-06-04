@@ -116,6 +116,10 @@ class TensorStorage:
         logging.info(f"Available datasets: {dataset_names}")
         return dataset_names
 
+    def dataset_exists(self, name: str) -> bool:
+        """Check if a dataset with the given name exists."""
+        return name in self.datasets
+
     def create_dataset(self, name: str) -> None:
         """
         Creates a new, empty dataset.
