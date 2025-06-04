@@ -346,6 +346,26 @@ The Streamlit UI provides a user-friendly interface for:
     *   `task_type`: Type of task ('regression' or 'classification').
     *   `results_dataset`: Dataset name for storing results.
 
+### Model Utilities
+
+`tensorus.models.utils` provides small helpers for working with datasets in
+`TensorStorage` when training models.  The snippet below loads features and
+targets and stores predictions back into the storage:
+
+```python
+from tensorus.tensor_storage import TensorStorage
+from tensorus.models.linear_regression import LinearRegressionModel
+from tensorus.models.utils import load_xy_from_storage, store_predictions
+
+storage = TensorStorage()
+X, y = load_xy_from_storage(storage, "my_dataset", target_field="label")
+model = LinearRegressionModel()
+model.fit(X, y)
+preds = model.predict(X)
+store_predictions(storage, "my_predictions", preds,
+                  model_name="LinearRegressionModel")
+```
+
 ## Basic Tensor Operations
 
 This section details the core tensor manipulation functionalities provided by `tensor_ops.py`. These operations are designed to be robust, with built-in type and shape checking where appropriate.
