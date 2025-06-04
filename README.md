@@ -15,6 +15,8 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 *   **API-Driven:** A FastAPI backend provides a RESTful API for interacting with Tensorus.
 *   **Streamlit UI:** A user-friendly Streamlit frontend for exploring data and controlling agents.
 *   **Tensor Operations:** A comprehensive library of robust tensor operations for common manipulations. See [Basic Tensor Operations](#basic-tensor-operations) for details.
+*   **Model System:** Lightweight framework with a model registry and built-in
+    linear and logistic regression models.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
 *   **Model Context Protocol (MCP) Server:** Provides a standardized interface for AI agents and LLMs to interact with Tensorus capabilities (tensor storage and operations) using the Model Context Protocol. (See [MCP Server Details](#mcp-server-details) below).
 
@@ -345,6 +347,22 @@ The Streamlit UI provides a user-friendly interface for:
     *   `output_dim`: Output dimension for the model.
     *   `task_type`: Type of task ('regression' or 'classification').
     *   `results_dataset`: Dataset name for storing results.
+
+### Model System
+
+The `tensorus.models` package provides a minimal framework for training and
+managing models directly within Tensorus. The framework consists of:
+
+* **`TensorusModel` base class** defining `fit`, `predict`, `save` and `load`
+  methods.
+* **Model registry** accessed via `register_model` and `get_model` for looking
+  up models by name.
+* **Built-in models** implemented with PyTorch and NumPy:
+  `LinearRegressionModel` and `LogisticRegressionModel`.
+
+Models can easily load their training data from a dataset and write prediction
+results back to `TensorStorage` using the helper functions in
+`tensorus.models.utils`.
 
 ### Model Utilities
 
