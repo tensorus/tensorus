@@ -339,6 +339,13 @@ This section details the core tensor manipulation functionalities provided by `t
 *   `matrix_eigendecomposition(matrix_A)`: Returns eigenvalues and eigenvectors of a square matrix.
 *   `matrix_trace(matrix_A)`: Computes the trace of a 2-D matrix.
 *   `tensor_trace(tensor_A, axis1=0, axis2=1)`: Trace of a tensor along two axes.
+*   `svd(matrix)`: Singular value decomposition of a matrix, returns `U`, `S`, and `Vh`.
+*   `qr_decomposition(matrix)`: QR decomposition returning `Q` and `R`.
+*   `lu_decomposition(matrix)`: LU decomposition returning permutation `P`, lower `L`, and upper `U` matrices.
+*   `cholesky_decomposition(matrix)`: Cholesky factor of a symmetric positive-definite matrix.
+*   `matrix_inverse(matrix)`: Inverse of a square matrix.
+*   `matrix_determinant(matrix)`: Determinant of a square matrix.
+*   `matrix_rank(matrix)`: Rank of a matrix.
 
 #### Reduction Operations
 
