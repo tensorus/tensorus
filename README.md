@@ -334,6 +334,8 @@ This section details the core tensor manipulation functionalities provided by `t
 
 *   `matmul(t1, t2)`: Matrix multiplication of two tensors, supporting various dimensionalities (e.g., 2D matrices, batched matrix multiplication).
 *   `dot(t1, t2)`: Computes the dot product of two 1D tensors.
+*   `outer(t1, t2)`: Computes the outer product of two 1‑D tensors.
+*   `cross(t1, t2, dim=-1)`: Computes the cross product along the specified dimension (size must be 3).
 *   `matrix_eigendecomposition(matrix_A)`: Returns eigenvalues and eigenvectors of a square matrix.
 *   `matrix_trace(matrix_A)`: Computes the trace of a 2-D matrix.
 *   `tensor_trace(tensor_A, axis1=0, axis2=1)`: Trace of a tensor along two axes.

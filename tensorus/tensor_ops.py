@@ -198,6 +198,47 @@ class TensorOps:
             logging.error(f"Error during dot product: {e}. t1 shape: {t1.shape}, t2 shape: {t2.shape}")
             raise e
 
+    @staticmethod
+    def outer(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
+        """Outer product for two 1-D tensors."""
+        TensorOps._check_tensor(t1, t2)
+        TensorOps._check_shape(t1, (None,), "outer input 1")
+        TensorOps._check_shape(t2, (None,), "outer input 2")
+        try:
+            return torch.outer(t1, t2)
+        except RuntimeError as e:
+            logging.error(
+                f"Error during outer product: {e}. t1 shape: {t1.shape}, t2 shape: {t2.shape}"
+            )
+            raise e
+
+    @staticmethod
+    def cross(t1: torch.Tensor, t2: torch.Tensor, dim: int = -1) -> torch.Tensor:
+        """Cross product along a dimension (size 3)."""
+        TensorOps._check_tensor(t1, t2)
+        if t1.shape != t2.shape:
+            raise ValueError(
+                f"Cross product requires tensors of the same shape, got {t1.shape} and {t2.shape}"
+            )
+        rank = t1.ndim
+        if rank == 0:
+            raise ValueError("Cross product requires tensors with at least 1 dimension")
+        if dim < 0:
+            dim += rank
+        if dim < 0 or dim >= rank:
+            raise ValueError(f"dim {dim} out of range for tensors with rank {rank}")
+        if t1.shape[dim] != 3:
+            raise ValueError(
+                f"Cross product is defined for dimension size 3, got {t1.shape[dim]}"
+            )
+        try:
+            return torch.cross(t1, t2, dim=dim)
+        except RuntimeError as e:
+            logging.error(
+                f"Error during cross product: {e}. t1 shape: {t1.shape}, t2 shape: {t2.shape}, dim: {dim}"
+            )
+            raise e
+
 
     # --- Reduction Operations ---
 

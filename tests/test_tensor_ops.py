@@ -99,6 +99,32 @@ class TestTensorOps(unittest.TestCase):
         with self.assertRaises(ValueError): # As per TensorOps.matmul ndim check
             TensorOps.matmul(t1,t2)
 
+    def test_outer_valid(self):
+        t1 = torch.tensor([1., 2.])
+        t2 = torch.tensor([3., 4., 5.])
+        expected = torch.outer(t1, t2)
+        result = TensorOps.outer(t1, t2)
+        self.assertTrue(torch.equal(result, expected))
+
+    def test_outer_invalid_rank(self):
+        t1 = torch.tensor([[1., 2.]])
+        t2 = torch.tensor([1., 2.])
+        with self.assertRaises(ValueError):
+            TensorOps.outer(t1, t2)
+
+    def test_cross_valid(self):
+        t1 = torch.tensor([1., 0., 0.])
+        t2 = torch.tensor([0., 1., 0.])
+        expected = torch.cross(t1, t2)
+        result = TensorOps.cross(t1, t2)
+        self.assertTrue(torch.equal(result, expected))
+
+    def test_cross_invalid_dim_size(self):
+        t1 = torch.tensor([1., 2., 3., 4.])
+        t2 = torch.tensor([4., 5., 6., 7.])
+        with self.assertRaises(ValueError):
+            TensorOps.cross(t1, t2, dim=0)
+
 
     # --- Test Reduction Operations ---
     def test_sum_all_elements(self):
