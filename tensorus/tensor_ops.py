@@ -280,6 +280,52 @@ class TensorOps:
             logging.error(f"Error during permute: {e}. tensor shape: {tensor.shape}, dims: {dims}")
             raise e
 
+    @staticmethod
+    def flatten(tensor: torch.Tensor, start_dim: int = 0, end_dim: int = -1) -> torch.Tensor:
+        """Flatten contiguous dimensions of a tensor."""
+        TensorOps._check_tensor(tensor)
+        rank = tensor.ndim
+        # Normalize negative indices
+        if start_dim < 0:
+            start_dim += rank
+        if end_dim < 0:
+            end_dim += rank
+        if not (0 <= start_dim < rank) or not (0 <= end_dim < rank):
+            raise ValueError(f"start_dim and end_dim must be in [0, {rank-1}], got {start_dim} and {end_dim}")
+        if start_dim > end_dim:
+            raise ValueError(f"start_dim ({start_dim}) cannot be greater than end_dim ({end_dim})")
+        try:
+            return torch.flatten(tensor, start_dim=start_dim, end_dim=end_dim)
+        except Exception as e:
+            logging.error(f"Error during flatten: {e}. tensor shape: {tensor.shape}, start_dim: {start_dim}, end_dim: {end_dim}")
+            raise e
+
+    @staticmethod
+    def squeeze(tensor: torch.Tensor, dim: Optional[int] = None) -> torch.Tensor:
+        """Remove dimensions of size 1."""
+        TensorOps._check_tensor(tensor)
+        if dim is not None:
+            if dim < -tensor.ndim or dim >= tensor.ndim:
+                raise ValueError(f"dim {dim} out of range for tensor with rank {tensor.ndim}")
+        try:
+            return torch.squeeze(tensor, dim) if dim is not None else torch.squeeze(tensor)
+        except Exception as e:
+            logging.error(f"Error during squeeze: {e}. tensor shape: {tensor.shape}, dim: {dim}")
+            raise e
+
+    @staticmethod
+    def unsqueeze(tensor: torch.Tensor, dim: int) -> torch.Tensor:
+        """Insert a dimension of size 1 at the specified position."""
+        TensorOps._check_tensor(tensor)
+        rank = tensor.ndim
+        if dim < -(rank + 1) or dim > rank:
+            raise ValueError(f"dim {dim} out of valid range [-(rank+1), rank] for tensor rank {rank}")
+        try:
+            return torch.unsqueeze(tensor, dim)
+        except Exception as e:
+            logging.error(f"Error during unsqueeze: {e}. tensor shape: {tensor.shape}, dim: {dim}")
+            raise e
+
 
     # --- Concatenation and Splitting ---
 
