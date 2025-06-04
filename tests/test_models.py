@@ -17,6 +17,7 @@ from tensorus.models.random_forest_classifier import RandomForestClassifierModel
 from tensorus.models.random_forest_regressor import RandomForestRegressorModel
 from tensorus.models.pca_decomposition import PCADecompositionModel
 from tensorus.models.tsne_embedding import TSNEEmbeddingModel
+from tensorus.models.mlp_classifier import MLPClassifierModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
 
@@ -48,6 +49,28 @@ def test_logistic_regression_fit_predict(tmp_path):
     save_path = tmp_path / "log.pt"
     model.save(str(save_path))
     model2 = LogisticRegressionModel()
+    model2.load(str(save_path))
+    pred2 = model2.predict(X)
+    assert torch.equal(pred, pred2)
+
+
+def test_mlp_classifier(tmp_path):
+    X = np.array([[0.0], [1.0], [2.0], [3.0]])
+    y = np.array([0, 0, 1, 1])
+    model = MLPClassifierModel(
+        input_size=1,
+        hidden_layers=[8],
+        output_size=2,
+        lr=0.1,
+        epochs=200,
+    )
+    model.fit(X, y)
+    pred = model.predict(X)
+    assert torch.equal(pred, torch.tensor(y))
+
+    save_path = tmp_path / "mlp.pt"
+    model.save(str(save_path))
+    model2 = MLPClassifierModel(input_size=1, hidden_layers=[8], output_size=2)
     model2.load(str(save_path))
     pred2 = model2.predict(X)
     assert torch.equal(pred, pred2)
