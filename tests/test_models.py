@@ -15,6 +15,8 @@ from tensorus.models.kmeans import KMeansClusteringModel
 from tensorus.models.knn_classifier import KNNClassifierModel
 from tensorus.models.random_forest_classifier import RandomForestClassifierModel
 from tensorus.models.random_forest_regressor import RandomForestRegressorModel
+from tensorus.models.pca_decomposition import PCADecompositionModel
+from tensorus.models.tsne_embedding import TSNEEmbeddingModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
 
@@ -136,3 +138,29 @@ def test_random_forest_models(tmp_path):
     reg2 = RandomForestRegressorModel()
     reg2.load(str(save_reg))
     assert np.allclose(reg2.predict(X), preds_reg)
+
+
+def test_dimensionality_reduction_models(tmp_path):
+    X = np.array([[0.0, 1.0], [1.0, 0.0], [2.0, 1.0], [3.0, 0.0]])
+
+    pca = PCADecompositionModel(n_components=1)
+    X_pca = pca.fit_transform(X)
+    assert X_pca.shape == (4, 1)
+
+    save_pca = tmp_path / "pca.joblib"
+    pca.save(str(save_pca))
+    pca2 = PCADecompositionModel(n_components=1)
+    pca2.load(str(save_pca))
+    assert np.allclose(pca2.transform(X), X_pca)
+
+    tsne = TSNEEmbeddingModel(n_components=2, perplexity=2, random_state=42)
+    X_tsne = tsne.fit_transform(X)
+    assert X_tsne.shape == (4, 2)
+
+    save_tsne = tmp_path / "tsne.joblib"
+    tsne.save(str(save_tsne))
+    tsne2 = TSNEEmbeddingModel(n_components=2)
+    tsne2.load(str(save_tsne))
+    if hasattr(tsne2.model, "transform"):
+        assert np.allclose(tsne2.transform(X), tsne.transform(X))
+
