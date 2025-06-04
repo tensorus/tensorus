@@ -13,6 +13,8 @@ from .kmeans import KMeansClusteringModel
 from .knn_classifier import KNNClassifierModel
 from .random_forest_classifier import RandomForestClassifierModel
 from .random_forest_regressor import RandomForestRegressorModel
+from .pca_decomposition import PCADecompositionModel
+from .tsne_embedding import TSNEEmbeddingModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -30,6 +32,8 @@ __all__ = [
     "KNNClassifierModel",
     "RandomForestClassifierModel",
     "RandomForestRegressorModel",
+    "PCADecompositionModel",
+    "TSNEEmbeddingModel",
     "load_xy_from_storage",
     "store_predictions",
 ]
