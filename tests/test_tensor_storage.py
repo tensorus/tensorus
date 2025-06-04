@@ -1,4 +1,7 @@
 import unittest
+import pytest
+
+pytest.importorskip("torch")
 import torch
 import shutil
 import os
