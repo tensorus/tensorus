@@ -193,6 +193,62 @@ class TestTensorOps(unittest.TestCase):
         with self.assertRaises(TypeError):
             TensorOps.log("not_a_tensor") # type: ignore
 
+    # --- Additional Operations ---
+
+    def test_compute_gradient(self):
+        x = torch.tensor(2.0, requires_grad=True)
+        def f(t):
+            return t * t
+        grad = TensorOps.compute_gradient(f, x)
+        self.assertTrue(torch.allclose(grad, torch.tensor(4.0)))
+
+    def test_compute_jacobian(self):
+        x = torch.tensor([1.0, 2.0])
+        def f(t):
+            return torch.stack([t[0] + t[1], t[0] * t[1]])
+        jac = TensorOps.compute_jacobian(f, x)
+        expected = torch.tensor([[1., 1.], [2.0, 1.0]])
+        self.assertTrue(torch.allclose(jac, expected))
+
+    def test_matrix_eigendecomposition(self):
+        A = torch.tensor([[2., 0.], [0., 3.]])
+        vals, vecs = TensorOps.matrix_eigendecomposition(A)
+        self.assertTrue(torch.allclose(torch.sort(vals).values, torch.tensor([2., 3.])))
+        self.assertTrue(torch.allclose(torch.abs(vecs), torch.eye(2)))
+
+    def test_matrix_trace_and_tensor_trace(self):
+        A = torch.tensor([[1., 2.], [3., 4.]])
+        self.assertEqual(TensorOps.matrix_trace(A).item(), 5.0)
+
+        T = torch.arange(24.).reshape(2, 3, 4)
+        trace_res = TensorOps.tensor_trace(T, axis1=0, axis2=1)
+        expected = torch.tensor([0.+9.+18., 1.+10.+19., 2.+11.+20., 3.+12.+21.])
+        self.assertTrue(torch.allclose(trace_res, expected))
+
+    def test_convolutions(self):
+        sig = torch.tensor([1., 2., 3.])
+        ker = torch.tensor([1., 1.])
+        conv_valid = TensorOps.convolve_1d(sig, ker, mode="valid")
+        self.assertTrue(torch.allclose(conv_valid, torch.tensor([3., 5.])))
+
+        img = torch.tensor([[1., 2.], [3., 4.]])
+        k = torch.tensor([[1., 0.], [0., 1.]])
+        conv2d_same = TensorOps.convolve_2d(img, k, mode="same")
+        self.assertEqual(conv2d_same.shape, img.shape)
+
+    def test_statistics(self):
+        t = torch.tensor([[1., 2.], [3., 4.]])
+        self.assertTrue(torch.allclose(TensorOps.variance(t), torch.var(t, unbiased=False)))
+        cov = TensorOps.covariance(t)
+        import numpy as np
+        expected_cov = torch.from_numpy(np.cov(t.numpy(), rowvar=True, bias=False))
+        self.assertTrue(torch.allclose(cov, expected_cov))
+        corr = TensorOps.correlation(t)
+        expected_corr = torch.from_numpy(np.corrcoef(t.numpy(), rowvar=True))
+        self.assertTrue(torch.allclose(corr, expected_corr))
+        self.assertTrue(torch.allclose(TensorOps.frobenius_norm(t), torch.linalg.norm(t, "fro")))
+        self.assertTrue(torch.allclose(TensorOps.l1_norm(t), torch.sum(torch.abs(t))))
+
     # --- Test CP Decomposition ---
 
     def test_cp_decomposition_valid_low_rank(self):

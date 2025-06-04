@@ -324,104 +324,148 @@ class TensorOps:
             logging.error(f"Error during einsum: {e}. Equation: '{equation}', Input shapes: {shapes}")
             raise e
 
-    # --- Tensor Decomposition Operations ---
+    # --- Autograd Operations ---
 
-    # cp_decomposition method has been moved to tensor_decompositions.py
-    # tucker_decomposition method has been moved to tensor_decompositions.py
-    # hosvd method has been moved to tensor_decompositions.py
-    # tt_decomposition method has been moved to tensor_decompositions.py
-    # All decomposition methods are now in TensorDecompositionOps
+    @staticmethod
+    def compute_gradient(scalar_function, tensor_input: torch.Tensor) -> torch.Tensor:
+        """Compute gradient of a scalar function with respect to `tensor_input`."""
+        TensorOps._check_tensor(tensor_input)
+        if not tensor_input.requires_grad:
+            tensor_input.requires_grad_(True)
+        if tensor_input.grad is not None:
+            tensor_input.grad.zero_()
+        output = scalar_function(tensor_input)
+        if output.ndim != 0:
+            raise ValueError("scalar_function must return a scalar tensor")
+        output.backward()
+        return tensor_input.grad
 
+    @staticmethod
+    def compute_jacobian(vector_function, tensor_input: torch.Tensor) -> torch.Tensor:
+        """Compute Jacobian of a vector function with respect to `tensor_input`."""
+        TensorOps._check_tensor(tensor_input)
+        from torch.autograd.functional import jacobian
+        return jacobian(vector_function, tensor_input)
 
-# Example Usage
-if __name__ == "__main__":
-    t1 = torch.tensor([[1., 2.], [3., 4.]])
-    t2 = torch.tensor([[5., 6.], [7., 8.]])
-    t3 = torch.tensor([1., 2.])
-    t4 = torch.tensor([3., 4.])
+    # --- Linear Algebra Operations ---
 
-    print("--- Arithmetic ---")
-    print("Add:", TensorOps.add(t1, t2))
-    print("Subtract:", TensorOps.subtract(t1, 5.0))
-    print("Multiply:", TensorOps.multiply(t1, t2))
-    print("Divide:", TensorOps.divide(t1, 2.0))
-    try:
-        TensorOps.divide(t1, torch.tensor([[1., 0.], [1., 1.]]))
-    except ValueError as e:
-        print("Caught expected division by zero warning/error.") # Logging handles the warning
+    @staticmethod
+    def matrix_eigendecomposition(matrix_A: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Eigenvalues and eigenvectors of a square matrix."""
+        TensorOps._check_tensor(matrix_A)
+        if matrix_A.ndim != 2:
+            raise ValueError("Input matrix_A must be 2-D")
+        if matrix_A.shape[0] != matrix_A.shape[1]:
+            raise ValueError("Input matrix_A must be square")
+        return torch.linalg.eig(matrix_A)
 
+    @staticmethod
+    def matrix_trace(matrix_A: torch.Tensor) -> torch.Tensor:
+        """Trace of a 2-D matrix."""
+        TensorOps._check_tensor(matrix_A)
+        if matrix_A.ndim != 2:
+            raise ValueError("Input matrix_A must be 2-D")
+        return torch.trace(matrix_A)
 
-    print("\n--- Matrix/Dot ---")
-    print("Matmul:", TensorOps.matmul(t1, t2))
-    print("Dot:", TensorOps.dot(t3, t4))
-    try:
-        TensorOps.matmul(t1, t3) # Incompatible shapes
-    except ValueError as e:
-        print(f"Caught expected matmul error: {e}")
+    @staticmethod
+    def tensor_trace(tensor_A: torch.Tensor, axis1: int = 0, axis2: int = 1) -> torch.Tensor:
+        """Trace of a tensor along two axes."""
+        TensorOps._check_tensor(tensor_A)
+        if axis1 >= tensor_A.ndim or axis2 >= tensor_A.ndim:
+            raise ValueError("axis1 and axis2 must be valid dimensions")
+        if tensor_A.shape[axis1] != tensor_A.shape[axis2]:
+            raise ValueError("Dimensions for axis1 and axis2 must match")
+        return torch.diagonal(tensor_A, offset=0, dim1=axis1, dim2=axis2).sum(-1)
 
-    print("\n--- Reduction ---")
-    print("Sum (all):", TensorOps.sum(t1))
-    print("Mean (dim 0):", TensorOps.mean(t1, dim=0))
-    print("Max (dim 1):", TensorOps.max(t1, dim=1)) # Returns (values, indices)
+    # --- Convolution Operations ---
 
-    print("\n--- Reshaping ---")
-    print("Reshape:", TensorOps.reshape(t1, (4, 1)))
-    print("Transpose:", TensorOps.transpose(t1, 0, 1))
-    print("Permute:", TensorOps.permute(torch.rand(2,3,4), (1, 2, 0)).shape)
+    @staticmethod
+    def convolve_1d(signal_x: torch.Tensor, kernel_w: torch.Tensor, mode: str = "valid") -> torch.Tensor:
+        """1D convolution implemented with `torch.nn.functional.conv1d`."""
+        import torch.nn.functional as F
+        TensorOps._check_tensor(signal_x, kernel_w)
+        if signal_x.ndim != 1 or kernel_w.ndim != 1:
+            raise ValueError("Inputs must be 1D tensors")
+        signal = signal_x.unsqueeze(0).unsqueeze(0)
+        kernel = kernel_w.flip(0).unsqueeze(0).unsqueeze(0)
+        if mode == "full":
+            padding = kernel_w.numel() - 1
+        elif mode == "same":
+            padding = kernel_w.numel() // 2
+        elif mode == "valid":
+            padding = 0
+        else:
+            raise ValueError("mode must be one of 'full', 'same', or 'valid'")
+        result = F.conv1d(signal, kernel, padding=padding)
+        return result.squeeze(0).squeeze(0)
 
-    print("\n--- Concat/Stack ---")
-    print("Concatenate (dim 0):", TensorOps.concatenate([t1, t2], dim=0))
-    print("Stack (dim 0):", TensorOps.stack([t1, t1], dim=0)) # Stacks along new dim 0
+    @staticmethod
+    def convolve_2d(image_I: torch.Tensor, kernel_K: torch.Tensor, mode: str = "valid") -> torch.Tensor:
+        """2D convolution implemented with `torch.nn.functional.conv2d`."""
+        import torch.nn.functional as F
+        TensorOps._check_tensor(image_I, kernel_K)
+        if image_I.ndim != 2 or kernel_K.ndim != 2:
+            raise ValueError("Inputs must be 2D tensors")
+        img = image_I.unsqueeze(0).unsqueeze(0)
+        ker = kernel_K.flip(0, 1).unsqueeze(0).unsqueeze(0)
+        if mode == "full":
+            padding = (kernel_K.shape[0]-1, kernel_K.shape[1]-1)
+        elif mode == "same":
+            padding = (kernel_K.shape[0]//2, kernel_K.shape[1]//2)
+        elif mode == "valid":
+            padding = (0, 0)
+        else:
+            raise ValueError("mode must be one of 'full', 'same', or 'valid'")
+        result = F.conv2d(img, ker, padding=padding)
+        return result.squeeze(0).squeeze(0)
 
-    print("\n--- Advanced ---")
-    print("Einsum (trace):", TensorOps.einsum('ii->', t1)) # Trace
-    print("Einsum (batch matmul):", TensorOps.einsum('bij,bjk->bik', torch.rand(5, 2, 3), torch.rand(5, 3, 4)).shape)
+    # --- Statistical Operations ---
 
-    print("\n--- Error Handling Example ---")
-    try:
-        TensorOps.add(t1, "not a tensor")
-    except TypeError as e:
-        print(f"Caught expected type error: {e}")
+    @staticmethod
+    def variance(tensor: torch.Tensor, dim: Optional[Union[int, Tuple[int, ...]]] = None,
+                 unbiased: bool = False, keepdim: bool = False) -> torch.Tensor:
+        """Variance of tensor elements."""
+        TensorOps._check_tensor(tensor)
+        return torch.var(tensor.float(), dim=dim, unbiased=unbiased, keepdim=keepdim)
 
-    try:
-         TensorOps._check_shape(t1, (None, 3), "Example Op") # Wrong dim size
-    except ValueError as e:
-         print(f"Caught expected shape error: {e}")
+    @staticmethod
+    def covariance(matrix_X: torch.Tensor, matrix_Y: Optional[torch.Tensor] = None,
+                   rowvar: bool = True, bias: bool = False, ddof: Optional[int] = None) -> torch.Tensor:
+        """Estimate covariance matrix of the given variables."""
+        TensorOps._check_tensor(matrix_X)
+        if matrix_Y is not None:
+            TensorOps._check_tensor(matrix_Y)
+            matrices = [matrix_X, matrix_Y]
+            mat = torch.cat(matrices, dim=0 if rowvar else 1)
+        else:
+            mat = matrix_X
+        if not rowvar:
+            mat = mat.t()
+        if ddof is None:
+            ddof = 0 if bias else 1
+        mean = mat.mean(dim=1, keepdim=True)
+        xm = mat - mean
+        cov = xm @ xm.t() / (mat.shape[1] - ddof)
+        return cov
 
-    print("\n--- Tensor Decomposition ---")
-    # CP Decomposition example removed as method moved to TensorDecompositionOps
-    # print(f"Original tensor shape for CP: {{data.shape}}") would have been here.
-    # try:
-    #     from tensorus.tensor_decompositions import TensorDecompositionOps # Import for example
-    #     # ... (rest of CP example using TensorDecompositionOps.cp_decomposition)
-    # except ImportError:
-    #     print("Could not import TensorDecompositionOps for CP example.")
-    # except Exception as e:
-    #     print(f"An error occurred running CP example via TensorDecompositionOps: {e}")
+    @staticmethod
+    def correlation(matrix_X: torch.Tensor, matrix_Y: Optional[torch.Tensor] = None,
+                    rowvar: bool = True) -> torch.Tensor:
+        """Correlation coefficient matrix."""
+        cov = TensorOps.covariance(matrix_X, matrix_Y, rowvar=rowvar, bias=False)
+        diag = torch.sqrt(torch.diag(cov))
+        denom = diag.unsqueeze(0) * diag.unsqueeze(1)
+        return cov / denom
 
+    @staticmethod
+    def frobenius_norm(tensor: torch.Tensor) -> torch.Tensor:
+        """Frobenius norm of a tensor."""
+        TensorOps._check_tensor(tensor)
+        return torch.linalg.norm(tensor, "fro")
 
-    # Example for Tucker Decomposition (now moved to TensorDecompositionOps)
-    # print(f"\nOriginal tensor shape for Tucker: {{data_tucker.shape}}, Ranks: {{ranks_tucker}}")
-    # try:
-    #     from tensorus.tensor_decompositions import TensorDecompositionOps # Import for example
-    #     # ... (rest of Tucker example using TensorDecompositionOps.tucker_decomposition)
-    # except ImportError:
-    #     print("Could not import TensorDecompositionOps for Tucker example.")
-    # except Exception as e:
-    #      print(f"An error occurred running Tucker example via TensorDecompositionOps: {e}")
+    @staticmethod
+    def l1_norm(tensor: torch.Tensor) -> torch.Tensor:
+        """L1 norm of a tensor."""
+        TensorOps._check_tensor(tensor)
+        return torch.sum(torch.abs(tensor))
 
-
-    # Example for HOSVD (now moved to TensorDecompositionOps)
-    # print(f"\nOriginal tensor shape for HOSVD: {{data_hosvd.shape}}")
-    # try:
-    #     from tensorus.tensor_decompositions import TensorDecompositionOps
-    #     # ... (rest of HOSVD example using TensorDecompositionOps.hosvd)
-    # except ImportError:
-    #     print("Could not import TensorDecompositionOps for HOSVD example.")
-    # except Exception as e:
-    #     print(f"An error occurred running HOSVD example via TensorDecompositionOps: {e}")
-
-
-    # All Tensor Decomposition examples have been moved to tensor_decompositions.py
-    # and should be run from there if needed.
-    print("\n--- Tensor Decomposition examples have been moved to tensor_decompositions.py ---")
