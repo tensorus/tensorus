@@ -3,5 +3,5 @@
 
 pytest
 pytest-asyncio
-httpx
+httpx==0.23.0
 scipy

@@ -160,8 +160,9 @@ graph TD
     ./setup.sh
     ```
     This installs Python requirements from `requirements.txt` and
-    `requirements-test.txt` and runs `npm install` in
-    `mcp_tensorus_server` (needed for integration tests).
+    `requirements-test.txt`, using CPU wheels for PyTorch and
+    pinning `httpx` to a compatible version. The script also runs
+    `npm install` in `mcp_tensorus_server` (needed for integration tests).
 
 ### Running the API Server
 
