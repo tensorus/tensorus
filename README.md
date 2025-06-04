@@ -245,6 +245,31 @@ You can run the example agents directly from their respective files:
 
     *   Note: The Ingestion Agent will monitor the `temp_ingestion_source` directory (created automatically if it doesn't exist in the project root) for new files.
 
+### Running Tests
+
+Tensorus includes Python unit tests and optional Node.js integration tests. To set up the environment and run them:
+
+1. Install all dependencies using:
+
+    ```bash
+    ./setup.sh
+    ```
+
+    This script installs packages from `requirements.txt` and `requirements-test.txt` and runs `npm install` in `mcp_tensorus_server`.
+
+2. Run the Python test suite:
+
+    ```bash
+    pytest
+    ```
+
+3. (Optional) Run the Node-based integration tests from `mcp_tensorus_server`:
+
+    ```bash
+    cd mcp_tensorus_server
+    npm test
+    ```
+
 ## Using Tensorus
 
 ### API Endpoints
