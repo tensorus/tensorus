@@ -464,6 +464,70 @@ class TensorOps:
             raise ValueError("Dimensions for axis1 and axis2 must match")
         return torch.diagonal(tensor_A, offset=0, dim1=axis1, dim2=axis2).sum(-1)
 
+    @staticmethod
+    def svd(matrix: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Singular Value Decomposition of a 2-D matrix."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError("Input matrix must be 2-D")
+        return torch.linalg.svd(matrix, full_matrices=False)
+
+    @staticmethod
+    def qr_decomposition(matrix: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """QR decomposition of a 2-D matrix."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError("Input matrix must be 2-D")
+        return torch.linalg.qr(matrix)
+
+    @staticmethod
+    def lu_decomposition(matrix: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """LU decomposition of a 2-D matrix returning P, L, U."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError("Input matrix must be 2-D")
+        return torch.linalg.lu(matrix)
+
+    @staticmethod
+    def cholesky_decomposition(matrix: torch.Tensor) -> torch.Tensor:
+        """Cholesky decomposition of a symmetric positive-definite matrix."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError("Input matrix must be 2-D")
+        if matrix.shape[0] != matrix.shape[1]:
+            raise ValueError("Input matrix must be square")
+        if not torch.allclose(matrix, matrix.transpose(-2, -1)):
+            raise ValueError("Input matrix must be symmetric")
+        return torch.linalg.cholesky(matrix)
+
+    @staticmethod
+    def matrix_inverse(matrix: torch.Tensor) -> torch.Tensor:
+        """Inverse of a square matrix."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError("Input matrix must be 2-D")
+        if matrix.shape[0] != matrix.shape[1]:
+            raise ValueError("Input matrix must be square")
+        return torch.linalg.inv(matrix)
+
+    @staticmethod
+    def matrix_determinant(matrix: torch.Tensor) -> torch.Tensor:
+        """Determinant of a square matrix."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError("Input matrix must be 2-D")
+        if matrix.shape[0] != matrix.shape[1]:
+            raise ValueError("Input matrix must be square")
+        return torch.linalg.det(matrix)
+
+    @staticmethod
+    def matrix_rank(matrix: torch.Tensor) -> torch.Tensor:
+        """Matrix rank of a 2-D tensor."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError("Input matrix must be 2-D")
+        return torch.linalg.matrix_rank(matrix)
+
     # --- Convolution Operations ---
 
     @staticmethod

@@ -251,6 +251,50 @@ class TestTensorOps(unittest.TestCase):
         expected = torch.tensor([0.+9.+18., 1.+10.+19., 2.+11.+20., 3.+12.+21.])
         self.assertTrue(torch.allclose(trace_res, expected))
 
+    def test_svd_reconstruction(self):
+        A = torch.tensor([[3., 1.], [1., 3.]], dtype=torch.float32)
+        U, S, Vh = TensorOps.svd(A)
+        reconstructed = U @ torch.diag(S) @ Vh
+        self.assertTrue(torch.allclose(reconstructed, A))
+
+    def test_qr_reconstruction(self):
+        A = torch.randn(4, 3)
+        Q, R = TensorOps.qr_decomposition(A)
+        self.assertTrue(torch.allclose(Q @ R, A))
+
+    def test_lu_decomposition(self):
+        A = torch.tensor([[4., 3.], [6., 3.]], dtype=torch.float32)
+        P, L, U = TensorOps.lu_decomposition(A)
+        self.assertTrue(torch.allclose(P @ A, L @ U))
+
+    def test_cholesky_valid(self):
+        B = torch.tensor([[2., 0.], [1., 1.]], dtype=torch.float32)
+        A = B @ B.t()
+        L = TensorOps.cholesky_decomposition(A)
+        self.assertTrue(torch.allclose(L @ L.t(), A))
+
+    def test_cholesky_non_symmetric_error(self):
+        A = torch.tensor([[1., 2.], [3., 4.]], dtype=torch.float32)
+        with self.assertRaises(ValueError):
+            TensorOps.cholesky_decomposition(A)
+
+    def test_matrix_inverse(self):
+        A = torch.tensor([[4., 7.], [2., 6.]], dtype=torch.float32)
+        inv = TensorOps.matrix_inverse(A)
+        self.assertTrue(torch.allclose(A @ inv, torch.eye(2)))
+
+    def test_matrix_inverse_non_square_error(self):
+        A = torch.randn(2, 3)
+        with self.assertRaises(ValueError):
+            TensorOps.matrix_inverse(A)
+
+    def test_matrix_determinant_and_rank(self):
+        A = torch.tensor([[1., 2.], [2., 4.]], dtype=torch.float32)
+        det = TensorOps.matrix_determinant(A)
+        rank = TensorOps.matrix_rank(A)
+        self.assertEqual(det.item(), 0.0)
+        self.assertEqual(rank.item(), 1)
+
     def test_convolutions(self):
         sig = torch.tensor([1., 2., 3.])
         ker = torch.tensor([1., 1.])
