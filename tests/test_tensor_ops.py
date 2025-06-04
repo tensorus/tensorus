@@ -248,6 +248,12 @@ class TestTensorOps(unittest.TestCase):
         self.assertTrue(torch.allclose(corr, expected_corr))
         self.assertTrue(torch.allclose(TensorOps.frobenius_norm(t), torch.linalg.norm(t, "fro")))
         self.assertTrue(torch.allclose(TensorOps.l1_norm(t), torch.sum(torch.abs(t))))
+        self.assertTrue(torch.allclose(TensorOps.l2_norm(t), torch.linalg.norm(t, 2)))
+        self.assertTrue(torch.allclose(TensorOps.p_norm(t, 3), torch.linalg.norm(t, 3)))
+        m = torch.tensor([[1., 2.], [3., 4.]])
+        self.assertTrue(torch.allclose(TensorOps.nuclear_norm(m), torch.linalg.matrix_norm(m, ord="nuc")))
+        with self.assertRaises(ValueError):
+            TensorOps.nuclear_norm(torch.tensor([1., 2., 3.]))
 
     def test_std_default(self):
         t = torch.tensor([[1., 2.], [3., 4.]])

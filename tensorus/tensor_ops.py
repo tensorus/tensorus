@@ -476,3 +476,29 @@ class TensorOps:
         TensorOps._check_tensor(tensor)
         return torch.sum(torch.abs(tensor))
 
+    @staticmethod
+    def l2_norm(tensor: torch.Tensor) -> torch.Tensor:
+        """L2 norm of a tensor."""
+        TensorOps._check_tensor(tensor)
+        return torch.linalg.norm(tensor, 2)
+
+    @staticmethod
+    def p_norm(tensor: torch.Tensor, p: float) -> torch.Tensor:
+        """General p-norm of a tensor."""
+        TensorOps._check_tensor(tensor)
+        if not isinstance(p, (int, float)):
+            raise TypeError("p must be a numeric value")
+        if p <= 0:
+            raise ValueError("p must be positive")
+        return torch.linalg.norm(tensor, p)
+
+    @staticmethod
+    def nuclear_norm(matrix: torch.Tensor) -> torch.Tensor:
+        """Nuclear norm (sum of singular values) for a 2-D tensor."""
+        TensorOps._check_tensor(matrix)
+        if matrix.ndim != 2:
+            raise ValueError(
+                f"Nuclear norm expects a 2-D tensor, got shape {matrix.shape}"
+            )
+        return torch.linalg.matrix_norm(matrix, ord="nuc")
+
