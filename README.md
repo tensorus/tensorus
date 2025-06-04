@@ -353,6 +353,9 @@ This section details the core tensor manipulation functionalities provided by `t
 *   `reshape(tensor, shape)`: Changes the shape of a tensor without changing its data.
 *   `transpose(tensor, dim0, dim1)`: Swaps two dimensions of a tensor.
 *   `permute(tensor, dims)`: Permutes the dimensions of a tensor according to the specified order.
+*   `flatten(tensor, start_dim=0, end_dim=-1)`: Flattens a range of dimensions into a single dimension.
+*   `squeeze(tensor, dim=None)`: Removes dimensions of size 1, or a specific dimension if provided.
+*   `unsqueeze(tensor, dim)`: Inserts a dimension of size 1 at the given position.
 
 #### Concatenation and Splitting
 

@@ -271,6 +271,41 @@ class TestTensorOps(unittest.TestCase):
         with self.assertRaises(TypeError):
             TensorOps.std("not_a_tensor")  # type: ignore
 
+    # --- Test Reshaping Operations ---
+    def test_flatten_default(self):
+        t = torch.arange(6).reshape(2, 3)
+        expected = torch.flatten(t)
+        result = TensorOps.flatten(t)
+        self.assertTrue(torch.equal(result, expected))
+
+    def test_flatten_start_end(self):
+        t = torch.arange(24).reshape(2, 3, 4)
+        expected = torch.flatten(t, start_dim=1, end_dim=2)
+        result = TensorOps.flatten(t, start_dim=1, end_dim=2)
+        self.assertTrue(torch.equal(result, expected))
+        self.assertEqual(result.shape, (2, 12))
+
+    def test_squeeze_default(self):
+        t = torch.zeros(1, 3, 1, 4)
+        expected = torch.squeeze(t)
+        result = TensorOps.squeeze(t)
+        self.assertTrue(torch.equal(result, expected))
+        self.assertEqual(result.shape, (3, 4))
+
+    def test_squeeze_dim(self):
+        t = torch.zeros(1, 3, 1, 4)
+        expected = torch.squeeze(t, dim=2)
+        result = TensorOps.squeeze(t, dim=2)
+        self.assertTrue(torch.equal(result, expected))
+        self.assertEqual(result.shape, (1, 3, 4))
+
+    def test_unsqueeze(self):
+        t = torch.randn(3, 4)
+        expected = torch.unsqueeze(t, dim=0)
+        result = TensorOps.unsqueeze(t, dim=0)
+        self.assertTrue(torch.equal(result, expected))
+        self.assertEqual(result.shape, (1, 3, 4))
+
     # --- Test CP Decomposition ---
 
     def test_cp_decomposition_valid_low_rank(self):
