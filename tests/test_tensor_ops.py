@@ -312,6 +312,12 @@ class TestTensorOps(unittest.TestCase):
         with self.assertRaises(ValueError):
             TensorOps.tensor_trace(T, axis1=0, axis2=1)
 
+    def test_tensor_trace_valid(self):
+        T = torch.arange(27.).reshape(3, 3, 3).float()
+        diag_sum0 = T.diagonal(dim1=0, dim2=1).sum(-1)
+        result = TensorOps.tensor_trace(T, axis1=0, axis2=1)
+        self.assertTrue(torch.equal(result, diag_sum0))
+
     def test_svd_reconstruction(self):
         A = torch.tensor([[3., 1.], [1., 3.]], dtype=torch.float32)
         U, S, Vh = TensorOps.svd(A)
