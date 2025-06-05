@@ -6,6 +6,7 @@ from .linear_regression import LinearRegressionModel
 from .logistic_regression import LogisticRegressionModel
 from .ridge_regression import RidgeRegressionModel
 from .lasso_regression import LassoRegressionModel
+from .elastic_net_regression import ElasticNetRegressionModel
 from .decision_tree_classifier import DecisionTreeClassifierModel
 from .svm_classifier import SVMClassifierModel
 from .svr import SVRModel
@@ -26,6 +27,7 @@ __all__ = [
     "LogisticRegressionModel",
     "RidgeRegressionModel",
     "LassoRegressionModel",
+    "ElasticNetRegressionModel",
     "DecisionTreeClassifierModel",
     "SVMClassifierModel",
     "SVRModel",

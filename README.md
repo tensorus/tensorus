@@ -362,6 +362,7 @@ managing models directly within Tensorus. The framework consists of:
     * `LogisticRegressionModel` - logistic regression classifier.
     * `RidgeRegressionModel` - linear regression with L2 regularization.
     * `LassoRegressionModel` - linear regression with L1 regularization.
+    * `ElasticNetRegressionModel` - linear regression with mixed L1/L2 regularization.
     * `DecisionTreeClassifierModel` - decision tree classifier.
     * `KMeansClusteringModel` - k-means clustering algorithm.
     * `SVMClassifierModel` - support vector machine classifier.
