@@ -26,6 +26,7 @@ from tensorus.models.pca_decomposition import PCADecompositionModel
 from tensorus.models.tsne_embedding import TSNEEmbeddingModel
 from tensorus.models.mlp_classifier import MLPClassifierModel
 from tensorus.models.elastic_net_regression import ElasticNetRegressionModel
+from tensorus.models.poisson_regressor import PoissonRegressorModel
 from tensorus.models.polynomial_regression import PolynomialRegressionModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
@@ -241,6 +242,25 @@ def test_polynomial_regression_model(tmp_path):
     save_path = tmp_path / "poly.joblib"
     model.save(str(save_path))
     model2 = PolynomialRegressionModel()
+    model2.load(str(save_path))
+    preds2 = model2.predict(X)
+    assert np.allclose(preds2, preds)
+
+
+def test_poisson_regressor_model(tmp_path):
+    rng = np.random.default_rng(0)
+    X = rng.poisson(1.0, size=(100, 1))
+    coef = 0.8
+    y = rng.poisson(np.exp(coef * X[:, 0]))
+
+    model = PoissonRegressorModel(alpha=0.0, max_iter=1000)
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert preds.shape == y.shape
+
+    save_path = tmp_path / "poisson.joblib"
+    model.save(str(save_path))
+    model2 = PoissonRegressorModel()
     model2.load(str(save_path))
     preds2 = model2.predict(X)
     assert np.allclose(preds2, preds)
