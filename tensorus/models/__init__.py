@@ -53,6 +53,13 @@ from .rnn_models import (
     LSTMClassifierModel,
     GRUClassifierModel,
 )
+from .transformer_models import (
+    TransformerModel,
+    BERTModel,
+    GPTModel,
+    T5Model,
+    VisionTransformerModel,
+)
 from .label_propagation import LabelPropagationModel
 from .self_training_classifier import SelfTrainingClassifierModel
 from .arima_model import ARIMAModel
@@ -132,6 +139,11 @@ __all__ = [
     "StructuralEquationModel",
     "load_xy_from_storage",
     "store_predictions",
+    "TransformerModel",
+    "BERTModel",
+    "GPTModel",
+    "T5Model",
+    "VisionTransformerModel",
 ]
 
 # Register models in the simple registry for convenience
@@ -151,3 +163,8 @@ register_model("MobileNet", MobileNetModel)
 register_model("EfficientNet", EfficientNetModel)
 register_model("LSTMClassifier", LSTMClassifierModel)
 register_model("GRUClassifier", GRUClassifierModel)
+register_model("Transformer", TransformerModel)
+register_model("BERT", BERTModel)
+register_model("GPT", GPTModel)
+register_model("T5", T5Model)
+register_model("VisionTransformer", VisionTransformerModel)
