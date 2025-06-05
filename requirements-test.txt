@@ -6,3 +6,4 @@ pytest-asyncio
 httpx==0.23.0
 scipy
 semopy>=2.3
+segmentation-models-pytorch

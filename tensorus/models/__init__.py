@@ -80,6 +80,8 @@ from .flow_based_model import FlowBasedModel
 from .gcn_classifier import GCNClassifierModel
 from .gat_classifier import GATClassifierModel
 from .named_entity_recognition import NamedEntityRecognitionModel
+from .faster_rcnn import FasterRCNNModel
+from .unet_segmentation import UNetSegmentationModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -141,6 +143,8 @@ __all__ = [
     "ResNetModel",
     "MobileNetModel",
     "EfficientNetModel",
+    "FasterRCNNModel",
+    "UNetSegmentationModel",
     "LSTMModule",
     "GRUModule",
     "BidirectionalWrapper",
@@ -195,3 +199,5 @@ register_model("GATClassifier", GATClassifierModel)
 register_model("Word2Vec", Word2VecModel)
 register_model("GloVe", GloVeModel)
 register_model("NamedEntityRecognition", NamedEntityRecognitionModel)
+register_model("FasterRCNN", FasterRCNNModel)
+register_model("UNetSegmentation", UNetSegmentationModel)
