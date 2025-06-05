@@ -24,6 +24,8 @@ from .random_forest_regressor import RandomForestRegressorModel
 from .pca_decomposition import PCADecompositionModel
 from .tsne_embedding import TSNEEmbeddingModel
 from .umap_embedding import UMAPEmbeddingModel
+from .isolation_forest import IsolationForestModel
+from .one_class_svm import OneClassSVMModel
 from .mlp_classifier import MLPClassifierModel
 from .utils import load_xy_from_storage, store_predictions
 
@@ -53,6 +55,8 @@ __all__ = [
     "PCADecompositionModel",
     "TSNEEmbeddingModel",
     "UMAPEmbeddingModel",
+    "IsolationForestModel",
+    "OneClassSVMModel",
     "MLPClassifierModel",
     "load_xy_from_storage",
     "store_predictions",
