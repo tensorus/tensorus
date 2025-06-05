@@ -44,3 +44,5 @@ semopy>=2.3
 xgboost
 lightgbm
 catboost
+gensim
+joblib
