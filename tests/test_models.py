@@ -23,6 +23,8 @@ from tensorus.models.random_forest_classifier import RandomForestClassifierModel
 from tensorus.models.random_forest_regressor import RandomForestRegressorModel
 from tensorus.models.decision_tree_regressor import DecisionTreeRegressorModel
 from tensorus.models.pca_decomposition import PCADecompositionModel
+from tensorus.models.factor_analysis import FactorAnalysisModel
+from tensorus.models.cca import CCAModel
 from tensorus.models.tsne_embedding import TSNEEmbeddingModel
 from tensorus.models.mlp_classifier import MLPClassifierModel
 from tensorus.models.elastic_net_regression import ElasticNetRegressionModel
@@ -330,3 +332,37 @@ def test_cox_ph_model(tmp_path):
     model2.load(str(save_path))
     pred2 = model2.predict(X)
     assert np.allclose(pred2, pred)
+
+
+def test_factor_analysis_model(tmp_path):
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(20, 5))
+    model = FactorAnalysisModel(n_components=2)
+    X_fa = model.fit_transform(X)
+    assert X_fa.shape == (20, 2)
+
+    save_path = tmp_path / "fa.joblib"
+    model.save(str(save_path))
+    model2 = FactorAnalysisModel(n_components=2)
+    model2.load(str(save_path))
+    assert np.allclose(model2.transform(X), model.transform(X))
+
+
+def test_cca_model(tmp_path):
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(30, 3))
+    Y = 2.0 * X[:, [0]] + 0.01 * rng.normal(size=(30, 1))
+    model = CCAModel(n_components=1)
+    X_c, Y_c = model.fit_transform(X, Y)
+    assert X_c.shape == (30, 1)
+    assert Y_c.shape == (30, 1)
+    corr = np.corrcoef(X_c[:, 0], Y_c[:, 0])[0, 1]
+    assert corr > 0.8
+
+    save_path = tmp_path / "cca.joblib"
+    model.save(str(save_path))
+    model2 = CCAModel(n_components=1)
+    model2.load(str(save_path))
+    X_c2, Y_c2 = model2.transform(X, Y)
+    assert np.allclose(X_c2, X_c)
+    assert np.allclose(Y_c2, Y_c)
