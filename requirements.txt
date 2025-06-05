@@ -4,6 +4,7 @@
 # --- Core Tensor and Numerics ---
 torch>=1.13.0
 torchvision>=0.14.0
+segmentation-models-pytorch
 torch-geometric
 transformers
 numpy>=1.21.0
