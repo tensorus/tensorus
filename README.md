@@ -437,6 +437,40 @@ preds = model.predict(X)
 model.save("rbm.pt")
 ```
 
+### LargeLanguageModelWrapper Usage
+
+```python
+from tensorus.models.large_language_model import LargeLanguageModelWrapper
+
+model = LargeLanguageModelWrapper(model_name="gpt2")
+text = model.generate(["Hello world"])[0]
+print(text)
+```
+
+### MultimodalFoundationModel Usage
+
+```python
+from PIL import Image
+from tensorus.models.multimodal_foundation import MultimodalFoundationModel
+
+img = Image.new("RGB", (224, 224))
+model = MultimodalFoundationModel()
+similarity = model.predict([img], ["a plain image"])
+```
+
+### FedAvgModel Usage Considerations
+
+```python
+import torch.nn as nn
+from tensorus.models.fedavg_model import FedAvgModel
+
+global_net = nn.Linear(10, 2)
+aggregator = FedAvgModel(global_net)
+
+# client_state_dicts would be collected from remote clients
+aggregator.fit(client_state_dicts)
+```
+
 ## Basic Tensor Operations
 
 This section details the core tensor manipulation functionalities provided by `tensor_ops.py`. These operations are designed to be robust, with built-in type and shape checking where appropriate.
