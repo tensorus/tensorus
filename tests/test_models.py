@@ -18,6 +18,7 @@ from tensorus.models.random_forest_regressor import RandomForestRegressorModel
 from tensorus.models.pca_decomposition import PCADecompositionModel
 from tensorus.models.tsne_embedding import TSNEEmbeddingModel
 from tensorus.models.mlp_classifier import MLPClassifierModel
+from tensorus.models.elastic_net_regression import ElasticNetRegressionModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
 
@@ -186,4 +187,21 @@ def test_dimensionality_reduction_models(tmp_path):
     tsne2.load(str(save_tsne))
     if hasattr(tsne2.model, "transform"):
         assert np.allclose(tsne2.transform(X), tsne.transform(X))
+
+
+def test_elastic_net_regression_model(tmp_path):
+    X = np.array([[1.0], [2.0], [3.0], [4.0]])
+    y = np.array([3.0, 5.0, 7.0, 9.0])
+
+    enet = ElasticNetRegressionModel(alpha=0.1, l1_ratio=0.5)
+    enet.fit(X, y)
+    preds = enet.predict(X)
+    assert np.allclose(preds, y, atol=1e-1)
+
+    save_path = tmp_path / "enet.joblib"
+    enet.save(str(save_path))
+    enet2 = ElasticNetRegressionModel()
+    enet2.load(str(save_path))
+    preds2 = enet2.predict(X)
+    assert np.allclose(preds2, preds)
 
