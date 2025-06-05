@@ -36,6 +36,8 @@ from .factor_analysis import FactorAnalysisModel
 from .cca import CCAModel
 from .tsne_embedding import TSNEEmbeddingModel
 from .umap_embedding import UMAPEmbeddingModel
+from .word2vec_model import Word2VecModel
+from .glove_model import GloVeModel
 from .isolation_forest import IsolationForestModel
 from .one_class_svm import OneClassSVMModel
 from .mlp_classifier import MLPClassifierModel
@@ -77,6 +79,7 @@ from .diffusion_model import DiffusionModel
 from .flow_based_model import FlowBasedModel
 from .gcn_classifier import GCNClassifierModel
 from .gat_classifier import GATClassifierModel
+from .named_entity_recognition import NamedEntityRecognitionModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -117,6 +120,8 @@ __all__ = [
     "CCAModel",
     "TSNEEmbeddingModel",
     "UMAPEmbeddingModel",
+    "Word2VecModel",
+    "GloVeModel",
     "IsolationForestModel",
     "OneClassSVMModel",
     "LabelPropagationModel",
@@ -129,6 +134,7 @@ __all__ = [
     "FlowBasedModel",
     "GCNClassifierModel",
     "GATClassifierModel",
+    "NamedEntityRecognitionModel",
     "LeNetModel",
     "AlexNetModel",
     "VGGModel",
@@ -186,3 +192,6 @@ register_model("Diffusion", DiffusionModel)
 register_model("FlowBased", FlowBasedModel)
 register_model("GCNClassifier", GCNClassifierModel)
 register_model("GATClassifier", GATClassifierModel)
+register_model("Word2Vec", Word2VecModel)
+register_model("GloVe", GloVeModel)
+register_model("NamedEntityRecognition", NamedEntityRecognitionModel)
