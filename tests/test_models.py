@@ -12,6 +12,9 @@ from tensorus.models.decision_tree_classifier import DecisionTreeClassifierModel
 from tensorus.models.svm_classifier import SVMClassifierModel
 from tensorus.models.svr import SVRModel
 from tensorus.models.kmeans import KMeansClusteringModel
+from tensorus.models.dbscan import DBSCANClusteringModel
+from tensorus.models.agglomerative import AgglomerativeClusteringModel
+from tensorus.models.gaussian_mixture import GaussianMixtureModel
 from tensorus.models.knn_classifier import KNNClassifierModel
 from tensorus.models.gaussian_nb_classifier import GaussianNBClassifierModel
 from tensorus.models.lda_classifier import LDAClassifierModel
@@ -251,4 +254,23 @@ def test_qda_classifier_model():
     model.fit(X, y)
     preds = model.predict(X)
     assert np.array_equal(preds, y)
+
+
+def test_clustering_models():
+    X = np.array([[0.0], [0.1], [1.0], [1.1]])
+
+    db = DBSCANClusteringModel(eps=0.2, min_samples=1)
+    db.fit(X)
+    labels_db = db.predict(X)
+    assert set(labels_db) == {0, 1}
+
+    ag = AgglomerativeClusteringModel(n_clusters=2)
+    ag.fit(X)
+    labels_ag = ag.predict(X)
+    assert set(labels_ag) == {0, 1}
+
+    gm = GaussianMixtureModel(n_components=2, random_state=42)
+    gm.fit(X)
+    labels_gm = gm.predict(X)
+    assert set(labels_gm) == {0, 1}
 

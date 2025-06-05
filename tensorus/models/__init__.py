@@ -12,6 +12,9 @@ from .decision_tree_regressor import DecisionTreeRegressorModel
 from .svm_classifier import SVMClassifierModel
 from .svr import SVRModel
 from .kmeans import KMeansClusteringModel
+from .dbscan import DBSCANClusteringModel
+from .agglomerative import AgglomerativeClusteringModel
+from .gaussian_mixture import GaussianMixtureModel
 from .knn_classifier import KNNClassifierModel
 from .gaussian_nb_classifier import GaussianNBClassifierModel
 from .lda_classifier import LDAClassifierModel
@@ -37,6 +40,9 @@ __all__ = [
     "SVMClassifierModel",
     "SVRModel",
     "KMeansClusteringModel",
+    "DBSCANClusteringModel",
+    "AgglomerativeClusteringModel",
+    "GaussianMixtureModel",
     "KNNClassifierModel",
     "GaussianNBClassifierModel",
     "LDAClassifierModel",
