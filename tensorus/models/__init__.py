@@ -75,6 +75,8 @@ from .vae_model import VAEModel
 from .gan_model import GANModel
 from .diffusion_model import DiffusionModel
 from .flow_based_model import FlowBasedModel
+from .gcn_classifier import GCNClassifierModel
+from .gat_classifier import GATClassifierModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -125,6 +127,8 @@ __all__ = [
     "GANModel",
     "DiffusionModel",
     "FlowBasedModel",
+    "GCNClassifierModel",
+    "GATClassifierModel",
     "LeNetModel",
     "AlexNetModel",
     "VGGModel",
@@ -180,3 +184,5 @@ register_model("VAE", VAEModel)
 register_model("GAN", GANModel)
 register_model("Diffusion", DiffusionModel)
 register_model("FlowBased", FlowBasedModel)
+register_model("GCNClassifier", GCNClassifierModel)
+register_model("GATClassifier", GATClassifierModel)
