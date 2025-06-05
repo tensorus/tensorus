@@ -13,6 +13,9 @@ from tensorus.models.svm_classifier import SVMClassifierModel
 from tensorus.models.svr import SVRModel
 from tensorus.models.kmeans import KMeansClusteringModel
 from tensorus.models.knn_classifier import KNNClassifierModel
+from tensorus.models.gaussian_nb_classifier import GaussianNBClassifierModel
+from tensorus.models.lda_classifier import LDAClassifierModel
+from tensorus.models.qda_classifier import QDAClassifierModel
 from tensorus.models.random_forest_classifier import RandomForestClassifierModel
 from tensorus.models.random_forest_regressor import RandomForestRegressorModel
 from tensorus.models.decision_tree_regressor import DecisionTreeRegressorModel
@@ -221,4 +224,31 @@ def test_elastic_net_regression_model(tmp_path):
     enet2.load(str(save_path))
     preds2 = enet2.predict(X)
     assert np.allclose(preds2, preds)
+
+
+def test_gaussian_nb_classifier_model():
+    X = np.array([[0.0], [1.0], [2.0], [3.0]])
+    y = np.array([0, 0, 1, 1])
+    model = GaussianNBClassifierModel()
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert np.array_equal(preds, y)
+
+
+def test_lda_classifier_model():
+    X = np.array([[0.0], [1.0], [2.0], [3.0]])
+    y = np.array([0, 0, 1, 1])
+    model = LDAClassifierModel()
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert np.array_equal(preds, y)
+
+
+def test_qda_classifier_model():
+    X = np.array([[0.0], [1.0], [2.0], [3.0]])
+    y = np.array([0, 0, 1, 1])
+    model = QDAClassifierModel()
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert np.array_equal(preds, y)
 
