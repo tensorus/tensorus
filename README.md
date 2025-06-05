@@ -364,15 +364,29 @@ managing models directly within Tensorus. The framework consists of:
     * `LassoRegressionModel` - linear regression with L1 regularization.
     * `ElasticNetRegressionModel` - linear regression with mixed L1/L2 regularization.
     * `DecisionTreeClassifierModel` - decision tree classifier.
+    * `DecisionTreeRegressorModel` - decision tree regressor.
     * `KMeansClusteringModel` - k-means clustering algorithm.
+    * `DBSCANClusteringModel` - density-based clustering.
+    * `AgglomerativeClusteringModel` - hierarchical agglomerative clustering.
+    * `GaussianMixtureModel` - mixture of Gaussians.
     * `SVMClassifierModel` - support vector machine classifier.
     * `SVRModel` - support vector regression.
     * `RandomForestClassifierModel` - ensemble of trees for classification.
     * `RandomForestRegressorModel` - ensemble of trees for regression.
     * `KNNClassifierModel` - k-nearest neighbors classifier.
+    * `GaussianNBClassifierModel` - Gaussian naive Bayes classifier.
+    * `LDAClassifierModel` - linear discriminant analysis.
+    * `QDAClassifierModel` - quadratic discriminant analysis.
     * `PCADecompositionModel` - principal component analysis.
     * `TSNEEmbeddingModel` - t-SNE dimensionality reduction.
+    * `UMAPEmbeddingModel` - UMAP dimensionality reduction.
+    * `IsolationForestModel` - isolation forest anomaly detector.
+    * `OneClassSVMModel` - one-class SVM anomaly detector.
     * `MLPClassifierModel` - simple neural network classifier.
+    * `ARIMAModel` - ARIMA time series model.
+    * `SARIMAModel` - seasonal ARIMA model.
+    * `ExponentialSmoothingModel` - Holt-Winters exponential smoothing.
+    * `GARCHModel` - generalized autoregressive conditional heteroskedasticity.
 
 Models can easily load their training data from a dataset and write prediction
 results back to `TensorStorage` using the helper functions in
