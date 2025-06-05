@@ -388,6 +388,59 @@ managing models directly within Tensorus. The framework consists of:
     * `SARIMAModel` - seasonal ARIMA model.
     * `ExponentialSmoothingModel` - Holt-Winters exponential smoothing.
     * `GARCHModel` - generalized autoregressive conditional heteroskedasticity.
+    * `PoissonRegressorModel` - Poisson regression for count data.
+    * `PolynomialRegressionModel` - polynomial regression.
+    * `GradientBoostingClassifierModel` - gradient boosted trees for classification.
+    * `GradientBoostingRegressorModel` - gradient boosted trees for regression.
+    * `XGBoostClassifierModel` - XGBoost classifier.
+    * `XGBoostRegressorModel` - XGBoost regressor.
+    * `LightGBMClassifierModel` - LightGBM classifier.
+    * `LightGBMRegressorModel` - LightGBM regressor.
+    * `CatBoostClassifierModel` - CatBoost classifier.
+    * `CatBoostRegressorModel` - CatBoost regressor.
+    * `FactorAnalysisModel` - factor analysis.
+    * `CCAModel` - canonical correlation analysis.
+    * `Word2VecModel` - Word2Vec embeddings.
+    * `GloVeModel` - GloVe embeddings.
+    * `LabelPropagationModel` - label propagation semi-supervised classifier.
+    * `SelfTrainingClassifierModel` - self-training semi-supervised classifier.
+    * `VAEModel` - variational autoencoder.
+    * `GANModel` - generative adversarial network.
+    * `DiffusionModel` - diffusion-based generative model.
+    * `FlowBasedModel` - normalizing flow generative model.
+    * `GCNClassifierModel` - graph convolutional network classifier.
+    * `GATClassifierModel` - graph attention network classifier.
+    * `NamedEntityRecognitionModel` - simple NER tagger.
+    * `LeNetModel` - classic LeNet CNN.
+    * `AlexNetModel` - AlexNet CNN.
+    * `VGGModel` - VGG CNN.
+    * `ResNetModel` - ResNet CNN.
+    * `MobileNetModel` - MobileNet CNN.
+    * `EfficientNetModel` - EfficientNet CNN.
+    * `FasterRCNNModel` - object detection with Faster R-CNN.
+    * `UNetSegmentationModel` - UNet image segmentation.
+    * `CollaborativeFilteringModel` - classic collaborative filtering.
+    * `MatrixFactorizationModel` - matrix factorization recommender.
+    * `NeuralCollaborativeFilteringModel` - neural collaborative filtering.
+    * `NeuroSymbolicModel` - hybrid neuro-symbolic model.
+    * `PhysicsInformedNNModel` - physics-informed neural network.
+    * `StackedGeneralizationModel` - stacking ensemble.
+    * `MixtureOfExpertsModel` - mixture of experts ensemble.
+    * `LSTMClassifierModel` - LSTM-based classifier.
+    * `GRUClassifierModel` - GRU-based classifier.
+    * `CoxPHModel` - Cox proportional hazards survival model.
+    * `AnovaModel` - analysis of variance.
+    * `ManovaModel` - multivariate ANOVA.
+    * `MixedEffectsModel` - mixed effects regression.
+    * `StructuralEquationModel` - structural equation modeling.
+    * `TransformerModel` - generic Transformer encoder-decoder.
+    * `BERTModel` - BERT classifier.
+    * `GPTModel` - GPT language model.
+    * `T5Model` - T5 text-to-text model.
+    * `VisionTransformerModel` - vision transformer.
+    * `LargeLanguageModelWrapper` - wrapper around HuggingFace causal language models.
+    * `MultimodalFoundationModel` - CLIP-style multimodal encoder.
+    * `FedAvgModel` - federated averaging aggregator.
 
 Models can easily load their training data from a dataset and write prediction
 results back to `TensorStorage` using the helper functions in
