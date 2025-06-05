@@ -13,6 +13,9 @@ from .svm_classifier import SVMClassifierModel
 from .svr import SVRModel
 from .kmeans import KMeansClusteringModel
 from .knn_classifier import KNNClassifierModel
+from .gaussian_nb_classifier import GaussianNBClassifierModel
+from .lda_classifier import LDAClassifierModel
+from .qda_classifier import QDAClassifierModel
 from .random_forest_classifier import RandomForestClassifierModel
 from .random_forest_regressor import RandomForestRegressorModel
 from .pca_decomposition import PCADecompositionModel
@@ -35,6 +38,9 @@ __all__ = [
     "SVRModel",
     "KMeansClusteringModel",
     "KNNClassifierModel",
+    "GaussianNBClassifierModel",
+    "LDAClassifierModel",
+    "QDAClassifierModel",
     "RandomForestClassifierModel",
     "RandomForestRegressorModel",
     "PCADecompositionModel",
