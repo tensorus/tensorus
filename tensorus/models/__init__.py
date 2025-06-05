@@ -93,6 +93,15 @@ from .mixture_of_experts import MixtureOfExpertsModel
 from .large_language_model import LargeLanguageModelWrapper
 from .multimodal_foundation import MultimodalFoundationModel
 from .fedavg_model import FedAvgModel
+from .rl_models import (
+    ReplayBuffer,
+    QLearningModel,
+    DQNModel,
+    A2CModel,
+    PPOModel,
+    TRPOModel,
+    SACModel,
+)
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -188,6 +197,13 @@ __all__ = [
     "LargeLanguageModelWrapper",
     "MultimodalFoundationModel",
     "FedAvgModel",
+    "ReplayBuffer",
+    "QLearningModel",
+    "DQNModel",
+    "A2CModel",
+    "PPOModel",
+    "TRPOModel",
+    "SACModel",
 ]
 
 # Register models in the simple registry for convenience
@@ -245,3 +261,9 @@ register_model("MixtureOfExperts", MixtureOfExpertsModel)
 register_model("LargeLanguageModel", LargeLanguageModelWrapper)
 register_model("MultimodalFoundation", MultimodalFoundationModel)
 register_model("FedAvg", FedAvgModel)
+register_model("QLearning", QLearningModel)
+register_model("DQN", DQNModel)
+register_model("A2C", A2CModel)
+register_model("PPO", PPOModel)
+register_model("TRPO", TRPOModel)
+register_model("SAC", SACModel)
