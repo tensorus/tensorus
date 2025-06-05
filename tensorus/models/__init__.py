@@ -46,6 +46,13 @@ from .vgg import VGGModel
 from .resnet import ResNetModel
 from .mobilenet import MobileNetModel
 from .efficientnet import EfficientNetModel
+from .rnn_models import (
+    LSTMModule,
+    GRUModule,
+    BidirectionalWrapper,
+    LSTMClassifierModel,
+    GRUClassifierModel,
+)
 from .label_propagation import LabelPropagationModel
 from .self_training_classifier import SelfTrainingClassifierModel
 from .arima_model import ARIMAModel
@@ -109,6 +116,11 @@ __all__ = [
     "ResNetModel",
     "MobileNetModel",
     "EfficientNetModel",
+    "LSTMModule",
+    "GRUModule",
+    "BidirectionalWrapper",
+    "LSTMClassifierModel",
+    "GRUClassifierModel",
     "ARIMAModel",
     "SARIMAModel",
     "ExponentialSmoothingModel",
@@ -137,3 +149,5 @@ register_model("VGG", VGGModel)
 register_model("ResNet", ResNetModel)
 register_model("MobileNet", MobileNetModel)
 register_model("EfficientNet", EfficientNetModel)
+register_model("LSTMClassifier", LSTMClassifierModel)
+register_model("GRUClassifier", GRUClassifierModel)
