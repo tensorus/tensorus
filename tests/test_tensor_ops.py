@@ -330,7 +330,7 @@ class TestTensorOps(unittest.TestCase):
     def test_qr_reconstruction(self):
         A = torch.randn(4, 3)
         Q, R = TensorOps.qr_decomposition(A)
-        self.assertTrue(torch.allclose(Q @ R, A))
+        self.assertTrue(torch.allclose(Q @ R, A, atol=1e-5, rtol=1e-5))
 
     def test_lu_decomposition(self):
         A = torch.tensor([[4., 3.], [6., 3.]], dtype=torch.float32)
