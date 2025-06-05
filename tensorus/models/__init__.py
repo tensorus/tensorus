@@ -33,6 +33,7 @@ from .arima_model import ARIMAModel
 from .sarima_model import SARIMAModel
 from .exponential_smoothing_model import ExponentialSmoothingModel
 from .garch_model import GARCHModel
+from .cox_ph_model import CoxPHModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -70,6 +71,7 @@ __all__ = [
     "SARIMAModel",
     "ExponentialSmoothingModel",
     "GARCHModel",
+    "CoxPHModel",
     "load_xy_from_storage",
     "store_predictions",
 ]
