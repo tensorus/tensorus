@@ -248,6 +248,24 @@ You can run the example agents directly from their respective files:
 
     *   Note: The Ingestion Agent will monitor the `temp_ingestion_source` directory (created automatically if it doesn't exist in the project root) for new files.
 
+### Docker Usage
+
+Tensorus can also be run inside a Docker container. Build the image from the project root:
+
+```bash
+docker build -t tensorus .
+```
+
+Run the container and expose the API server on port `8000`:
+
+```bash
+docker run -p 8000:8000 tensorus
+```
+
+The FastAPI documentation will then be available at `http://localhost:8000/docs`.
+
+If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker) installed, you can pass `--gpus all` to `docker run` and modify `setup.sh` to install CUDA-enabled PyTorch wheels for GPU acceleration.
+
 ### Running Tests
 
 Tensorus includes Python unit tests and optional Node.js integration tests. To set up the environment and run them:
