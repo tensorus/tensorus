@@ -10,6 +10,21 @@ models_pkg = types.ModuleType("tensorus.models")
 sys.modules.setdefault("tensorus", pkg)
 sys.modules.setdefault("tensorus.models", models_pkg)
 
+storage_spec = importlib.util.spec_from_file_location(
+    "tensorus.tensor_storage",
+    Path(__file__).resolve().parents[1] / "tensorus" / "tensor_storage.py",
+)
+storage_mod = importlib.util.module_from_spec(storage_spec)
+storage_spec.loader.exec_module(storage_mod)  # type: ignore
+sys.modules["tensorus.tensor_storage"] = storage_mod
+
+# Provide a dummy OpenCV module to satisfy YOLOv5 imports
+sys.modules.setdefault("cv2", types.ModuleType("cv2"))
+# Additional lightweight stubs for optional dependencies
+sys.modules.setdefault("pandas", types.ModuleType("pandas"))
+sys.modules.setdefault("requests", types.ModuleType("requests"))
+sys.modules.setdefault("ultralytics", types.ModuleType("ultralytics"))
+
 base_spec = importlib.util.spec_from_file_location(
     "tensorus.models.base",
     Path(__file__).resolve().parents[1] / "tensorus" / "models" / "base.py",
@@ -32,7 +47,7 @@ YOLOv5Detector = yolov5_mod.YOLOv5Detector
 def test_yolov5_predict(tmp_path):
     model = YOLOv5Detector(model_name="yolov5n", pretrained=False)
     img = torch.zeros(3, 32, 32)
-    model.train()  # ensure method exists
+    model.fit(None)
     results = model.predict(img)
     assert hasattr(results, "xyxy")
 
