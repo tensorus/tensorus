@@ -1,5 +1,10 @@
 """Tensorus core package."""
 
-from . import models
+import os
 
-__all__ = ["models"]
+if not os.environ.get("TENSORUS_MINIMAL_IMPORT"):
+    from . import models
+
+    __all__ = ["models"]
+else:
+    __all__ = []
