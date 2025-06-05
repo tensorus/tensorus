@@ -37,3 +37,4 @@ umap-learn
 pandas>=1.5.0
 arch>=5.7
 lifelines>=0.28
+semopy>=2.3

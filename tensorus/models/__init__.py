@@ -38,6 +38,8 @@ from .garch_model import GARCHModel
 from .cox_ph_model import CoxPHModel
 from .anova import AnovaModel
 from .manova import ManovaModel
+from .mixed_effects_model import MixedEffectsModel
+from .structural_equation_model import StructuralEquationModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -80,6 +82,8 @@ __all__ = [
     "CoxPHModel",
     "AnovaModel",
     "ManovaModel",
+    "MixedEffectsModel",
+    "StructuralEquationModel",
     "load_xy_from_storage",
     "store_predictions",
 ]
