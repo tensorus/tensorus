@@ -27,6 +27,10 @@ from .umap_embedding import UMAPEmbeddingModel
 from .isolation_forest import IsolationForestModel
 from .one_class_svm import OneClassSVMModel
 from .mlp_classifier import MLPClassifierModel
+from .arima_model import ARIMAModel
+from .sarima_model import SARIMAModel
+from .exponential_smoothing_model import ExponentialSmoothingModel
+from .garch_model import GARCHModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -58,6 +62,10 @@ __all__ = [
     "IsolationForestModel",
     "OneClassSVMModel",
     "MLPClassifierModel",
+    "ARIMAModel",
+    "SARIMAModel",
+    "ExponentialSmoothingModel",
+    "GARCHModel",
     "load_xy_from_storage",
     "store_predictions",
 ]
