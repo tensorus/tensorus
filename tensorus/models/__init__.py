@@ -40,6 +40,12 @@ from .isolation_forest import IsolationForestModel
 from .one_class_svm import OneClassSVMModel
 from .mlp_classifier import MLPClassifierModel
 from .stacked_rbm_classifier import StackedRBMClassifierModel
+from .lenet import LeNetModel
+from .alexnet import AlexNetModel
+from .vgg import VGGModel
+from .resnet import ResNetModel
+from .mobilenet import MobileNetModel
+from .efficientnet import EfficientNetModel
 from .label_propagation import LabelPropagationModel
 from .self_training_classifier import SelfTrainingClassifierModel
 from .arima_model import ARIMAModel
@@ -97,6 +103,12 @@ __all__ = [
     "SelfTrainingClassifierModel",
     "MLPClassifierModel",
     "StackedRBMClassifierModel",
+    "LeNetModel",
+    "AlexNetModel",
+    "VGGModel",
+    "ResNetModel",
+    "MobileNetModel",
+    "EfficientNetModel",
     "ARIMAModel",
     "SARIMAModel",
     "ExponentialSmoothingModel",
@@ -119,3 +131,9 @@ register_model("LightGBMClassifier", LightGBMClassifierModel)
 register_model("LightGBMRegressor", LightGBMRegressorModel)
 register_model("CatBoostClassifier", CatBoostClassifierModel)
 register_model("CatBoostRegressor", CatBoostRegressorModel)
+register_model("LeNet", LeNetModel)
+register_model("AlexNet", AlexNetModel)
+register_model("VGG", VGGModel)
+register_model("ResNet", ResNetModel)
+register_model("MobileNet", MobileNetModel)
+register_model("EfficientNet", EfficientNetModel)
