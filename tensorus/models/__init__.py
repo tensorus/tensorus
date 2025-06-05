@@ -39,6 +39,8 @@ from .umap_embedding import UMAPEmbeddingModel
 from .isolation_forest import IsolationForestModel
 from .one_class_svm import OneClassSVMModel
 from .mlp_classifier import MLPClassifierModel
+from .label_propagation import LabelPropagationModel
+from .self_training_classifier import SelfTrainingClassifierModel
 from .arima_model import ARIMAModel
 from .sarima_model import SARIMAModel
 from .exponential_smoothing_model import ExponentialSmoothingModel
@@ -90,6 +92,8 @@ __all__ = [
     "UMAPEmbeddingModel",
     "IsolationForestModel",
     "OneClassSVMModel",
+    "LabelPropagationModel",
+    "SelfTrainingClassifierModel",
     "MLPClassifierModel",
     "ARIMAModel",
     "SARIMAModel",
