@@ -46,3 +46,4 @@ lightgbm
 catboost
 gensim
 joblib
+opencv-python

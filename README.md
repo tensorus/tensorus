@@ -418,6 +418,7 @@ managing models directly within Tensorus. The framework consists of:
     * `MobileNetModel` - MobileNet CNN.
     * `EfficientNetModel` - EfficientNet CNN.
     * `FasterRCNNModel` - object detection with Faster R-CNN.
+    * `YOLOv5Detector` - object detection with YOLOv5.
     * `UNetSegmentationModel` - UNet image segmentation.
     * `CollaborativeFilteringModel` - classic collaborative filtering.
     * `MatrixFactorizationModel` - matrix factorization recommender.

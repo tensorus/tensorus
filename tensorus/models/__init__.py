@@ -82,6 +82,7 @@ from .gat_classifier import GATClassifierModel
 from .named_entity_recognition import NamedEntityRecognitionModel
 from .faster_rcnn import FasterRCNNModel
 from .unet_segmentation import UNetSegmentationModel
+from .yolov5_detector import YOLOv5Detector
 from .collaborative_filtering import CollaborativeFilteringModel
 from .matrix_factorization import MatrixFactorizationModel
 from .neural_cf import NeuralCollaborativeFilteringModel
@@ -154,6 +155,7 @@ __all__ = [
     "MobileNetModel",
     "EfficientNetModel",
     "FasterRCNNModel",
+    "YOLOv5Detector",
     "UNetSegmentationModel",
     "CollaborativeFilteringModel",
     "MatrixFactorizationModel",
@@ -231,6 +233,7 @@ register_model("Word2Vec", Word2VecModel)
 register_model("GloVe", GloVeModel)
 register_model("NamedEntityRecognition", NamedEntityRecognitionModel)
 register_model("FasterRCNN", FasterRCNNModel)
+register_model("YOLOv5", YOLOv5Detector)
 register_model("UNetSegmentation", UNetSegmentationModel)
 register_model("CollaborativeFiltering", CollaborativeFilteringModel)
 register_model("MatrixFactorization", MatrixFactorizationModel)
