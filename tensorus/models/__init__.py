@@ -23,6 +23,14 @@ from .lda_classifier import LDAClassifierModel
 from .qda_classifier import QDAClassifierModel
 from .random_forest_classifier import RandomForestClassifierModel
 from .random_forest_regressor import RandomForestRegressorModel
+from .gradient_boosting_classifier import GradientBoostingClassifierModel
+from .gradient_boosting_regressor import GradientBoostingRegressorModel
+from .xgboost_classifier import XGBoostClassifierModel
+from .xgboost_regressor import XGBoostRegressorModel
+from .lightgbm_classifier import LightGBMClassifierModel
+from .lightgbm_regressor import LightGBMRegressorModel
+from .catboost_classifier import CatBoostClassifierModel
+from .catboost_regressor import CatBoostRegressorModel
 from .pca_decomposition import PCADecompositionModel
 from .factor_analysis import FactorAnalysisModel
 from .cca import CCAModel
@@ -67,6 +75,14 @@ __all__ = [
     "QDAClassifierModel",
     "RandomForestClassifierModel",
     "RandomForestRegressorModel",
+    "GradientBoostingClassifierModel",
+    "GradientBoostingRegressorModel",
+    "XGBoostClassifierModel",
+    "XGBoostRegressorModel",
+    "LightGBMClassifierModel",
+    "LightGBMRegressorModel",
+    "CatBoostClassifierModel",
+    "CatBoostRegressorModel",
     "PCADecompositionModel",
     "FactorAnalysisModel",
     "CCAModel",
@@ -87,3 +103,13 @@ __all__ = [
     "load_xy_from_storage",
     "store_predictions",
 ]
+
+# Register models in the simple registry for convenience
+register_model("GradientBoostingClassifier", GradientBoostingClassifierModel)
+register_model("GradientBoostingRegressor", GradientBoostingRegressorModel)
+register_model("XGBoostClassifier", XGBoostClassifierModel)
+register_model("XGBoostRegressor", XGBoostRegressorModel)
+register_model("LightGBMClassifier", LightGBMClassifierModel)
+register_model("LightGBMRegressor", LightGBMRegressorModel)
+register_model("CatBoostClassifier", CatBoostClassifierModel)
+register_model("CatBoostRegressor", CatBoostRegressorModel)
