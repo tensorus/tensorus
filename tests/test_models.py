@@ -28,6 +28,7 @@ from tensorus.models.mlp_classifier import MLPClassifierModel
 from tensorus.models.elastic_net_regression import ElasticNetRegressionModel
 from tensorus.models.poisson_regressor import PoissonRegressorModel
 from tensorus.models.polynomial_regression import PolynomialRegressionModel
+from tensorus.models.cox_ph_model import CoxPHModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
 
@@ -311,3 +312,21 @@ def test_clustering_models():
     labels_gm = gm.predict(X)
     assert set(labels_gm) == {0, 1}
 
+
+def test_cox_ph_model(tmp_path):
+    X = np.array([[0.0], [1.0], [2.0], [3.0]])
+    durations = np.array([1.0, 2.0, 3.0, 4.0])
+    events = np.array([1, 1, 0, 1])
+    model = CoxPHModel()
+    model.fit(X, durations, events)
+    pred = model.predict(X)
+    assert len(pred) == len(X)
+    hazard = model.predict_partial_hazard(X)
+    assert hazard.shape[0] == len(X)
+
+    save_path = tmp_path / "cox.joblib"
+    model.save(str(save_path))
+    model2 = CoxPHModel()
+    model2.load(str(save_path))
+    pred2 = model2.predict(X)
+    assert np.allclose(pred2, pred)
