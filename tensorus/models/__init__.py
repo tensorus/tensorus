@@ -8,6 +8,7 @@ from .ridge_regression import RidgeRegressionModel
 from .lasso_regression import LassoRegressionModel
 from .elastic_net_regression import ElasticNetRegressionModel
 from .decision_tree_classifier import DecisionTreeClassifierModel
+from .decision_tree_regressor import DecisionTreeRegressorModel
 from .svm_classifier import SVMClassifierModel
 from .svr import SVRModel
 from .kmeans import KMeansClusteringModel
@@ -29,6 +30,7 @@ __all__ = [
     "LassoRegressionModel",
     "ElasticNetRegressionModel",
     "DecisionTreeClassifierModel",
+    "DecisionTreeRegressorModel",
     "SVMClassifierModel",
     "SVRModel",
     "KMeansClusteringModel",
