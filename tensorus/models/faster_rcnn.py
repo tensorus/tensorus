@@ -37,7 +37,10 @@ class FasterRCNNModel(TensorusModel):
         raise TypeError("Input must be a torch.Tensor or numpy.ndarray")
 
     def fit(self, X: Any, y: Any) -> None:  # pragma: no cover - training not implemented
-        pass
+        """Training is not supported for this model."""
+        raise NotImplementedError(
+            "FasterRCNNModel currently supports inference only"
+        )
 
     def predict(self, X: Any) -> List[Dict[str, torch.Tensor]]:
         X_t = self._to_tensor(X)
