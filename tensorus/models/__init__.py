@@ -24,6 +24,8 @@ from .qda_classifier import QDAClassifierModel
 from .random_forest_classifier import RandomForestClassifierModel
 from .random_forest_regressor import RandomForestRegressorModel
 from .pca_decomposition import PCADecompositionModel
+from .factor_analysis import FactorAnalysisModel
+from .cca import CCAModel
 from .tsne_embedding import TSNEEmbeddingModel
 from .umap_embedding import UMAPEmbeddingModel
 from .isolation_forest import IsolationForestModel
@@ -64,6 +66,8 @@ __all__ = [
     "RandomForestClassifierModel",
     "RandomForestRegressorModel",
     "PCADecompositionModel",
+    "FactorAnalysisModel",
+    "CCAModel",
     "TSNEEmbeddingModel",
     "UMAPEmbeddingModel",
     "IsolationForestModel",
