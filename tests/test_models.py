@@ -26,6 +26,7 @@ from tensorus.models.pca_decomposition import PCADecompositionModel
 from tensorus.models.tsne_embedding import TSNEEmbeddingModel
 from tensorus.models.mlp_classifier import MLPClassifierModel
 from tensorus.models.elastic_net_regression import ElasticNetRegressionModel
+from tensorus.models.polynomial_regression import PolynomialRegressionModel
 from tensorus.tensor_storage import TensorStorage
 from tensorus.models.utils import load_xy_from_storage, store_predictions
 
@@ -226,6 +227,22 @@ def test_elastic_net_regression_model(tmp_path):
     enet2 = ElasticNetRegressionModel()
     enet2.load(str(save_path))
     preds2 = enet2.predict(X)
+    assert np.allclose(preds2, preds)
+
+
+def test_polynomial_regression_model(tmp_path):
+    X = np.array([[0.0], [1.0], [2.0], [3.0]])
+    y = np.array([1.0, 3.0, 5.0, 7.0])
+    model = PolynomialRegressionModel(degree=2, regularization=0.0)
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert np.allclose(preds, y, atol=1e-1)
+
+    save_path = tmp_path / "poly.joblib"
+    model.save(str(save_path))
+    model2 = PolynomialRegressionModel()
+    model2.load(str(save_path))
+    preds2 = model2.predict(X)
     assert np.allclose(preds2, preds)
 
 
