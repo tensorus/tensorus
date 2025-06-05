@@ -85,6 +85,10 @@ from .unet_segmentation import UNetSegmentationModel
 from .collaborative_filtering import CollaborativeFilteringModel
 from .matrix_factorization import MatrixFactorizationModel
 from .neural_cf import NeuralCollaborativeFilteringModel
+from .neuro_symbolic_model import NeuroSymbolicModel
+from .physics_informed_nn import PhysicsInformedNNModel
+from .stacked_generalization import StackedGeneralizationModel
+from .mixture_of_experts import MixtureOfExpertsModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -151,6 +155,10 @@ __all__ = [
     "CollaborativeFilteringModel",
     "MatrixFactorizationModel",
     "NeuralCollaborativeFilteringModel",
+    "NeuroSymbolicModel",
+    "PhysicsInformedNNModel",
+    "StackedGeneralizationModel",
+    "MixtureOfExpertsModel",
     "LSTMModule",
     "GRUModule",
     "BidirectionalWrapper",
@@ -210,3 +218,7 @@ register_model("UNetSegmentation", UNetSegmentationModel)
 register_model("CollaborativeFiltering", CollaborativeFilteringModel)
 register_model("MatrixFactorization", MatrixFactorizationModel)
 register_model("NeuralCollaborativeFiltering", NeuralCollaborativeFilteringModel)
+register_model("NeuroSymbolic", NeuroSymbolicModel)
+register_model("PhysicsInformedNN", PhysicsInformedNNModel)
+register_model("StackedGeneralization", StackedGeneralizationModel)
+register_model("MixtureOfExperts", MixtureOfExpertsModel)
