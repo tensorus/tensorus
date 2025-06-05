@@ -71,6 +71,10 @@ from .anova import AnovaModel
 from .manova import ManovaModel
 from .mixed_effects_model import MixedEffectsModel
 from .structural_equation_model import StructuralEquationModel
+from .vae_model import VAEModel
+from .gan_model import GANModel
+from .diffusion_model import DiffusionModel
+from .flow_based_model import FlowBasedModel
 from .utils import load_xy_from_storage, store_predictions
 
 __all__ = [
@@ -117,6 +121,10 @@ __all__ = [
     "SelfTrainingClassifierModel",
     "MLPClassifierModel",
     "StackedRBMClassifierModel",
+    "VAEModel",
+    "GANModel",
+    "DiffusionModel",
+    "FlowBasedModel",
     "LeNetModel",
     "AlexNetModel",
     "VGGModel",
@@ -168,3 +176,7 @@ register_model("BERT", BERTModel)
 register_model("GPT", GPTModel)
 register_model("T5", T5Model)
 register_model("VisionTransformer", VisionTransformerModel)
+register_model("VAE", VAEModel)
+register_model("GAN", GANModel)
+register_model("Diffusion", DiffusionModel)
+register_model("FlowBased", FlowBasedModel)
