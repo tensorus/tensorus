@@ -33,3 +33,4 @@ matplotlib>=3.5.0
 # For Time Series Analysis (ARIMA model)
 statsmodels>=0.13.0
 scikit-learn>=1.3.0
+umap-learn
