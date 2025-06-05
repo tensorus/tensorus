@@ -27,6 +27,7 @@ from tensorus.models.factor_analysis import FactorAnalysisModel
 from tensorus.models.cca import CCAModel
 from tensorus.models.tsne_embedding import TSNEEmbeddingModel
 from tensorus.models.mlp_classifier import MLPClassifierModel
+from tensorus.models.stacked_rbm_classifier import StackedRBMClassifierModel
 from tensorus.models.elastic_net_regression import ElasticNetRegressionModel
 from tensorus.models.poisson_regressor import PoissonRegressorModel
 from tensorus.models.polynomial_regression import PolynomialRegressionModel
@@ -366,3 +367,30 @@ def test_cca_model(tmp_path):
     X_c2, Y_c2 = model2.transform(X, Y)
     assert np.allclose(X_c2, X_c)
     assert np.allclose(Y_c2, Y_c)
+
+
+def test_stacked_rbm_classifier(tmp_path):
+    import torchvision
+    transform = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Lambda(lambda x: x.view(-1))
+    ])
+    dataset = torchvision.datasets.FakeData(
+        size=50, image_size=(1, 28, 28), num_classes=10, transform=transform
+    )
+    X = torch.stack([dataset[i][0] for i in range(50)])
+    y = torch.tensor([dataset[i][1] for i in range(50)])
+    model = StackedRBMClassifierModel(
+        layer_sizes=[784, 32], n_classes=10,
+        rbm_epochs=1, fine_tune_epochs=1, batch_size=10
+    )
+    model.fit(X, y)
+    preds = model.predict(X)
+    assert preds.shape[0] == 50
+
+    save_path = tmp_path / "rbm.pt"
+    model.save(str(save_path))
+    model2 = StackedRBMClassifierModel(layer_sizes=[784, 32], n_classes=10)
+    model2.load(str(save_path))
+    preds2 = model2.predict(X)
+    assert torch.equal(preds, preds2)

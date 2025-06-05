@@ -383,6 +383,7 @@ managing models directly within Tensorus. The framework consists of:
     * `IsolationForestModel` - isolation forest anomaly detector.
     * `OneClassSVMModel` - one-class SVM anomaly detector.
     * `MLPClassifierModel` - simple neural network classifier.
+    * `StackedRBMClassifierModel` - stacked Restricted Boltzmann Machines classifier.
     * `ARIMAModel` - ARIMA time series model.
     * `SARIMAModel` - seasonal ARIMA model.
     * `ExponentialSmoothingModel` - Holt-Winters exponential smoothing.
@@ -410,6 +411,30 @@ model.fit(X, y)
 preds = model.predict(X)
 store_predictions(storage, "my_predictions", preds,
                   model_name="LinearRegressionModel")
+```
+
+### StackedRBMClassifierModel Usage
+
+```python
+import torch
+from torchvision import transforms
+from torchvision.datasets import FakeData
+from tensorus.models.stacked_rbm_classifier import StackedRBMClassifierModel
+
+dataset = FakeData(size=100, image_size=(1, 28, 28), num_classes=10,
+                   transform=transforms.Compose([
+                       transforms.ToTensor(),
+                       transforms.Lambda(lambda x: x.view(-1))
+                   ]))
+X = torch.stack([dataset[i][0] for i in range(100)])
+y = torch.tensor([dataset[i][1] for i in range(100)])
+
+model = StackedRBMClassifierModel(layer_sizes=[784, 64], n_classes=10,
+                                  rbm_epochs=1, fine_tune_epochs=1,
+                                  batch_size=10)
+model.fit(X, y)
+preds = model.predict(X)
+model.save("rbm.pt")
 ```
 
 ## Basic Tensor Operations
