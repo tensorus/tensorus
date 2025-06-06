@@ -785,20 +785,14 @@ async def get_tensor_by_id_api(
     record_id: str = Path(..., description="The unique ID of the tensor record."),
     storage: TensorStorage = Depends(get_tensor_storage)
 ):
+    """Retrieve a tensor by ``record_id`` from ``dataset_name``.
+
+    Returns the tensor along with its metadata. Raises ``HTTPException`` with
+    status 404 if either the dataset or the record is not found.
     """
-    Retrieves a specific tensor record by its ID from the specified dataset.
-    """
+
     try:
         record = storage.get_tensor_by_id(dataset_name, record_id)
-
-        shape, dtype, data_list = tensor_to_list(record['tensor'])
-        return TensorOutput(
-            record_id=record_id, # or record['metadata'].get('record_id', record_id)
-            shape=shape,
-            dtype=dtype,
-            data=data_list,
-            metadata=record['metadata']
-        )
     except DatasetNotFoundError as e:
         logger.warning(
             f"Dataset not found while fetching tensor '{record_id}' from '{dataset_name}': {e}"
@@ -808,13 +802,32 @@ async def get_tensor_by_id_api(
         logger.warning(
             f"Tensor '{record_id}' not found in dataset '{dataset_name}': {e}"
         )
+        # TensorStorage now raises TensorNotFoundError instead of returning None
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValueError as e:
-        logger.error(f"Validation error retrieving tensor '{record_id}' from '{dataset_name}': {e}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.exception(f"Error fetching tensor '{record_id}' from dataset '{dataset_name}': {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error fetching tensor.")
+        logger.exception(
+            f"Error fetching tensor '{record_id}' from dataset '{dataset_name}': {e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error fetching tensor."
+        )
+
+    try:
+        shape, dtype, data_list = tensor_to_list(record["tensor"])
+    except ValueError as e:
+        logger.error(
+            f"Validation error retrieving tensor '{record_id}' from '{dataset_name}': {e}"
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return TensorOutput(
+        record_id=record_id,
+        shape=shape,
+        dtype=dtype,
+        data=data_list,
+        metadata=record["metadata"],
+    )
 
 @app.delete("/datasets/{dataset_name}", response_model=ApiResponse, tags=["Datasets"])
 async def delete_dataset_api(
