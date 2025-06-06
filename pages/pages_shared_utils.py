@@ -6,11 +6,12 @@ Copied/adapted from app.py to avoid complex import issues.
 import streamlit as st
 import requests
 import logging
-from typing import Optional
+import os # Added import
+from typing import Optional, List, Dict, Any # Added for new functions
 
 logger = logging.getLogger(__name__)
 
-API_BASE_URL = "http://127.0.0.1:8000" # Ensure this matches api.py
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") # Changed API_BASE_URL
 
 def load_css():
     """Loads the main CSS styles. Assumes app.py's CSS content."""
@@ -493,3 +494,78 @@ def post_nql_query(query: str) -> dict:
     except Exception as e:
         logger.exception(f"Unexpected error in post_nql_query (pages_shared_utils): {e}")
         return {"query": query, "response_text": "An unexpected error occurred.", "error": str(e), "results": None}
+
+# --- Functions to be added from app.py ---
+
+def configure_agent(agent_id: str, config: dict) -> dict:
+    """
+    Sends a request to the backend to configure a specific agent.
+
+    Uses the `API_BASE_URL` constant defined in this module.
+    Constructs a POST request to the `/agents/{agent_id}/configure` endpoint.
+
+    Args:
+        agent_id (str): The unique identifier of the agent to configure.
+        config (dict): The configuration dictionary for the agent.
+
+    Returns:
+        dict: A dictionary containing the API response. Typically includes 'success' boolean
+              and a 'message' string. In case of connection or unexpected errors,
+              it also returns a dict with 'success': False and an error 'message'.
+    """
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/agents/{agent_id}/configure",
+            json={"config": config},
+            timeout=7 # Increased timeout similar to start/stop
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API error configuring agent {agent_id} (shared_utils): {e}")
+        return {"success": False, "message": f"Failed to configure agent {agent_id}: {str(e)}"}
+    except Exception as e:
+        logger.exception(f"Unexpected error in configure_agent (shared_utils) for {agent_id}: {e}")
+        return {"success": False, "message": f"An unexpected error occurred: {str(e)}"}
+
+def operate_explorer(dataset: str, operation: str, index: int, params: dict) -> dict:
+    """
+    Sends an operation request to the data explorer for a specific tensor.
+
+    Uses the `API_BASE_URL` constant defined in this module.
+    Constructs a POST request to the `/explorer/operate` endpoint.
+
+    Args:
+        dataset (str): The name of the dataset containing the tensor.
+        operation (str): The operation to perform (e.g., 'view', 'transform').
+        index (int): The index of the tensor within the dataset.
+        params (dict): Additional parameters required for the operation.
+
+    Returns:
+        dict: A dictionary containing the API response. Typically includes:
+              - 'success': A boolean indicating if the operation was accepted.
+              - 'metadata': A dictionary with details about the operation or resulting tensor.
+              - 'result_data': The data of the resulting tensor (if applicable), or None.
+              In case of connection or server-side errors, it returns a dict with
+              'success': False, 'metadata': {'error': error_message}, and 'result_data': None.
+    """
+    payload = {
+        "dataset": dataset,
+        "operation": operation,
+        "tensor_index": index,
+        "params": params
+    }
+    try:
+        response = requests.post(
+            f"{API_BASE_URL}/explorer/operate",
+            json=payload,
+            timeout=15 # Standard timeout for potentially long operations
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API error in operate_explorer for {dataset} (shared_utils): {e}")
+        return {"success": False, "metadata": {"error": str(e)}, "result_data": None}
+    except Exception as e:
+        logger.exception(f"Unexpected error in operate_explorer (shared_utils) for {dataset}: {e}")
+        return {"success": False, "metadata": {"error": str(e)}, "result_data": None}
