@@ -804,6 +804,11 @@ async def get_tensor_by_id_api(
             f"Dataset not found while fetching tensor '{record_id}' from '{dataset_name}': {e}"
         )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except TensorNotFoundError as e:
+        logger.warning(
+            f"Tensor '{record_id}' not found in dataset '{dataset_name}': {e}"
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         logger.error(f"Validation error retrieving tensor '{record_id}' from '{dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
