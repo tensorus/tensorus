@@ -86,6 +86,49 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'self'"
     return response
 
+# --- FastAPI App Instance ---
+app = FastAPI(
+    title="Tensorus API",
+    description=(
+        "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
+        "Includes dataset management, NQL querying, and agent control."
+    ),
+    version="0.2.1",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    # contact={
+    #     "name": "API Support",
+    #     "url": "http://example.com/support",
+    #     "email": "support@example.com",
+    # },
+    # license_info={
+    #     "name": "Apache 2.0",
+    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    # }
+)
+
+# Add middleware
+app.add_middleware(LoggingMiddleware)
+app.middleware("http")(add_security_headers)
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Trusted hosts
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"],  # In production, specify trusted hosts
+)
+
+
+
 # Import Tensorus modules - Ensure these files exist in your project path
 try:
     from .tensor_storage import (
@@ -514,46 +557,6 @@ class DashboardMetrics(BaseModel):
     system_cpu_usage_percent: float = Field(..., description="Simulated overall system CPU usage percentage.")
     system_memory_usage_percent: float = Field(..., description="Simulated overall system memory usage percentage.")
 
-# --- FastAPI App Instance ---
-app = FastAPI(
-    title="Tensorus API",
-    description=(
-        "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
-        "Includes dataset management, NQL querying, and agent control."
-    ),
-    version="0.2.1",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
-    # contact={
-    #     "name": "API Support",
-    #     "url": "http://example.com/support",
-    #     "email": "support@example.com",
-    # },
-    # license_info={
-    #     "name": "Apache 2.0",
-    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
-    # }
-)
-
-# Add middleware
-app.add_middleware(LoggingMiddleware)
-app.middleware("http")(add_security_headers)
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Trusted hosts
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"],  # In production, specify trusted hosts
-)
 
 # Exception handlers
 @app.exception_handler(APIError)
