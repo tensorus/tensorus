@@ -61,12 +61,13 @@ graph TD
     subgraph UI_Layer ["User Interaction"]
         UI[Streamlit UI]
     end
-    
+
     %% API Gateway Layer
     subgraph API_Layer ["Backend Services"]
         API[FastAPI Backend]
+        MCP["MCP Server (Node.js)"]
     end
-    
+
     %% Core Storage with Method Interface
     subgraph Storage_Layer ["Core Storage - TensorStorage"]
         TS[TensorStorage Core]
@@ -79,7 +80,7 @@ graph TD
         end
         TS --- Storage_Methods
     end
-    
+
     %% Agent Processing Layer
     subgraph Agent_Layer ["Processing Agents"]
         IA[Ingestion Agent]
@@ -87,32 +88,45 @@ graph TD
         RLA[RL Agent]
         AutoMLA[AutoML Agent]
     end
-    
+
+    %% Model System
+    subgraph Model_Layer ["Model System"]
+        Registry[Model Registry]
+        Builtins[Built-in Models]
+    end
+
     %% Tensor Operations Library
     subgraph Ops_Layer ["Tensor Operations"]
         TOps[TensorOps Library]
     end
 
-    %% Primary UI Flow
+    %% Primary UI & MCP Flow
     UI -->|HTTP Requests| API
+    MCP -->|MCP Calls| API
 
     %% API Orchestration
     API -->|Command Dispatch| IA
     API -->|Command Dispatch| NQLA
     API -->|Command Dispatch| RLA
     API -->|Command Dispatch| AutoMLA
+    API -->|Model Training| Registry
     API -->|Direct Query| TS_query
+
+    %% Model System Interactions
+    Registry -->|Uses Models| Builtins
+    Registry -->|Load/Save| TS
+    Builtins -->|Tensor Ops| TOps
 
     %% Agent Storage Interactions
     IA -->|Data Ingestion| TS_insert
-    
+
     NQLA -->|Query Execution| TS_query
     NQLA -->|Record Retrieval| TS_get
 
     RLA -->|State Persistence| TS_insert
     RLA -->|Experience Sampling| TS_sample
     RLA -->|State Retrieval| TS_get
-    
+
     AutoMLA -->|Trial Storage| TS_insert
     AutoMLA -->|Data Retrieval| TS_query
 
