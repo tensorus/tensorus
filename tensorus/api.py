@@ -1,24 +1,23 @@
 # api.py
 
 import logging
-from typing import List, Dict, Any, Optional, Tuple, Union, Callable, Awaitable, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, Tuple, Union, TYPE_CHECKING
 import random  # For simulating logs/status
 import time  # For simulating timestamps
 import math  # For simulating metrics
 import asyncio  # For async operations
-from datetime import datetime
+import os
 
 import torch
-import uvicorn
 from fastapi import (
-    FastAPI, HTTPException, Body, Depends, Path, status, 
-    Query, APIRouter, Request, Response, status as http_status
+    FastAPI, HTTPException, Body, Depends, Path, status,
+    Query, APIRouter, Request, Response
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, root_validator, ValidationError
+from pydantic import BaseModel, Field, root_validator
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 # Configure structured logging
@@ -86,6 +85,49 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'self'"
     return response
 
+# --- FastAPI App Instance ---
+app = FastAPI(
+    title="Tensorus API",
+    description=(
+        "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
+        "Includes dataset management, NQL querying, and agent control."
+    ),
+    version="0.2.1",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    # contact={
+    #     "name": "API Support",
+    #     "url": "http://example.com/support",
+    #     "email": "support@example.com",
+    # },
+    # license_info={
+    #     "name": "Apache 2.0",
+    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    # }
+)
+
+# Add middleware
+app.add_middleware(LoggingMiddleware)
+app.middleware("http")(add_security_headers)
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Trusted hosts
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"],  # In production, specify trusted hosts
+)
+
+
+
 # Import Tensorus modules - Ensure these files exist in your project path
 try:
     from .tensor_storage import (
@@ -123,7 +165,6 @@ except Exception as e:
     # This is critical, so raise an error to prevent the API from starting incorrectly.
     raise RuntimeError(f"Tensorus initialization failed: {e}") from e
 
-import os # Added import
 
 # --- Agent State Management ---
 # agent_registry holds static configuration and metadata.
@@ -514,46 +555,6 @@ class DashboardMetrics(BaseModel):
     system_cpu_usage_percent: float = Field(..., description="Simulated overall system CPU usage percentage.")
     system_memory_usage_percent: float = Field(..., description="Simulated overall system memory usage percentage.")
 
-# --- FastAPI App Instance ---
-app = FastAPI(
-    title="Tensorus API",
-    description=(
-        "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
-        "Includes dataset management, NQL querying, and agent control."
-    ),
-    version="0.2.1",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
-    # contact={
-    #     "name": "API Support",
-    #     "url": "http://example.com/support",
-    #     "email": "support@example.com",
-    # },
-    # license_info={
-    #     "name": "Apache 2.0",
-    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
-    # }
-)
-
-# Add middleware
-app.add_middleware(LoggingMiddleware)
-app.middleware("http")(add_security_headers)
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Trusted hosts
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["*"],  # In production, specify trusted hosts
-)
 
 # Exception handlers
 @app.exception_handler(APIError)
@@ -1129,10 +1130,10 @@ async def start_agent_api(agent_id: str = Path(..., description="The unique iden
         agent_instance = _get_or_create_ingestion_agent()
         current_status = agent_instance.get_status()
         if current_status == "running":
-            logger.info(f"Ingestion agent is already running.")
+            logger.info("Ingestion agent is already running.")
             return ApiResponse(success=False, message="Ingestion agent is already running.")
         if current_status == "error" and agent_instance._monitor_thread and agent_instance._monitor_thread.is_alive():
-             logger.warning(f"Ingestion agent is in error state but thread is alive. Attempting to stop first.")
+             logger.warning("Ingestion agent is in error state but thread is alive. Attempting to stop first.")
              agent_instance.stop() # Try to clean up before restart
              await asyncio.sleep(1) # Give it a moment to stop
 
@@ -1191,7 +1192,7 @@ async def stop_agent_api(agent_id: str = Path(..., description="The unique ident
 
         current_status = agent_instance.get_status()
         if current_status == "stopped":
-            logger.info(f"Ingestion agent is already stopped.")
+            logger.info("Ingestion agent is already stopped.")
             return ApiResponse(success=True, message="Ingestion agent is already stopped.")
 
         logger.info("Attempting to stop live DataIngestionAgent...")
