@@ -7,7 +7,11 @@ import torch
 import shutil
 import os
 from pathlib import Path
-from tensorus.tensor_storage import TensorStorage # Assuming tensor_storage.py is in the same directory or accessible via PYTHONPATH
+from tensorus.tensor_storage import (
+    TensorStorage,
+    DatasetNotFoundError,
+    TensorNotFoundError,
+)  # Assuming tensor_storage.py is accessible
 
 class TestTensorStorageInMemory(unittest.TestCase):
     def setUp(self):
@@ -52,7 +56,7 @@ class TestTensorStorageInMemory(unittest.TestCase):
         self.assertIn("dtype", retrieved_data["metadata"])
 
         # Test inserting into non-existent dataset
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DatasetNotFoundError):
             self.storage.insert("non_existent_dataset", self.tensor1)
         
         # Test inserting non-tensor data
@@ -68,7 +72,7 @@ class TestTensorStorageInMemory(unittest.TestCase):
         self.assertTrue(torch.equal(tensors[0], self.tensor1))
         self.assertTrue(torch.equal(tensors[1], self.tensor2))
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DatasetNotFoundError):
             self.storage.get_dataset("non_existent_dataset")
 
     def test_get_dataset_with_metadata(self):
@@ -82,7 +86,7 @@ class TestTensorStorageInMemory(unittest.TestCase):
         self.assertTrue(torch.equal(data_with_meta[1]["tensor"], self.tensor2))
         self.assertEqual(data_with_meta[1]["metadata"]["source"], self.meta2["source"])
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DatasetNotFoundError):
             self.storage.get_dataset_with_metadata("non_existent_dataset")
 
     def test_get_tensor_by_id(self):
@@ -91,9 +95,10 @@ class TestTensorStorageInMemory(unittest.TestCase):
         retrieved = self.storage.get_tensor_by_id(self.dataset_name1, record_id1)
         self.assertIsNotNone(retrieved)
         self.assertTrue(torch.equal(retrieved["tensor"], self.tensor1))
-        
-        self.assertIsNone(self.storage.get_tensor_by_id(self.dataset_name1, "non_existent_id"))
-        with self.assertRaises(ValueError):
+
+        with self.assertRaises(TensorNotFoundError):
+            self.storage.get_tensor_by_id(self.dataset_name1, "non_existent_id")
+        with self.assertRaises(DatasetNotFoundError):
             self.storage.get_tensor_by_id("non_existent_dataset", record_id1)
 
     def test_query(self):
@@ -120,7 +125,7 @@ class TestTensorStorageInMemory(unittest.TestCase):
             self.storage.query(self.dataset_name1, "not a function")
         
         # Query on non-existent dataset
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DatasetNotFoundError):
             self.storage.query("non_existent_dataset", lambda t, m: True)
 
     def test_list_datasets(self):
@@ -144,9 +149,11 @@ class TestTensorStorageInMemory(unittest.TestCase):
         self.assertEqual(retrieved["metadata"]["source"], self.meta1["source"]) # Original meta should persist
 
         # Test updating non-existent record_id
-        self.assertFalse(self.storage.update_tensor_metadata(self.dataset_name1, "fake_id", new_meta))
+        with self.assertRaises(TensorNotFoundError):
+            self.storage.update_tensor_metadata(self.dataset_name1, "fake_id", new_meta)
         # Test updating in non-existent dataset
-        self.assertFalse(self.storage.update_tensor_metadata("fake_dataset", record_id, new_meta))
+        with self.assertRaises(DatasetNotFoundError):
+            self.storage.update_tensor_metadata("fake_dataset", record_id, new_meta)
 
         # Test that record_id cannot be changed
         self.storage.update_tensor_metadata(self.dataset_name1, record_id, {"record_id": "new_record_id"})
@@ -163,13 +170,16 @@ class TestTensorStorageInMemory(unittest.TestCase):
         delete_success = self.storage.delete_tensor(self.dataset_name1, record_id1)
         self.assertTrue(delete_success)
         self.assertEqual(len(self.storage.get_dataset(self.dataset_name1)), 1)
-        self.assertIsNone(self.storage.get_tensor_by_id(self.dataset_name1, record_id1))
+        with self.assertRaises(TensorNotFoundError):
+            self.storage.get_tensor_by_id(self.dataset_name1, record_id1)
         self.assertIsNotNone(self.storage.get_tensor_by_id(self.dataset_name1, record_id2))
 
         # Test deleting non-existent record_id
-        self.assertFalse(self.storage.delete_tensor(self.dataset_name1, "fake_id"))
+        with self.assertRaises(TensorNotFoundError):
+            self.storage.delete_tensor(self.dataset_name1, "fake_id")
         # Test deleting from non-existent dataset
-        self.assertFalse(self.storage.delete_tensor("fake_dataset", record_id2))
+        with self.assertRaises(DatasetNotFoundError):
+            self.storage.delete_tensor("fake_dataset", record_id2)
 
     def test_delete_dataset(self):
         self.storage.create_dataset(self.dataset_name1)
@@ -182,7 +192,8 @@ class TestTensorStorageInMemory(unittest.TestCase):
         self.assertEqual(self.storage.list_datasets(), [])
 
         # Test deleting non-existent dataset
-        self.assertFalse(self.storage.delete_dataset("fake_dataset"))
+        with self.assertRaises(DatasetNotFoundError):
+            self.storage.delete_dataset("fake_dataset")
 
     def test_sample_dataset(self):
         self.storage.create_dataset(self.dataset_name1)
@@ -206,7 +217,7 @@ class TestTensorStorageInMemory(unittest.TestCase):
         self.assertCountEqual([s["metadata"]["record_id"] for s in samples_10], ids)
         
         # Sample from non-existent dataset
-        with self.assertRaises(ValueError):
+        with self.assertRaises(DatasetNotFoundError):
             self.storage.sample_dataset("non_existent_dataset", 1)
 
 
@@ -293,7 +304,8 @@ class TestTensorStoragePersistent(unittest.TestCase):
 
         # New instance
         storage2 = TensorStorage(storage_path=str(self.test_dir))
-        self.assertIsNone(storage2.get_tensor_by_id(self.dataset_name1, record_id1))
+        with self.assertRaises(TensorNotFoundError):
+            storage2.get_tensor_by_id(self.dataset_name1, record_id1)
         self.assertIsNotNone(storage2.get_tensor_by_id(self.dataset_name1, record_id2))
         self.assertEqual(len(storage2.get_dataset(self.dataset_name1)), 1)
 
