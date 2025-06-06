@@ -793,8 +793,6 @@ async def get_tensor_by_id_api(
     """
     try:
         record = storage.get_tensor_by_id(dataset_name, record_id)
-        if record is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tensor record '{record_id}' not found in dataset '{dataset_name}'.")
 
         shape, dtype, data_list = tensor_to_list(record['tensor'])
         return TensorOutput(
@@ -1387,10 +1385,6 @@ async def _get_tensor_from_ref(tensor_ref: TensorRef, storage: TensorStorage) ->
     """Helper to fetch a tensor from storage using a TensorRef."""
     try:
         record = storage.get_tensor_by_id(tensor_ref.dataset_name, tensor_ref.record_id)
-        if record is None:
-            logger.warning(f"Tensor record '{tensor_ref.record_id}' not found in dataset '{tensor_ref.dataset_name}'.")
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail=f"Input tensor '{tensor_ref.record_id}' not found in dataset '{tensor_ref.dataset_name}'.")
         if not isinstance(record.get('tensor'), torch.Tensor):
             logger.error(f"Retrieved object for '{tensor_ref.record_id}' in '{tensor_ref.dataset_name}' is not a tensor. Type: {type(record.get('tensor'))}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

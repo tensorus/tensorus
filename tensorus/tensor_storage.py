@@ -8,6 +8,13 @@ import random # Added for sampling
 import os
 from pathlib import Path
 
+# Public exceptions for dataset/tensor lookups
+class DatasetNotFoundError(ValueError):
+    """Raised when a requested dataset does not exist."""
+
+class TensorNotFoundError(ValueError):
+    """Raised when a requested tensor record cannot be found."""
+
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -165,12 +172,12 @@ class TensorStorage:
                  system-generated.
 
         Raises:
-            ValueError: If the dataset `name` does not exist.
+            DatasetNotFoundError: If the dataset `name` does not exist.
             TypeError: If the provided `tensor` object is not a PyTorch tensor.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for insertion.")
-            raise ValueError(f"Dataset '{name}' does not exist. Create it first.")
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist. Create it first.")
 
         if not isinstance(tensor, torch.Tensor):
             logging.error(f"Attempted to insert non-tensor data into dataset '{name}'.")
@@ -234,11 +241,11 @@ class TensorStorage:
             List[torch.Tensor]: A list of all tensors in the dataset.
 
         Raises:
-            ValueError: If the dataset `name` does not exist.
+            DatasetNotFoundError: If the dataset `name` does not exist.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for retrieval.")
-            raise ValueError(f"Dataset '{name}' does not exist.")
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist.")
 
         logging.debug(f"Retrieving all {len(self.datasets[name]['tensors'])} tensors from dataset '{name}'.")
         # --- Placeholder for Reassembling Chunks ---
@@ -259,11 +266,11 @@ class TensorStorage:
                                  associated 'metadata' (Dict[str, Any]).
 
         Raises:
-            ValueError: If the dataset `name` does not exist.
+            DatasetNotFoundError: If the dataset `name` does not exist.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for retrieval with metadata.")
-            raise ValueError(f"Dataset '{name}' does not exist.")
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist.")
 
         logging.debug(f"Retrieving all {len(self.datasets[name]['tensors'])} tensors and metadata from dataset '{name}'.")
 
@@ -291,12 +298,12 @@ class TensorStorage:
                                  query function.
 
         Raises:
-            ValueError: If the dataset `name` does not exist.
+            DatasetNotFoundError: If the dataset `name` does not exist.
             TypeError: If `query_fn` is not a callable function.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for querying.")
-            raise ValueError(f"Dataset '{name}' does not exist.")
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist.")
 
         if not callable(query_fn):
              logging.error(f"Provided query_fn is not callable for dataset '{name}'.")
@@ -321,7 +328,7 @@ class TensorStorage:
         return results # Returns List of dictionaries, each containing 'tensor' and 'metadata'
 
 
-    def get_tensor_by_id(self, name: str, record_id: str) -> Optional[Dict[str, Any]]:
+    def get_tensor_by_id(self, name: str, record_id: str) -> Dict[str, Any]:
         """
         Retrieves a specific tensor and its metadata by its unique record ID.
 
@@ -330,16 +337,15 @@ class TensorStorage:
             record_id (str): The unique ID of the record to retrieve.
 
         Returns:
-            Optional[Dict[str, Any]]: A dictionary containing the 'tensor' and
-                                     'metadata', or None if the `record_id` is
-                                     not found in the specified dataset.
+            Dict[str, Any]: A dictionary containing the 'tensor' and 'metadata'.
 
         Raises:
-            ValueError: If the dataset `name` does not exist.
+            DatasetNotFoundError: If the dataset `name` does not exist.
+            TensorNotFoundError: If the `record_id` is not found in the dataset.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for get_tensor_by_id.")
-            raise ValueError(f"Dataset '{name}' does not exist.")
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist.")
 
         # This is inefficient for large datasets; requires an index in a real system.
         for tensor, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
@@ -348,7 +354,7 @@ class TensorStorage:
                  return {"tensor": tensor, "metadata": meta}
 
         logging.warning(f"Tensor with record_id '{record_id}' not found in dataset '{name}'.")
-        return None
+        raise TensorNotFoundError(f"Tensor '{record_id}' not found in dataset '{name}'.")
 
     # --- ADDED METHOD (from Step 3) ---
     def sample_dataset(self, name: str, n_samples: int) -> List[Dict[str, Any]]:
@@ -367,11 +373,11 @@ class TensorStorage:
                                  if `n_samples` is non-positive.
 
         Raises:
-            ValueError: If the dataset `name` does not exist.
+            DatasetNotFoundError: If the dataset `name` does not exist.
         """
         if name not in self.datasets:
             logging.error(f"Dataset '{name}' not found for sampling.")
-            raise ValueError(f"Dataset '{name}' does not exist.")
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist.")
 
         dataset_size = len(self.datasets[name]["tensors"])
         if n_samples <= 0:
@@ -405,8 +411,10 @@ class TensorStorage:
             name (str): The name of the dataset to delete.
 
         Returns:
-            bool: True if the dataset was deleted (from memory and disk if applicable),
-                  False if the dataset did not exist.
+            bool: True if the dataset was deleted (from memory and disk if applicable).
+
+        Raises:
+            DatasetNotFoundError: If the dataset `name` does not exist.
         """
         if name in self.datasets:
             # If persistence is enabled, attempt to delete the dataset file
@@ -430,7 +438,7 @@ class TensorStorage:
             return True
         else:
             logging.warning(f"Attempted to delete non-existent dataset '{name}'.")
-            return False
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist.")
 
     def update_tensor_metadata(self, dataset_name: str, record_id: str, new_metadata: Dict[str, Any]) -> bool:
         """
@@ -445,12 +453,17 @@ class TensorStorage:
                                            ignored to prevent changing the unique ID.
 
         Returns:
-            bool: True if the metadata was updated successfully, False otherwise
-                  (e.g., dataset or `record_id` not found).
+            bool: True if the metadata was updated successfully.
+
+        Raises:
+            DatasetNotFoundError: If the dataset `dataset_name` does not exist.
+            TensorNotFoundError: If `record_id` is not found in the dataset.
         """
         if dataset_name not in self.datasets:
-            logging.warning(f"Dataset '{dataset_name}' not found for metadata update of record '{record_id}'.")
-            return False
+            logging.warning(
+                f"Dataset '{dataset_name}' not found for metadata update of record '{record_id}'."
+            )
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' does not exist.")
 
         dataset = self.datasets[dataset_name]
         found_record = False
@@ -477,8 +490,12 @@ class TensorStorage:
                 break # Exit loop once record is found and updated
         
         if not found_record:
-            logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for metadata update.")
-            return False
+            logging.warning(
+                f"Record '{record_id}' not found in dataset '{dataset_name}' for metadata update."
+            )
+            raise TensorNotFoundError(
+                f"Tensor '{record_id}' not found in dataset '{dataset_name}'."
+            )
         return True
 
     def delete_tensor(self, dataset_name: str, record_id: str) -> bool:
@@ -490,12 +507,17 @@ class TensorStorage:
             record_id (str): The unique ID of the tensor record to delete.
 
         Returns:
-            bool: True if the tensor was deleted successfully, False otherwise
-                  (e.g., dataset or `record_id` not found).
+            bool: True if the tensor was deleted successfully.
+
+        Raises:
+            DatasetNotFoundError: If the dataset `dataset_name` does not exist.
+            TensorNotFoundError: If `record_id` is not found in the dataset.
         """
         if dataset_name not in self.datasets:
-            logging.warning(f"Dataset '{dataset_name}' not found for deletion of record '{record_id}'.")
-            return False
+            logging.warning(
+                f"Dataset '{dataset_name}' not found for deletion of record '{record_id}'."
+            )
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' does not exist.")
 
         dataset = self.datasets[dataset_name]
         for i, meta in enumerate(dataset["metadata"]):
@@ -507,7 +529,10 @@ class TensorStorage:
                 return True
 
         logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for deletion.")
-        return False
+        raise TensorNotFoundError(f"Tensor '{record_id}' not found in dataset '{dataset_name}'.")
+
+# Public API exports
+__all__ = ["TensorStorage", "DatasetNotFoundError", "TensorNotFoundError"]
 
 # Example Usage (can be run directly if needed)
 if __name__ == "__main__":
