@@ -88,7 +88,11 @@ async def add_security_headers(request: Request, call_next):
 
 # Import Tensorus modules - Ensure these files exist in your project path
 try:
-    from .tensor_storage import TensorStorage
+    from .tensor_storage import (
+        TensorStorage,
+        DatasetNotFoundError,
+        TensorNotFoundError,
+    )
     from .nql_agent import NQLAgent
     from .tensor_ops import TensorOps
     # from rl_agent import RLAgent
@@ -221,6 +225,48 @@ def _simulate_agent_log(agent_id: str) -> str:
     # Safely get the agent name using .get()
     agent_name = agent_registry.get(agent_id, {}).get("name", agent_id) # Default to id if name missing
     return f"{ts} [{level}] ({agent_name}) {msg}"
+
+
+# --- Background Simulation Task ---
+async def _metrics_simulation_loop() -> None:
+    """Periodically updates simulated metrics for placeholder agents."""
+    while True:
+        try:
+            rl_state = agent_registry.get("rl_trainer")
+            if rl_state is not None:
+                rl_state["sim_steps"] = rl_state.get("sim_steps", 0) + random.randint(10, 150)
+
+            automl_state = agent_registry.get("automl_search")
+            if automl_state is not None:
+                automl_state["sim_trials"] = automl_state.get("sim_trials", 0) + random.randint(0, 3)
+                current_best = automl_state.get("sim_best_score")
+                if current_best is None:
+                    automl_state["sim_best_score"] = random.uniform(0.7, 0.95)
+                else:
+                    improvement = random.uniform(1.0, 1.005)
+                    automl_state["sim_best_score"] = min(1.0, current_best * improvement)
+        except Exception as exc:  # pragma: no cover - best effort logging
+            logger.error(f"Metrics simulation loop error: {exc}")
+
+        await asyncio.sleep(5)
+
+
+@app.on_event("startup")
+async def _start_simulation_task() -> None:
+    """Launch background metric simulation when the app starts."""
+    app.state.metrics_task = asyncio.create_task(_metrics_simulation_loop())
+
+
+@app.on_event("shutdown")
+async def _stop_simulation_task() -> None:
+    """Cancel background metric simulation on shutdown."""
+    task = getattr(app.state, "metrics_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:  # pragma: no cover
+            pass
 
 
 # --- Helper Functions (Tensor Conversion) ---
@@ -623,15 +669,12 @@ async def ingest_tensor(
         logger.info(f"Ingested tensor into dataset '{name}' with record_id: {record_id}")
         return ApiResponse(success=True, message="Tensor ingested successfully.", data={"record_id": record_id})
 
-    except ValueError as e: # Catch errors from list_to_tensor or storage.insert
-        logger.error(f"ValueError during ingestion into '{name}': {e}")
-        # Differentiate between bad data and dataset not found
-        # Suggestion: Modify TensorStorage to raise specific exceptions (e.g., DatasetNotFoundError)
-        # for more robust error handling here instead of string matching.
-        if "Dataset not found" in str(e) or "does not exist" in str(e): # Adapt based on TensorStorage's error messages
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dataset '{name}' not found.")
-        else: # Assume other ValueErrors are due to bad input data/shape/dtype
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid tensor data or parameters: {e}")
+    except DatasetNotFoundError as e:
+        logger.warning(f"Dataset not found during ingestion into '{name}': {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        logger.error(f"Validation error during ingestion into '{name}': {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid tensor data or parameters: {e}")
     except TypeError as e: # Catch potential type errors during tensor creation
         logger.error(f"TypeError during ingestion into '{name}': {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid data type provided: {e}")
@@ -697,9 +740,12 @@ async def fetch_dataset(
         logger.info(log_message)
         return ApiResponse(success=True, message=log_message, data=output_records)
 
-    except ValueError as e: # Typically "Dataset not found" from storage
+    except DatasetNotFoundError as e:
         logger.warning(f"Attempted to fetch non-existent dataset '{name}': {e}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        logger.error(f"Validation error fetching dataset '{name}': {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
          logger.exception(f"Unexpected error fetching dataset '{name}': {e}")
          raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error while fetching dataset.")
@@ -758,9 +804,14 @@ async def get_tensor_by_id_api(
             data=data_list,
             metadata=record['metadata']
         )
-    except ValueError as e: # Catch "Dataset not found"
-        logger.warning(f"Dataset not found while trying to get tensor by ID: {dataset_name}, {record_id}. Error: {e}")
+    except DatasetNotFoundError as e:
+        logger.warning(
+            f"Dataset not found while fetching tensor '{record_id}' from '{dataset_name}': {e}"
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        logger.error(f"Validation error retrieving tensor '{record_id}' from '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.exception(f"Error fetching tensor '{record_id}' from dataset '{dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error fetching tensor.")
@@ -777,9 +828,12 @@ async def delete_dataset_api(
         storage.delete_dataset(dataset_name)
         logger.info(f"Dataset '{dataset_name}' deleted successfully.")
         return ApiResponse(success=True, message=f"Dataset '{dataset_name}' deleted successfully.")
-    except ValueError as e: # Catch "Dataset not found"
+    except DatasetNotFoundError as e:
         logger.warning(f"Attempted to delete non-existent dataset '{dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        logger.error(f"Validation error deleting dataset '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.exception(f"Error deleting dataset '{dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error deleting dataset.")
@@ -797,14 +851,15 @@ async def delete_tensor_api(
         storage.delete_tensor(dataset_name, record_id)
         logger.info(f"Tensor record '{record_id}' deleted successfully from dataset '{dataset_name}'.")
         return ApiResponse(success=True, message=f"Tensor record '{record_id}' deleted successfully.")
-    except ValueError as e: # Catch "Dataset not found" or "Tensor not found"
-        logger.warning(f"Error deleting tensor '{record_id}' from '{dataset_name}': {e}")
-        if "Dataset not found" in str(e): # Crude check, better if TensorStorage raises specific errors
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dataset '{dataset_name}' not found.")
-        elif "Tensor not found" in str(e) or "Record ID not found" in str(e):
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tensor record '{record_id}' not found in dataset '{dataset_name}'.")
-        else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except DatasetNotFoundError as e:
+        logger.warning(f"Error deleting tensor from unknown dataset '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except TensorNotFoundError as e:
+        logger.warning(f"Tensor record '{record_id}' not found in '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        logger.error(f"Validation error deleting tensor '{record_id}' from '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.exception(f"Error deleting tensor '{record_id}' from dataset '{dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error deleting tensor.")
@@ -824,14 +879,15 @@ async def update_tensor_metadata_api(
         storage.update_tensor_metadata(dataset_name, record_id, update_request.new_metadata)
         logger.info(f"Metadata for tensor '{record_id}' in dataset '{dataset_name}' updated successfully.")
         return ApiResponse(success=True, message="Tensor metadata updated successfully.")
-    except ValueError as e: # Catch "Dataset not found" or "Tensor not found"
-        logger.warning(f"Error updating metadata for tensor '{record_id}' in '{dataset_name}': {e}")
-        if "Dataset not found" in str(e):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dataset '{dataset_name}' not found.")
-        elif "Tensor not found" in str(e) or "Record ID not found" in str(e):
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tensor record '{record_id}' not found in dataset '{dataset_name}'.")
-        else: # Other ValueErrors could be due to invalid metadata structure if TensorStorage validates it
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid request: {e}")
+    except DatasetNotFoundError as e:
+        logger.warning(f"Dataset not found while updating metadata for '{record_id}' in '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except TensorNotFoundError as e:
+        logger.warning(f"Tensor '{record_id}' not found in '{dataset_name}' during metadata update: {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        logger.error(f"Validation error updating metadata for tensor '{record_id}' in '{dataset_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid request: {e}")
     except Exception as e:
         logger.exception(f"Error updating metadata for tensor '{record_id}' in dataset '{dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating tensor metadata.")
@@ -1264,33 +1320,18 @@ async def get_dashboard_metrics(storage: TensorStorage = Depends(get_tensor_stor
     metrics_data["data_ingestion_rate"] = random.uniform(5.0, 50.0) * (1.0 if ingestion_running else 0.1)
     metrics_data["avg_query_latency_ms"] = random.uniform(50.0, 300.0) * (1 + 0.5 * math.sin(current_time / 60)) # Smoother oscillation
 
-    # --- Simulation state update (WARNING: Modifies state in GET request) ---
-    # This part modifies the global state. Better practice: use a background task.
-    rl_agent_state = agent_registry.setdefault("rl_trainer", {"sim_steps": 0}) # Ensure key and sim_steps exist
-    rl_total_steps = int(max(0, rl_agent_state.get("sim_steps", 0) + (random.randint(10, 150) if rl_running else 0))) # Adjusted range
-    rl_agent_state["sim_steps"] = rl_total_steps # Store simulated steps back
+    # --- Simulation state reading ---
+    # State mutation for these counters is handled in a background task started on app startup.
+    rl_agent_state = agent_registry.get("rl_trainer", {})
+    rl_total_steps = int(rl_agent_state.get("sim_steps", 0))
     metrics_data["rl_total_steps"] = rl_total_steps
-    metrics_data["rl_latest_reward"] = random.gauss(10, 5.0) if rl_running else None # Example reward distribution
+    metrics_data["rl_latest_reward"] = random.gauss(10, 5.0) if rl_running else None
 
-    automl_agent_state = agent_registry.setdefault("automl_search", {"sim_trials": 0, "sim_best_score": None}) # Ensure keys exist
-    automl_trials_completed = int(max(0, automl_agent_state.get("sim_trials", 0) + (random.randint(0, 3) if automl_running else 0)))
-    automl_agent_state["sim_trials"] = automl_trials_completed
+    automl_agent_state = agent_registry.get("automl_search", {})
+    automl_trials_completed = int(automl_agent_state.get("sim_trials", 0))
     metrics_data["automl_trials_completed"] = automl_trials_completed
-
-    current_best = automl_agent_state.get("sim_best_score", None)
-    automl_best_score = None
-    if automl_running:
-        if current_best is None:
-             automl_best_score = random.uniform(0.7, 0.95) # Example initial score (e.g., accuracy)
-        else:
-             # Simulate improvement (higher is better for this example score)
-             improvement_factor = random.uniform(1.0, 1.005)
-             automl_best_score = min(1.0, current_best * improvement_factor) # Cap at 1.0
-        automl_agent_state["sim_best_score"] = automl_best_score # Store back
-    elif current_best is not None:
-         automl_best_score = current_best # Keep last known best if stopped
-    metrics_data["automl_best_score"] = automl_best_score
-    # --- End Simulation state update ---
+    metrics_data["automl_best_score"] = automl_agent_state.get("sim_best_score")
+    # --- End simulation state reading ---
 
     # Simulate System Health (with bounds checks)
     cpu_load = random.uniform(5.0, 25.0) \
@@ -1333,12 +1374,6 @@ async def get_dashboard_metrics(storage: TensorStorage = Depends(get_tensor_stor
 
 
 # --- Root Endpoint ---
-@app.get("/", include_in_schema=False)
-async def read_root():
-    """Provides a simple welcome message for the API root."""
-    # Useful for health checks or simple verification that the API is running
-    return {"message": "Welcome to the Tensorus API! Visit /docs or /redoc for interactive documentation."}
-
 # --- Tensor Operations Router ---
 ops_router = APIRouter(
     prefix="/ops",
@@ -1361,9 +1396,21 @@ async def _get_tensor_from_ref(tensor_ref: TensorRef, storage: TensorStorage) ->
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                                 detail=f"Retrieved object for input tensor '{tensor_ref.record_id}' is not a valid tensor.")
         return record['tensor']
-    except ValueError as e: # Catch "Dataset not found" from storage
-        logger.warning(f"Dataset not found while trying to get tensor by ID: {tensor_ref.dataset_name}, {tensor_ref.record_id}. Error: {e}")
+    except DatasetNotFoundError as e:
+        logger.warning(
+            f"Dataset not found while fetching tensor '{tensor_ref.record_id}' from '{tensor_ref.dataset_name}': {e}"
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except TensorNotFoundError as e:
+        logger.warning(
+            f"Tensor '{tensor_ref.record_id}' not found in '{tensor_ref.dataset_name}': {e}"
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        logger.error(
+            f"Validation error retrieving tensor '{tensor_ref.record_id}' from '{tensor_ref.dataset_name}': {e}"
+        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.exception(f"Unexpected error fetching tensor '{tensor_ref.record_id}' from dataset '{tensor_ref.dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1416,7 +1463,10 @@ async def _store_and_respond_ops(
             output_record_id=record_id,
             output_tensor_details=tensor_out_details
         )
-    except ValueError as e: # From storage.insert if dataset not found and not auto-created
+    except DatasetNotFoundError as e:
+        logger.warning(f"Output dataset '{output_dataset_name}' not found when storing result of '{op_name}': {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:  # Other validation errors
         logger.error(f"Failed to store result for '{op_name}' in '{output_dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Error storing result: {e}")
     except Exception as e:
