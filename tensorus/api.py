@@ -40,8 +40,8 @@ class NotFoundError(APIError):
     def __init__(self, detail: str = "Resource not found"):
         super().__init__(status_code=404, detail=detail)
 
-class ValidationError(APIError):
-    def __init__(self, detail: str = "Validation error"):
+class BadRequestError(APIError):
+    def __init__(self, detail: str = "Bad request"):
         super().__init__(status_code=400, detail=detail)
 
 # Custom middleware for logging
