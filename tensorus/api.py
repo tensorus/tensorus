@@ -107,9 +107,6 @@ if TYPE_CHECKING:
     # Import for type checking only to avoid heavy dependency during runtime
     from .ingestion_agent import DataIngestionAgent
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
 # --- Global Tensorus Instances ---
 try:
