@@ -13,6 +13,13 @@ import torch # Needed for integrated tensor utils
 from typing import List, Dict, Any, Optional, Union, Tuple # Needed for integrated tensor utils
 from pages.pages_shared_utils import get_api_status, get_agent_status, get_datasets # Updated imports
 
+# Work around a Streamlit bug where inspecting `torch.classes` during module
+# watching can raise a `RuntimeError`. Removing the module from `sys.modules`
+# prevents Streamlit's watcher from trying to access it.
+import sys
+if "torch.classes" in sys.modules:
+    del sys.modules["torch.classes"]
+
 # --- Page Configuration ---
 st.set_page_config(
     page_title="Tensorus Platform",
