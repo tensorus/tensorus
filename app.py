@@ -11,9 +11,7 @@ import requests # Needed for ui_utils functions if integrated
 import logging # Needed for ui_utils functions if integrated
 import torch # Needed for integrated tensor utils
 from typing import List, Dict, Any, Optional, Union, Tuple # Needed for integrated tensor utils
-import multiprocessing
-import uvicorn
-from tensorus.api import app as fastapi_app
+from pages.pages_shared_utils import get_api_status, get_agent_status, get_datasets # Updated imports
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -90,138 +88,33 @@ def tensor_to_list(tensor: torch.Tensor) -> Tuple[List[int], str, List[Any]]:
     data = tensor.tolist()
     return shape, dtype_str, data
 
-# --- Integrated UI Utilities (Preserved from former ui_utils.py) ---
-
-API_BASE_URL = "http://127.0.0.1:8000"
-
-def get_api_status():
-    """Checks if the backend API is reachable."""
-    try:
-        response = requests.get(f"{API_BASE_URL}/", timeout=2)
-        response.raise_for_status()
-        return True, response.json()
-    except requests.exceptions.RequestException as e:
-        logger.error(f"API connection error: {e}")
-        return False, {"error": str(e)}
-
-def get_agent_status():
-    """Fetches status for all agents from the backend."""
-    try:
-        response = requests.get(f"{API_BASE_URL}/agents/status", timeout=5)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error fetching agent status: {e}") # Handled by caller
-        return None
-
-def start_agent(agent_id: str):
-    """Sends a request to start an agent."""
-    try:
-        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/start", timeout=5)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error starting agent {agent_id}: {e}")
-        return {"success": False, "message": str(e)}
-
-def stop_agent(agent_id: str):
-    """Sends a request to stop an agent."""
-    try:
-        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/stop", timeout=5)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error stopping agent {agent_id}: {e}")
-        return {"success": False, "message": str(e)}
-
-def configure_agent(agent_id: str, config: dict):
-    """Sends a request to configure an agent."""
-    try:
-        response = requests.post(
-            f"{API_BASE_URL}/agents/{agent_id}/configure",
-            json={"config": config},
-            timeout=5
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error configuring agent {agent_id}: {e}")
-        return {"success": False, "message": str(e)}
-
-def post_nql_query(query: str):
-    """Sends an NQL query to the backend."""
-    try:
-        response = requests.post(
-            f"{API_BASE_URL}/chat/query",
-            json={"query": query},
-            timeout=15
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error posting NQL query: {e}")
-        return {"query": query, "response_text": "Error connecting to backend.", "error": str(e)}
-
-def get_datasets():
-    """Fetches the list of available datasets."""
-    try:
-        response = requests.get(f"{API_BASE_URL}/explorer/datasets", timeout=5)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("datasets", [])
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error fetching datasets: {e}")
-        return []
-
-def get_dataset_preview(dataset_name: str, limit: int = 5):
-    """Fetches preview data for a specific dataset."""
-    try:
-        response = requests.get(f"{API_BASE_URL}/explorer/dataset/{dataset_name}/preview?limit={limit}", timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error fetching preview for {dataset_name}: {e}")
-        return None
-
-def operate_explorer(dataset: str, operation: str, index: int, params: dict):
-    """Sends an operation request to the data explorer."""
-    payload = {
-        "dataset": dataset,
-        "operation": operation,
-        "tensor_index": index,
-        "params": params
-    }
-    try:
-        response = requests.post(
-            f"{API_BASE_URL}/explorer/operate",
-            json=payload,
-            timeout=15
-        )
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        # st.error(f"Connection Error performing operation '{operation}' on {dataset}: {e}")
-        return {"success": False, "metadata": {"error": str(e)}, "result_data": None}
-
 # --- Helper functions for dashboard (can be expanded) ---
 def get_total_tensors_placeholder():
-    # In a real app, this would call an API endpoint
-    # e.g., requests.get(f"{API_BASE_URL}/stats/total_tensors").json()['count']
-    return "1,234" # Placeholder
+    # For now, as this endpoint is hypothetical for this task
+    return "N/A"
 
+@st.cache_data(ttl=300)
 def get_active_datasets_placeholder():
-    # e.g., requests.get(f"{API_BASE_URL}/stats/active_datasets").json()['count']
-    return "15" # Placeholder
+    datasets = get_datasets()
+    if datasets: # get_datasets returns [] on error or if no datasets
+        return str(len(datasets))
+    return "Error"
 
+@st.cache_data(ttl=60)
 def get_agents_online_placeholder():
-    # e.g., count running agents from get_agent_status()
-    # For now, placeholder:
-    # agent_data = get_agent_status()
-    # if agent_data:
-    #     online = sum(1 for agent in agent_data.values() if agent.get('running'))
-    #     total = len(agent_data)
-    #     return f"{online}/{total} Online"
-    return "3/4 Online" # Placeholder
+    agent_data = get_agent_status()
+    if agent_data:
+        try:
+            # Assuming agent_data is a dict like {'agent_id': {'status': 'running', ...}}
+            # or {'agent_id': {'running': True, ...}}
+            online_agents = sum(1 for agent in agent_data.values()
+                                if agent.get('running') is True or str(agent.get('status', '')).lower() == 'running')
+            total_agents = len(agent_data)
+            return f"{online_agents}/{total_agents} Online"
+        except Exception as e:
+            logger.error(f"Error processing agent data for dashboard: {e}")
+            return "Error"
+    return "N/A" # If agent_data is None
 
 # --- CSS Styles ---
 # Renaming app.py's specific CSS loader to avoid confusion with the shared one.
@@ -320,38 +213,42 @@ def nexus_dashboard_content():
     st.markdown('<div class="metric-card-container">', unsafe_allow_html=True)
 
     # Card 1: Total Tensors
-    total_tensors = get_total_tensors_placeholder()
+    total_tensors_val = get_total_tensors_placeholder()
     st.markdown(f"""
     <div class="common-card metric-card">
         <div class="icon">⚙️</div>
         <h3>Total Tensors</h3>
-        <p class="metric-value">{total_tensors}</p>
+        <p class="metric-value">{total_tensors_val}</p>
     </div>
     """, unsafe_allow_html=True)
 
     # Card 2: Active Datasets
-    active_datasets = get_active_datasets_placeholder()
+    active_datasets_val = get_active_datasets_placeholder()
     st.markdown(f"""
     <div class="common-card metric-card">
         <div class="icon">📚</div>
         <h3>Active Datasets</h3>
-        <p class="metric-value">{active_datasets}</p>
+        <p class="metric-value">{active_datasets_val}</p>
     </div>
     """, unsafe_allow_html=True)
 
     # Card 3: Agents Online
-    agents_online = get_agents_online_placeholder()
+    agents_online_val = get_agents_online_placeholder()
     st.markdown(f"""
     <div class="common-card metric-card">
         <div class="icon">🤖</div>
         <h3>Agents Online</h3>
-        <p class="metric-value">{agents_online}</p>
+        <p class="metric-value">{agents_online_val}</p>
     </div>
     """, unsafe_allow_html=True)
 
     # Card 4: API Status
-    api_ok, _ = get_api_status()
-    api_status_text = "Connected" if api_ok else "Disconnected"
+    @st.cache_data(ttl=30)
+    def cached_get_api_status():
+        return get_api_status()
+
+    api_ok, _ = cached_get_api_status()
+    api_status_text_val = "Connected" if api_ok else "Disconnected"
     # Add specific class for API status icon coloring based on shared status styles
     api_status_icon_class = "api-status-connected" if api_ok else "api-status-disconnected"
     api_icon_char = "✔️" if api_ok else "❌"
@@ -359,7 +256,7 @@ def nexus_dashboard_content():
     <div class="common-card metric-card {api_status_icon_class}">
         <div class="icon">{api_icon_char}</div>
         <h3>API Status</h3>
-        <p class="metric-value">{api_status_text}</p>
+        <p class="metric-value">{api_status_text_val}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -386,12 +283,6 @@ def nexus_dashboard_content():
         </div>
         """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True) # Close activity-feed-container
-
-
-# --- FastAPI Server Process ---
-def run_fastapi_server():
-    """Runs the FastAPI server using Uvicorn."""
-    uvicorn.run(fastapi_app, host="127.0.0.1", port=8000, log_level="info")
 
 
 # --- Main Application ---
@@ -477,9 +368,4 @@ if __name__ == "__main__":
     if 'explorer_result' not in st.session_state: st.session_state.explorer_result = None
     if 'nql_response' not in st.session_state: st.session_state.nql_response = None
 
-    # Start FastAPI server in a separate process
-    fastapi_process = multiprocessing.Process(target=run_fastapi_server)
-    fastapi_process.daemon = True
-    fastapi_process.start()
-    
     main()
