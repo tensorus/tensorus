@@ -29,6 +29,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- FastAPI App Instance ---
+app = FastAPI(
+    title="Tensorus API",
+    description=(
+        "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
+        "Includes dataset management, NQL querying, and agent control."
+    ),
+    version="0.2.1",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    # contact={
+    #     "name": "API Support",
+    #     "url": "http://example.com/support",
+    #     "email": "support@example.com",
+    # },
+    # license_info={
+    #     "name": "Apache 2.0",
+    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    # }
+)
+
 # Custom exceptions
 class APIError(Exception):
     def __init__(self, status_code: int, detail: str):
@@ -513,28 +535,6 @@ class DashboardMetrics(BaseModel):
     automl_trials_completed: int = Field(..., description="Simulated number of AutoML trials completed.")
     system_cpu_usage_percent: float = Field(..., description="Simulated overall system CPU usage percentage.")
     system_memory_usage_percent: float = Field(..., description="Simulated overall system memory usage percentage.")
-
-# --- FastAPI App Instance ---
-app = FastAPI(
-    title="Tensorus API",
-    description=(
-        "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
-        "Includes dataset management, NQL querying, and agent control."
-    ),
-    version="0.2.1",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
-    # contact={
-    #     "name": "API Support",
-    #     "url": "http://example.com/support",
-    #     "email": "support@example.com",
-    # },
-    # license_info={
-    #     "name": "Apache 2.0",
-    #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
-    # }
-)
 
 # Add middleware
 app.add_middleware(LoggingMiddleware)
