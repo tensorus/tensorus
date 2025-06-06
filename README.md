@@ -65,7 +65,7 @@ graph TD
     %% API Gateway Layer
     subgraph API_Layer ["Backend Services"]
         API[FastAPI Backend]
-        MCP[MCP Server (Node.js)]
+        MCP["MCP Server (Node.js)"]
     end
 
     %% Core Storage with Method Interface
