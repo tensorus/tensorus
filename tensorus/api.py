@@ -21,14 +21,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, root_validator, ValidationError
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
-# Configure structured logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
-)
-logger = logging.getLogger(__name__)
-
 # --- FastAPI App Instance ---
 app = FastAPI(
     title="Tensorus API",
@@ -50,6 +42,14 @@ app = FastAPI(
     #     "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
     # }
 )
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 # Custom exceptions
 class APIError(Exception):
