@@ -131,7 +131,7 @@ def test_delete_tensor_api():
 
 def test_update_tensor_metadata_api():
     dataset_name = "test_update_meta_ds"
-    initial_metadata = {"source": "initial"}
+    initial_metadata = {"source": "initial", "old_field": "keep_me"}
     record_id = _ingest_tensor_for_test(client, dataset_name, "t_meta", [1], "bool", [True], metadata=initial_metadata)
 
     new_metadata = {"source": "updated", "version": 2}
@@ -147,7 +147,8 @@ def test_update_tensor_metadata_api():
     retrieved_metadata = response.json()["metadata"]
     for k, v in new_metadata.items():
         assert retrieved_metadata[k] == v
-    assert "record_id" in retrieved_metadata # System should preserve/add this
+    assert "record_id" in retrieved_metadata  # System should preserve/add this
+    assert "old_field" not in retrieved_metadata
 
     # Update non-existent tensor
     response = client.put(f"/datasets/{dataset_name}/tensors/non_id/metadata", json={"new_metadata": new_metadata})
