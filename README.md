@@ -7,6 +7,7 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 ## Key Features
 
 *   **Tensor Storage:** Efficiently store and retrieve PyTorch tensors with associated metadata.
+*   **Dataset Schemas:** Optional per-dataset schemas enforce required metadata fields and tensor shape/dtype.
 *   **Natural Query Language (NQL):** Query your tensor data using a simple, natural language-like syntax.
 *   **Agent Framework:** A foundation for building and integrating intelligent agents that interact with your data.
     *   **Data Ingestion Agent:** Automatically monitors a directory for new files and ingests them as tensors.
@@ -326,6 +327,26 @@ The API provides the following main endpoints:
     *   `GET /agents/{agent_id}/logs`: Get recent logs for an agent.
 *   **Metrics & Monitoring:**
     *   `GET /metrics/dashboard`: Get aggregated dashboard metrics.
+
+### Dataset Schemas
+
+Datasets can optionally include a schema when created. The schema defines
+required metadata fields and expected tensor `shape` and `dtype`. Inserts that
+violate the schema will raise a validation error.
+
+Example:
+
+```python
+schema = {
+    "shape": [3, 10],
+    "dtype": "float32",
+    "metadata": {"source": "str", "value": "int"}
+}
+storage.create_dataset("my_ds", schema=schema)
+storage.insert("my_ds", torch.rand(3, 10), {"source": "sensor", "value": 5})
+```
+
+### Streamlit UI
 
 ### Streamlit UI
 
@@ -748,7 +769,6 @@ async function example() {
     *   Support for diverse model architectures and custom models.
 *   **Model Management:** Add capabilities for saving, loading, versioning, and deploying trained models (from RL/AutoML).
 *   **Streaming Data Support:** Enhance Ingestion Agent to handle real-time streaming data.
-*   **Dataset Schema Validation:** Introduce mechanisms for defining and enforcing schemas for datasets in TensorStorage.
 *   **Resource Management:** Add tools and controls for monitoring and managing the resource consumption (CPU, memory) of agents.
 *   **Improved UI/UX:** Continuously refine the Streamlit UI for better usability and richer visualizations.
 *   **Comprehensive Testing:** Expand unit, integration, and end-to-end tests.
