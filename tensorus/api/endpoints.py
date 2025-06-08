@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Any
 from uuid import UUID
-from datetime import datetime # For time-based queries
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Body, Query, Path
 from pydantic import BaseModel, ValidationError
@@ -9,23 +9,22 @@ from tensorus.metadata.schemas import (
     TensorDescriptor, SemanticMetadata, DataType,
     LineageSourceType, LineageMetadata, ParentTensorLink,
     ComputationalMetadata, QualityMetadata, RelationalMetadata, UsageMetadata,
-    TensorDescriptor # For response models
 )
-from tensorus.metadata.storage import storage_instance
+from tensorus.metadata.storage_abc import MetadataStorage
+from tensorus.api.dependencies import get_storage_instance
 from tensorus.storage.connectors import mock_tensor_connector_instance
+from tensorus.metadata.schemas_iodata import TensorusExportData
 
-# For Pydantic models used in PATCH requests, e.g. LineageMetadataUpdate
-from pydantic import BaseModel as PydanticBaseModel # Alias to avoid conflict with schema.BaseModel if any
-from typing import TypeVar, Generic # For generic PATCH request body
+from pydantic import BaseModel as PydanticBaseModel
+from typing import TypeVar, Generic
 
-ModelType = TypeVar('ModelType', bound=PydanticBaseModel)
+from fastapi import Depends, Security, status # Added status for HTTPException
+from fastapi.responses import JSONResponse
+from .security import verify_api_key, api_key_header_auth
+from tensorus.audit import log_audit_event
 
-class PatchRequestBody(PydanticBaseModel, Generic[ModelType]):
-    # This can be used if we want a generic way to define PATCH bodies,
-    # but FastAPI handles dict directly for PATCH bodies which is often simpler.
-    # For this task, we'll use Dict[str, Any] for PATCH bodies directly in endpoints.
-    pass
-import copy # For duplicating tensor descriptor data
+import copy
+import uuid
 
 # Router for TensorDescriptor
 router_tensor_descriptor = APIRouter(
@@ -36,771 +35,500 @@ router_tensor_descriptor = APIRouter(
 
 # Router for SemanticMetadata
 router_semantic_metadata = APIRouter(
-    prefix="/semantic_metadata",
-    tags=["Semantic Metadata"],
+    prefix="/tensor_descriptors/{tensor_id}/semantic", # Corrected prefix for consistency
+    tags=["Semantic Metadata (Per Tensor)"],
     responses={404: {"description": "Not found"}},
 )
 
 # --- TensorDescriptor Endpoints ---
+@router_tensor_descriptor.post("/", response_model=TensorDescriptor, status_code=status.HTTP_201_CREATED)
+async def create_tensor_descriptor(
+    descriptor_data: Dict[str, Any],
+    storage: MetadataStorage = Depends(get_storage_instance),
+    api_key: str = Depends(verify_api_key)
+):
+    tensor_id_str = descriptor_data.get("tensor_id")
+    temp_id_for_lookup = UUID(tensor_id_str) if tensor_id_str else uuid.uuid4()
 
-@router_tensor_descriptor.post("/", response_model=TensorDescriptor, status_code=201,
-                               summary="Create Tensor Descriptor",
-                               description="Adds a new tensor descriptor to the metadata store. "
-                                           "If `shape`, `data_type`, or `byte_size` are not provided "
-                                           "and the tensor exists in storage, these details will be "
-                                           "fetched from the mock tensor store.")
-async def create_tensor_descriptor(descriptor_data: Dict[str, Any]):
-    tensor_id = descriptor_data.get("tensor_id")
-    if not tensor_id:
-        # If tensor_id is not provided in the request, Pydantic will create one by default.
-        # We need a UUID to check the mock store. Let Pydantic handle generation if fully new.
-        # However, if we intend to link to an *existing* tensor in storage, tensor_id *must* be provided.
-        pass # Allow Pydantic to generate if it's truly a new tensor not yet in storage
-
-    # Attempt to fetch details from mock storage if some fields are missing
-    # and a tensor_id was provided or generated that might exist in the mock store.
-    # This logic assumes that if a tensor_id is given, it *might* already be in the mock tensor store.
-
-    # Create a preliminary TensorDescriptor to get a valid tensor_id if not provided
-    # This is a bit of a workaround due to how Pydantic default_factory for tensor_id works
-    temp_id_for_lookup = UUID(tensor_id) if tensor_id else uuid.uuid4() # Use provided or generate one for lookup
-
-    # Fields to potentially fetch from storage
-    fields_to_fetch = ["shape", "data_type", "byte_size", "dimensionality"] # dimensionality added
+    fields_to_fetch = ["shape", "data_type", "byte_size", "dimensionality"]
     missing_fields = [field for field in fields_to_fetch if field not in descriptor_data or descriptor_data[field] is None]
 
     if missing_fields:
-        print(f"Missing fields {missing_fields} for tensor {temp_id_for_lookup}, attempting to fetch from mock storage.")
-        # Try to get details from the mock tensor storage
-        # This implies the tensor data should already exist in the mock storage if we are to fetch details.
-        # For this example, we assume `mock_tensor_connector_instance.store_tensor` might have been called separately,
-        # or `get_tensor_details` can generate details for a known (even if not explicitly stored) tensor_id.
         storage_details = mock_tensor_connector_instance.get_tensor_details(temp_id_for_lookup)
         if storage_details:
-            print(f"Fetched details from mock storage: {storage_details}")
             for field in missing_fields:
                 if field in storage_details and (field not in descriptor_data or descriptor_data[field] is None) :
                     descriptor_data[field] = storage_details[field]
-
-            # Special handling for dimensionality if shape is present
             if "shape" in descriptor_data and descriptor_data["shape"] is not None \
                and ("dimensionality" not in descriptor_data or descriptor_data["dimensionality"] is None):
                 descriptor_data["dimensionality"] = len(descriptor_data["shape"])
-        else:
-            print(f"Could not fetch details for tensor {temp_id_for_lookup} from mock storage.")
-            # If still missing after trying to fetch, Pydantic validation will catch it if mandatory
-
     try:
-        # Now create the final TensorDescriptor with potentially auto-filled data
         final_descriptor = TensorDescriptor(**descriptor_data)
-        storage_instance.add_tensor_descriptor(final_descriptor)
-
-        # As a demonstration, if we just created a descriptor for a tensor,
-        # let's ensure it's "stored" in the mock tensor storage if it wasn't already.
-        # This is more for completing the loop in the mock scenario.
+        storage.add_tensor_descriptor(final_descriptor)
         if mock_tensor_connector_instance.retrieve_tensor(final_descriptor.tensor_id) is None:
-            # Store some dummy data or the descriptor itself as placeholder
             mock_tensor_data_payload = {
-                "shape": final_descriptor.shape,
-                "data_type": final_descriptor.data_type.value,
-                "byte_size": final_descriptor.byte_size,
-                "info": "Placeholder data stored by create_tensor_descriptor endpoint"
+                "shape": final_descriptor.shape, "data_type": final_descriptor.data_type.value,
+                "byte_size": final_descriptor.byte_size, "info": "Placeholder data by create_tensor_descriptor"
             }
             mock_tensor_connector_instance.store_tensor(final_descriptor.tensor_id, mock_tensor_data_payload)
-            print(f"Stored placeholder tensor data for {final_descriptor.tensor_id} in mock storage.")
-
+        log_audit_event(action="CREATE_TENSOR_DESCRIPTOR", user=api_key, tensor_id=str(final_descriptor.tensor_id),
+                        details={"owner": final_descriptor.owner, "data_type": final_descriptor.data_type.value})
         return final_descriptor
-    except ValidationError as e: # Pydantic validation error
-        raise HTTPException(status_code=422, detail=e.errors())
-    except ValueError as e: # Custom validation errors from schemas or storage
-        raise HTTPException(status_code=400, detail=str(e))
+    except ValidationError as e:
+        log_audit_event(action="CREATE_TENSOR_DESCRIPTOR_FAILED_VALIDATION", user=api_key, details={"error": str(e), "input_tensor_id": tensor_id_str})
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=e.errors())
+    except ValueError as e:
+        log_audit_event(action="CREATE_TENSOR_DESCRIPTOR_FAILED_STORAGE", user=api_key, details={"error": str(e), "input_tensor_id": tensor_id_str})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-
-@router_tensor_descriptor.get("/", response_model=List[TensorDescriptor],
-                              summary="List Tensor Descriptors with Advanced Filtering",
-                              description="Lists all tensor descriptors, with optional filtering by core fields and extended metadata.")
+@router_tensor_descriptor.get("/", response_model=List[TensorDescriptor], summary="List Tensor Descriptors with Advanced Filtering")
 async def list_tensor_descriptors(
-    # Core TensorDescriptor fields
-    owner: Optional[str] = Query(None, description="Filter by owner of the tensor."),
-    data_type: Optional[DataType] = Query(None, description="Filter by data type of the tensor (e.g., float32, int64)."),
-    tags_contain: Optional[List[str]] = Query(None, description="Filter by tensors containing ALL specified tags."),
-    # LineageMetadata fields
-    lineage_version: Optional[str] = Query(None, alias="lineage.version", description="Filter by lineage version."),
-    lineage_source_type: Optional[LineageSourceType] = Query(None, alias="lineage.source.type", description="Filter by lineage source type."),
-    # ComputationalMetadata fields
-    comp_algorithm: Optional[str] = Query(None, alias="computational.algorithm", description="Filter by computational algorithm used."),
-    comp_gpu_model: Optional[str] = Query(None, alias="computational.hardware_info.gpu_model", description="Filter by GPU model used in computation (example of nested query)."),
-    # QualityMetadata fields
-    quality_confidence_gt: Optional[float] = Query(None, alias="quality.confidence_score_gt", description="Filter by quality confidence score greater than specified value."),
-    quality_noise_lt: Optional[float] = Query(None, alias="quality.noise_level_lt", description="Filter by quality noise level less than specified value."),
-    # RelationalMetadata fields
-    rel_collection: Optional[str] = Query(None, alias="relational.collection", description="Filter by tensors belonging to a specific collection."),
-    rel_has_related_tensor_id: Optional[UUID] = Query(None, alias="relational.has_related_tensor_id", description="Filter by tensors that have a specific related tensor ID."),
-    # UsageMetadata fields
-    usage_last_accessed_before: Optional[datetime] = Query(None, alias="usage.last_accessed_before", description="Filter by tensors last accessed before this timestamp."),
-    usage_used_by_app: Optional[str] = Query(None, alias="usage.used_by_app", description="Filter by tensors used by a specific application.")
+    owner: Optional[str] = Query(None), data_type: Optional[DataType] = Query(None),
+    tags_contain: Optional[List[str]] = Query(None), lineage_version: Optional[str] = Query(None, alias="lineage.version"),
+    lineage_source_type: Optional[LineageSourceType] = Query(None, alias="lineage.source.type"),
+    comp_algorithm: Optional[str] = Query(None, alias="computational.algorithm"),
+    comp_gpu_model: Optional[str] = Query(None, alias="computational.hardware_info.gpu_model"),
+    quality_confidence_gt: Optional[float] = Query(None, alias="quality.confidence_score_gt"),
+    quality_noise_lt: Optional[float] = Query(None, alias="quality.noise_level_lt"),
+    rel_collection: Optional[str] = Query(None, alias="relational.collection"),
+    rel_has_related_tensor_id: Optional[UUID] = Query(None, alias="relational.has_related_tensor_id"),
+    usage_last_accessed_before: Optional[datetime] = Query(None, alias="usage.last_accessed_before"),
+    usage_used_by_app: Optional[str] = Query(None, alias="usage.used_by_app"),
+    storage: MetadataStorage = Depends(get_storage_instance)
 ):
-    all_descriptors = storage_instance.list_tensor_descriptors()
+    all_descriptors = storage.list_tensor_descriptors(
+        owner=owner, data_type=data_type, tags_contain=tags_contain, lineage_version=lineage_version
+    ) # Pass some common filters
     filtered_descriptors = []
-
-    for desc in all_descriptors:
-        # --- Core Field Filtering ---
-        if owner is not None and desc.owner != owner:
-            continue
-        if data_type is not None and desc.data_type != data_type:
-            continue
-        if tags_contain is not None:
-            if not desc.tags or not all(tag in desc.tags for tag in tags_contain):
-                continue
-
-        # --- Extended Metadata Filtering ---
-        # For simplicity, fetching extended metadata for each descriptor.
-        # In a real DB, this would be part of the query.
-
-        # Lineage
-        if lineage_version is not None or lineage_source_type is not None:
-            lineage_meta = storage_instance.get_lineage_metadata(desc.tensor_id)
-            if lineage_meta:
-                if lineage_version is not None and lineage_meta.version != lineage_version:
-                    continue
-                if lineage_source_type is not None and (not lineage_meta.source or lineage_meta.source.type != lineage_source_type):
-                    continue
-            else: # If lineage filters are active, and no lineage meta, then it doesn't match
-                continue
-
-        # Computational
-        if comp_algorithm is not None or comp_gpu_model is not None:
-            comp_meta = storage_instance.get_computational_metadata(desc.tensor_id)
-            if comp_meta:
-                if comp_algorithm is not None and comp_meta.algorithm != comp_algorithm:
-                    continue
-                if comp_gpu_model is not None:
-                    # Example for nested dict query:
-                    gpu = comp_meta.hardware_info.get("gpu_model") if comp_meta.hardware_info else None
-                    if gpu != comp_gpu_model:
-                        continue
-            else:
-                continue
-
-        # Quality
-        if quality_confidence_gt is not None or quality_noise_lt is not None:
-            qual_meta = storage_instance.get_quality_metadata(desc.tensor_id)
-            if qual_meta:
-                if quality_confidence_gt is not None and (qual_meta.confidence_score is None or qual_meta.confidence_score <= quality_confidence_gt):
-                    continue
-                if quality_noise_lt is not None and (qual_meta.noise_level is None or qual_meta.noise_level >= quality_noise_lt):
-                    continue
-            else:
-                continue
-
-        # Relational
-        if rel_collection is not None or rel_has_related_tensor_id is not None:
-            rel_meta = storage_instance.get_relational_metadata(desc.tensor_id)
-            if rel_meta:
-                if rel_collection is not None and rel_collection not in rel_meta.collections:
-                    continue
-                if rel_has_related_tensor_id is not None:
-                    found_related = any(rt_link.related_tensor_id == rel_has_related_tensor_id for rt_link in rel_meta.related_tensors)
-                    if not found_related:
-                        continue
-            else:
-                continue
-
-        # Usage
-        if usage_last_accessed_before is not None or usage_used_by_app is not None:
-            usage_meta = storage_instance.get_usage_metadata(desc.tensor_id)
-            if usage_meta:
-                if usage_last_accessed_before is not None and (usage_meta.last_accessed_at is None or usage_meta.last_accessed_at >= usage_last_accessed_before):
-                    continue
-                if usage_used_by_app is not None and usage_used_by_app not in usage_meta.application_references:
-                    continue
-            else: # If usage filters active, and no usage meta, then no match
-                continue
-
+    for desc in all_descriptors: # Apply remaining filters in memory
+        if lineage_source_type and (not (lm := storage.get_lineage_metadata(desc.tensor_id)) or not lm.source or lm.source.type != lineage_source_type): continue
+        if comp_algorithm or comp_gpu_model:
+            cm = storage.get_computational_metadata(desc.tensor_id)
+            if not cm: continue
+            if comp_algorithm and cm.algorithm != comp_algorithm: continue
+            if comp_gpu_model and (not cm.hardware_info or cm.hardware_info.get("gpu_model") != comp_gpu_model): continue
+        if quality_confidence_gt or quality_noise_lt:
+            qm = storage.get_quality_metadata(desc.tensor_id)
+            if not qm: continue
+            if quality_confidence_gt and (qm.confidence_score is None or qm.confidence_score <= quality_confidence_gt): continue
+            if quality_noise_lt and (qm.noise_level is None or qm.noise_level >= quality_noise_lt): continue
+        if rel_collection or rel_has_related_tensor_id:
+            rm = storage.get_relational_metadata(desc.tensor_id)
+            if not rm: continue
+            if rel_collection and rel_collection not in rm.collections: continue
+            if rel_has_related_tensor_id and not any(rtl.related_tensor_id == rel_has_related_tensor_id for rtl in rm.related_tensors): continue
+        if usage_last_accessed_before or usage_used_by_app:
+            um = storage.get_usage_metadata(desc.tensor_id)
+            if not um: continue
+            if usage_last_accessed_before and (not um.last_accessed_at or um.last_accessed_at >= usage_last_accessed_before): continue
+            if usage_used_by_app and usage_used_by_app not in um.application_references: continue
         filtered_descriptors.append(desc)
-
     return filtered_descriptors
 
-@router_tensor_descriptor.get("/{tensor_id}", response_model=TensorDescriptor,
-                                summary="Get Tensor Descriptor by ID",
-                                description="Retrieves a specific tensor descriptor by its unique ID.")
-async def get_tensor_descriptor(tensor_id: UUID = Path(..., description="The UUID of the tensor descriptor.")): # type: ignore
-    descriptor = storage_instance.get_tensor_descriptor(tensor_id)
-    if descriptor is None:
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found.")
+@router_tensor_descriptor.get("/{tensor_id}", response_model=TensorDescriptor)
+async def get_tensor_descriptor(tensor_id: UUID = Path(...), storage: MetadataStorage = Depends(get_storage_instance)):
+    descriptor = storage.get_tensor_descriptor(tensor_id)
+    if not descriptor: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"TensorDescriptor ID {tensor_id} not found.")
     return descriptor
 
-# For PUT, Pydantic models are not directly used in FastAPI for partial updates in the way one might expect.
-# We accept a dictionary and then apply the updates.
 class TensorDescriptorUpdate(BaseModel):
-    dimensionality: Optional[int] = None
-    shape: Optional[List[int]] = None
-    data_type: Optional[DataType] = None
-    storage_format: Optional[str] = None # Assuming StorageFormat enum values are passed as strings
-    owner: Optional[str] = None
-    access_control: Optional[Dict[str, List[str]]] = None
-    byte_size: Optional[int] = None
-    compression_info: Optional[Dict[str, Any]] = None
-    tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, str]] = None
+    dimensionality: Optional[int]=None; shape: Optional[List[int]]=None; data_type: Optional[DataType]=None
+    storage_format: Optional[str]=None; owner: Optional[str]=None; access_control: Optional[Dict[str, List[str]]]=None
+    byte_size: Optional[int]=None; compression_info: Optional[Dict[str, Any]]=None
+    tags: Optional[List[str]]=None; metadata: Optional[Dict[str, Any]]=None
 
-@router_tensor_descriptor.put("/{tensor_id}", response_model=TensorDescriptor,
-                               summary="Update Tensor Descriptor",
-                               description="Updates an existing tensor descriptor. Allows partial updates of fields.")
+@router_tensor_descriptor.put("/{tensor_id}", response_model=TensorDescriptor)
 async def update_tensor_descriptor(
-    tensor_id: UUID = Path(..., description="The UUID of the tensor descriptor to update."), # type: ignore
-    updates: TensorDescriptorUpdate = Body(..., description="A dictionary containing the fields to update.") # type: ignore
+    tensor_id: UUID = Path(...), updates: TensorDescriptorUpdate = Body(...),
+    storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
 ):
     update_data = updates.dict(exclude_unset=True)
-
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No update data provided.")
-
-    current_descriptor = storage_instance.get_tensor_descriptor(tensor_id)
-    if not current_descriptor:
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found for update.")
-
+    if not update_data: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+    current = storage.get_tensor_descriptor(tensor_id)
+    if not current:
+        log_audit_event("UPDATE_TENSOR_DESCRIPTOR_FAILED_NOT_FOUND", api_key, str(tensor_id))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"TensorDescriptor ID {tensor_id} not found.")
     try:
-        updated_descriptor = storage_instance.update_tensor_descriptor(tensor_id, **update_data)
-        if updated_descriptor is None:
-             raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} failed to update.")
-        return updated_descriptor
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        updated = storage.update_tensor_descriptor(tensor_id, **update_data)
+        log_audit_event("UPDATE_TENSOR_DESCRIPTOR", api_key, str(tensor_id), {"updated_fields": list(update_data.keys())})
+        return updated
+    except (ValidationError, ValueError) as e:
+        log_audit_event("UPDATE_TENSOR_DESCRIPTOR_FAILED_VALIDATION", api_key, str(tensor_id), {"error": str(e)})
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(e, ValidationError) else status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-
-@router_tensor_descriptor.delete("/{tensor_id}", status_code=200,
-                                 summary="Delete Tensor Descriptor",
-                                 description="Deletes a tensor descriptor, its associated semantic metadata, and also attempts to delete the tensor data from the mock tensor store.")
-async def delete_tensor_descriptor(tensor_id: UUID = Path(..., description="The UUID of the tensor descriptor to delete.")): # type: ignore
-    metadata_deleted = storage_instance.delete_tensor_descriptor(tensor_id)
-    if not metadata_deleted:
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found in metadata store.")
-
-    tensor_data_deleted = mock_tensor_connector_instance.delete_tensor(tensor_id)
-    if tensor_data_deleted: # This is true if deleted or not found in mock store (idempotent)
-        return {"message": f"TensorDescriptor {tensor_id} and associated data deleted successfully from metadata store. Mock tensor store delete attempt finished."}
-    # Fallback message if needed, but current mock_delete always returns True if no error
-    return {"message": f"TensorDescriptor {tensor_id} deleted from metadata. Mock tensor store delete attempt finished."}
-
+@router_tensor_descriptor.delete("/{tensor_id}", status_code=status.HTTP_200_OK)
+async def delete_tensor_descriptor(
+    tensor_id: UUID = Path(...), storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
+):
+    if not storage.get_tensor_descriptor(tensor_id):
+        log_audit_event("DELETE_TENSOR_DESCRIPTOR_FAILED_NOT_FOUND", api_key, str(tensor_id))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"TensorDescriptor ID {tensor_id} not found.")
+    storage.delete_tensor_descriptor(tensor_id)
+    mock_tensor_connector_instance.delete_tensor(tensor_id)
+    log_audit_event("DELETE_TENSOR_DESCRIPTOR", api_key, str(tensor_id))
+    return {"message": f"TensorDescriptor {tensor_id} and associated data deleted."}
 
 # --- SemanticMetadata Endpoints ---
+def _check_td_exists_for_semantic(tensor_id: UUID, storage: MetadataStorage, api_key: Optional[str] = None, action_prefix: str = ""):
+    if not storage.get_tensor_descriptor(tensor_id):
+        if api_key and action_prefix:
+            log_audit_event(f"{action_prefix}_SEMANTIC_METADATA_FAILED_TD_NOT_FOUND", user=api_key, tensor_id=str(tensor_id))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Parent TensorDescriptor ID {tensor_id} not found.")
 
-@router_semantic_metadata.post("/", response_model=SemanticMetadata, status_code=201,
-                                 summary="Create Semantic Metadata",
-                                 description="Adds new semantic metadata linked to an existing TensorDescriptor.")
-async def create_semantic_metadata(metadata: SemanticMetadata): # type: ignore
-    if storage_instance.get_tensor_descriptor(metadata.tensor_id) is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"TensorDescriptor with ID {metadata.tensor_id} not found. Cannot add semantic metadata."
-        )
-    try:
-        storage_instance.add_semantic_metadata(metadata)
-        return metadata
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
-
-
-@router_semantic_metadata.get("/{tensor_id}", response_model=List[SemanticMetadata],
-                                summary="Get Semantic Metadata for a Tensor",
-                                description="Retrieves all semantic metadata entries associated with a given TensorDescriptor ID.")
-async def get_semantic_metadata_for_tensor(tensor_id: UUID = Path(..., description="The UUID of the tensor descriptor.")): # type: ignore
-    if storage_instance.get_tensor_descriptor(tensor_id) is None:
-         raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found, so no semantic metadata can be retrieved.")
-
-    metadata_list = storage_instance.get_semantic_metadata(tensor_id)
-    return metadata_list
-
-class SemanticMetadataUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-
-
-@router_semantic_metadata.put("/{tensor_id}/{name}", response_model=SemanticMetadata,
-                                 summary="Update Semantic Metadata",
-                                 description="Updates the description and/or name of a specific semantic metadata entry. The entry is identified by the tensor ID and its current name.")
-async def update_semantic_metadata_entry(
-    tensor_id: UUID = Path(..., description="The UUID of the tensor descriptor."), # type: ignore
-    name: str = Path(..., description="The current name of the semantic metadata entry to be updated."), # type: ignore
-    updates: SemanticMetadataUpdate = Body(..., description="The fields to update. Both 'name' and 'description' are optional.") # type: ignore
+@router_semantic_metadata.post("/", response_model=SemanticMetadata, status_code=status.HTTP_201_CREATED)
+async def create_semantic_metadata_for_tensor(
+    tensor_id: UUID = Path(...), metadata_in: SemanticMetadata = Body(...),
+    storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
 ):
-    if updates.description is None and updates.name is None:
-        raise HTTPException(status_code=400, detail="No update data provided for 'name' or 'description'.")
-
-    if storage_instance.get_tensor_descriptor(tensor_id) is None:
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found.")
-
+    _check_td_exists_for_semantic(tensor_id, storage, api_key, "CREATE")
+    if metadata_in.tensor_id != tensor_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tensor_id in path and body must match.")
     try:
-        updated_metadata = storage_instance.update_semantic_metadata(
-            tensor_id,
-            name,
-            new_description=updates.description,
-            new_name=updates.name
-        )
-    except ValueError as e: # Catch errors from storage, e.g. new name already exists
-        raise HTTPException(status_code=400, detail=str(e))
+        storage.add_semantic_metadata(metadata_in)
+        log_audit_event("CREATE_SEMANTIC_METADATA", api_key, str(tensor_id), {"name": metadata_in.name})
+        return metadata_in
+    except (ValidationError, ValueError) as e:
+        log_audit_event("CREATE_SEMANTIC_METADATA_FAILED", api_key, str(tensor_id), {"name": metadata_in.name, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST if isinstance(e, ValueError) else status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
-    if updated_metadata is None:
-        raise HTTPException(status_code=404, detail=f"SemanticMetadata with name '{name}' for tensor ID {tensor_id} not found.")
-    return updated_metadata
+@router_semantic_metadata.get("/", response_model=List[SemanticMetadata])
+async def get_all_semantic_metadata_for_tensor(tensor_id: UUID = Path(...), storage: MetadataStorage = Depends(get_storage_instance)):
+    _check_td_exists_for_semantic(tensor_id, storage)
+    return storage.get_semantic_metadata(tensor_id)
 
+class SemanticMetadataUpdate(BaseModel): name: Optional[str] = None; description: Optional[str] = None
 
-@router_semantic_metadata.delete("/{tensor_id}/{name}", status_code=200,
-                                  summary="Delete Specific Semantic Metadata",
-                                  description="Deletes a specific semantic metadata entry identified by its name, for a given tensor ID.")
-async def delete_specific_semantic_metadata(
-    tensor_id: UUID = Path(..., description="The UUID of the tensor descriptor."), # type: ignore
-    name: str = Path(..., description="The name of the semantic metadata entry to delete.") # type: ignore
+@router_semantic_metadata.put("/{current_name}", response_model=SemanticMetadata)
+async def update_named_semantic_metadata_for_tensor(
+    tensor_id: UUID = Path(...), current_name: str = Path(...), updates: SemanticMetadataUpdate = Body(...),
+    storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
 ):
-    if storage_instance.get_tensor_descriptor(tensor_id) is None:
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found.")
+    _check_td_exists_for_semantic(tensor_id, storage, api_key, "UPDATE")
+    if not updates.dict(exclude_unset=True): raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+    if not storage.get_semantic_metadata_by_name(tensor_id, current_name):
+        log_audit_event("UPDATE_SEMANTIC_METADATA_FAILED_NOT_FOUND", api_key, str(tensor_id), {"name": current_name})
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SemanticMetadata '{current_name}' not found for tensor {tensor_id}.")
+    try:
+        updated = storage.update_semantic_metadata(tensor_id, current_name, new_description=updates.description, new_name=updates.name)
+        log_audit_event("UPDATE_SEMANTIC_METADATA", api_key, str(tensor_id), {"original_name": current_name, "updated_fields": updates.dict(exclude_unset=True)})
+        return updated
+    except (ValidationError, ValueError) as e:
+        log_audit_event("UPDATE_SEMANTIC_METADATA_FAILED", api_key, str(tensor_id), {"name": current_name, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST if isinstance(e, ValueError) else status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
-    if not storage_instance.delete_semantic_metadata(tensor_id, name):
-        raise HTTPException(status_code=404, detail=f"SemanticMetadata with name '{name}' for tensor ID {tensor_id} not found or already deleted.")
-    return {"message": f"SemanticMetadata '{name}' for tensor {tensor_id} deleted successfully."}
+@router_semantic_metadata.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_named_semantic_metadata_for_tensor(
+    tensor_id: UUID = Path(...), name: str = Path(...),
+    storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
+):
+    _check_td_exists_for_semantic(tensor_id, storage, api_key, "DELETE")
+    if not storage.get_semantic_metadata_by_name(tensor_id, name):
+        log_audit_event("DELETE_SEMANTIC_METADATA_FAILED_NOT_FOUND", api_key, str(tensor_id), {"name": name})
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SemanticMetadata '{name}' not found for tensor {tensor_id}.")
+    storage.delete_semantic_metadata(tensor_id, name)
+    log_audit_event("DELETE_SEMANTIC_METADATA", api_key, str(tensor_id), {"name": name})
+    return None
 
-# --- Search and Aggregation Routers ---
-router_search_aggregate = APIRouter(
-    tags=["Search & Aggregate"]
-)
-
-@router_search_aggregate.get("/search/tensors/", response_model=List[TensorDescriptor],
-                             summary="Search Tensor Descriptors",
-                             description="Performs a text-based search across specified fields of tensor descriptors and their associated metadata.")
+# --- Search and Aggregation Routers (GET - No Auth/Audit) ---
+router_search_aggregate = APIRouter(tags=["Search & Aggregate"])
+@router_search_aggregate.get("/search/tensors/", response_model=List[TensorDescriptor])
 async def search_tensors(
-    text_query: str = Query(..., min_length=1, description="The text to search for."),
-    fields_to_search: Optional[List[str]] = Query(None, description="List of fields to search (e.g., 'owner', 'tags', 'semantic.description', 'lineage.source.identifier'). If empty, searches a predefined set.")
+    text_query: str = Query(..., min_length=1), fields_to_search: Optional[List[str]] = Query(None),
+    storage: MetadataStorage = Depends(get_storage_instance)
 ):
-    if not fields_to_search: # Default fields if none provided
-        fields_to_search = [
-            "tensor_id", "owner", "tags", "metadata", # From TensorDescriptor
-            "semantic.name", "semantic.description", # From SemanticMetadata (assuming one per tensor for simplicity here, or search all)
-            "lineage.source.identifier", "lineage.version", # From LineageMetadata
-            "computational.algorithm" # From ComputationalMetadata
-        ]
-    try:
-        results = storage_instance.search_tensor_descriptors(text_query, fields_to_search)
-        return results
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    default_fields = ["tensor_id", "owner", "tags", "metadata", "semantic.name", "semantic.description", "lineage.source.identifier", "lineage.version", "computational.algorithm"]
+    try: return storage.search_tensor_descriptors(text_query, fields_to_search or default_fields)
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-
-@router_search_aggregate.get("/aggregate/tensors/", response_model=Dict[str, Any],
-                               summary="Aggregate Tensor Descriptors",
-                               description="Performs aggregation on tensor descriptors based on a group-by field and an aggregation function.")
+@router_search_aggregate.get("/aggregate/tensors/", response_model=Dict[str, Any])
 async def aggregate_tensors(
-    group_by_field: str = Query(..., description="Field to group by (e.g., 'data_type', 'owner', 'semantic.name', 'lineage.source.type')."),
-    agg_function: str = Query(..., description="Aggregation function to apply (e.g., 'count', 'avg', 'sum', 'min', 'max')."),
-    agg_field: Optional[str] = Query(None, description="Field to aggregate for functions like 'avg', 'sum', 'min', 'max' (e.g., 'byte_size', 'computational.computation_time_seconds').")
+    group_by_field: str = Query(...), agg_function: str = Query(...), agg_field: Optional[str] = Query(None),
+    storage: MetadataStorage = Depends(get_storage_instance)
 ):
-    # Basic validation for agg_field requirement
     if agg_function in ["avg", "sum", "min", "max"] and not agg_field:
-        raise HTTPException(status_code=400, detail=f"'{agg_function}' aggregation requires 'agg_field' to be specified.")
-    if agg_function == "count" and agg_field:
-        # For 'count', agg_field is not strictly necessary but could be used to count non-null values of that field.
-        # For simplicity, we'll ignore it for 'count' here or could raise a warning/error.
-        pass
-
-    try:
-        results = storage_instance.aggregate_tensor_descriptors(group_by_field, agg_function, agg_field)
-        return results
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except NotImplementedError as e:
-        raise HTTPException(status_code=501, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{agg_function}' requires 'agg_field'.")
+    try: return storage.aggregate_tensor_descriptors(group_by_field, agg_function, agg_field)
+    except ValueError as e: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotImplementedError as e: raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(e))
 
 # --- Versioning and Lineage Router ---
-router_version_lineage = APIRouter(
-    tags=["Versioning & Lineage"]
-)
-
+router_version_lineage = APIRouter(tags=["Versioning & Lineage"])
 class NewTensorVersionRequest(BaseModel):
-    new_version_string: str
-    # Allow specifying changes for the new TensorDescriptor
-    # All fields are optional; if not provided, they might be copied from the parent.
-    dimensionality: Optional[int] = None
-    shape: Optional[List[int]] = None
-    data_type: Optional[DataType] = None
-    storage_format: Optional[str] = None
-    owner: Optional[str] = None
-    access_control: Optional[Dict[str, List[str]]] = None # Simplified for request
-    byte_size: Optional[int] = None
-    checksum: Optional[str] = None
-    compression_info: Optional[Dict[str, Any]] = None
-    tags: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
-    # Add fields for other metadata types if they should be settable for a new version
-    # For example, a new LineageSource for this version if it's materially different
-    lineage_source_identifier: Optional[str] = None
-    lineage_source_type: Optional[LineageSourceType] = None
+    new_version_string: str; dimensionality: Optional[int]=None; shape: Optional[List[int]]=None; data_type: Optional[DataType]=None
+    storage_format: Optional[str]=None; owner: Optional[str]=None; access_control: Optional[Dict[str, List[str]]]=None
+    byte_size: Optional[int]=None; checksum: Optional[str]=None; compression_info: Optional[Dict[str, Any]]=None
+    tags: Optional[List[str]]=None; metadata: Optional[Dict[str, Any]]=None
+    lineage_source_identifier: Optional[str]=None; lineage_source_type: Optional[LineageSourceType]=None
 
-
-@router_version_lineage.post("/tensors/{tensor_id}/versions", response_model=TensorDescriptor, status_code=201,
-                               summary="Create a New Version of a Tensor",
-                               description="Creates a new TensorDescriptor as a new version of an existing tensor. "
-                                           "The new version will have its own unique tensor_id and will be linked "
-                                           "to the original tensor via LineageMetadata.")
+@router_version_lineage.post("/tensors/{tensor_id}/versions", response_model=TensorDescriptor, status_code=status.HTTP_201_CREATED)
 async def create_tensor_version(
-    tensor_id: UUID = Path(..., description="The UUID of the tensor to version."), # type: ignore
-    version_request: NewTensorVersionRequest = Body(...) # type: ignore
+    tensor_id: UUID = Path(...), version_request: NewTensorVersionRequest = Body(...),
+    storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
 ):
-    parent_td = storage_instance.get_tensor_descriptor(tensor_id)
+    parent_td = storage.get_tensor_descriptor(tensor_id)
     if not parent_td:
-        raise HTTPException(status_code=404, detail=f"Parent TensorDescriptor with ID {tensor_id} not found.")
-
-    new_version_id = uuid.uuid4() # Generate new ID for the version
-
-    # Prepare data for the new TensorDescriptor
-    # Start by copying parent data, then override with request values
-    new_td_data = parent_td.dict(exclude={'tensor_id', 'creation_timestamp', 'last_modified_timestamp'}) # Pydantic v1
-
-    # Override with values from the request
+        log_audit_event("CREATE_TENSOR_VERSION_FAILED_PARENT_NOT_FOUND", api_key, str(tensor_id), {"new_version": version_request.new_version_string})
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Parent TensorDescriptor ID {tensor_id} not found.")
+    new_version_id = uuid.uuid4()
+    new_td_data = parent_td.dict(exclude={'tensor_id', 'creation_timestamp', 'last_modified_timestamp'})
     for field, value in version_request.dict(exclude_unset=True).items():
-        if hasattr(TensorDescriptor.__fields__.get(field), 'annotation'): # Check if it's a field of TD
-             if value is not None : new_td_data[field] = value
-        # Exclude fields that are not part of TensorDescriptor schema directly like 'new_version_string'
-        # or lineage_source_... which are handled separately.
-        # This simple check might need refinement based on Pydantic version and exact field names.
+        if field in TensorDescriptor.__fields__ and value is not None: new_td_data[field] = value
         elif field not in ['new_version_string', 'lineage_source_identifier', 'lineage_source_type']:
-            # If it's not a direct TD field and not a special request field, it might be intended for TD.metadata
             if new_td_data.get("metadata") is None: new_td_data["metadata"] = {}
             new_td_data["metadata"][field] = value
-
-
-    new_td_data["tensor_id"] = new_version_id
-    new_td_data["creation_timestamp"] = datetime.utcnow()
-    new_td_data["last_modified_timestamp"] = new_td_data["creation_timestamp"]
-
-    # Ensure required fields like owner, byte_size, etc. are present if not copied or set
-    # This relies on Pydantic validation during TensorDescriptor creation.
-    # If owner/byte_size are not in version_request and not copied (e.g. if parent_td.dict() excluded them),
-    # this would need explicit handling or ensure they are always copied.
-    # For now, assume parent_td.dict() includes them.
-    if 'owner' not in new_td_data or new_td_data['owner'] is None:
-        new_td_data['owner'] = parent_td.owner # Default to parent's owner
-    if 'byte_size' not in new_td_data or new_td_data['byte_size'] is None:
-        # Byte size might change, this is a placeholder. Ideally, it should be provided or recalculated.
-        new_td_data['byte_size'] = parent_td.byte_size
-
+    new_td_data.update({
+        "tensor_id": new_version_id, "creation_timestamp": datetime.utcnow(),
+        "last_modified_timestamp": datetime.utcnow(),
+        "owner": new_td_data.get('owner', parent_td.owner),
+        "byte_size": new_td_data.get('byte_size', parent_td.byte_size)
+    })
     try:
-        new_tensor_descriptor = TensorDescriptor(**new_td_data)
-        storage_instance.add_tensor_descriptor(new_tensor_descriptor)
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
-    except ValueError as e: # From storage_instance if ID exists (should not happen with uuid4)
-        raise HTTPException(status_code=400, detail=str(e))
+        new_td = TensorDescriptor(**new_td_data)
+        storage.add_tensor_descriptor(new_td)
+    except (ValidationError, ValueError) as e:
+        log_audit_event("CREATE_TENSOR_VERSION_FAILED_VALIDATION", api_key, str(new_version_id), {"parent_id": str(tensor_id), "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(e, ValidationError) else status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    # Create LineageMetadata for the new version
-    parent_link = ParentTensorLink(tensor_id=tensor_id, relationship="new_version_of")
-    lineage_data = {
-        "tensor_id": new_version_id,
-        "parent_tensors": [parent_link],
-        "version": version_request.new_version_string,
-    }
+    lineage_details = {"tensor_id": new_version_id, "parent_tensors": [ParentTensorLink(tensor_id=tensor_id, relationship="new_version_of")], "version": version_request.new_version_string}
     if version_request.lineage_source_identifier and version_request.lineage_source_type:
-        lineage_data["source"] = {
-            "type": version_request.lineage_source_type,
-            "identifier": version_request.lineage_source_identifier
-        }
+        lineage_details["source"] = LineageSource(type=version_request.lineage_source_type, identifier=version_request.lineage_source_identifier) # type: ignore
+    storage.add_lineage_metadata(LineageMetadata(**lineage_details))
+    log_audit_event("CREATE_TENSOR_VERSION", api_key, str(new_version_id), {"parent_id": str(tensor_id), "version": version_request.new_version_string})
+    return new_td
 
-    new_lineage_metadata = LineageMetadata(**lineage_data)
-    storage_instance.add_lineage_metadata(new_lineage_metadata)
-
-    # Optionally, copy other metadata types (Semantic, Computational etc.) or create new ones
-    # For now, only TensorDescriptor and basic LineageMetadata are created for the new version.
-
-    return new_tensor_descriptor
-
-
-@router_version_lineage.get("/tensors/{tensor_id}/versions", response_model=List[TensorDescriptor],
-                              summary="List Direct Next Versions of a Tensor",
-                              description="Lists TensorDescriptors that are direct 'next versions' of the given tensor ID. "
-                                          "This is based on LineageMetadata where the given tensor is a parent "
-                                          "with a 'new_version_of' relationship. Includes the tensor itself.")
-async def list_tensor_versions(tensor_id: UUID = Path(..., description="The UUID of the tensor.")): #type: ignore
+@router_version_lineage.get("/tensors/{tensor_id}/versions", response_model=List[TensorDescriptor])
+async def list_tensor_versions(tensor_id: UUID = Path(...), storage: MetadataStorage = Depends(get_storage_instance)):
     results = []
-    # Include the tensor itself if it exists
-    current_td = storage_instance.get_tensor_descriptor(tensor_id)
-    if current_td:
-        results.append(current_td)
-    else: # If the base tensor_id itself doesn't exist, we can't find versions of it.
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found.")
-
-    # Find direct children that are versions
-    # This simplified approach finds only direct children marked as new versions.
-    # A full version history might require traversing up to a root and then down all branches.
-    all_lineage_meta = [_lm for _lm in storage_instance._lineage_metadata_store.values() if _lm] # type: ignore # Accessing internal for demo
-
-    for lm_entry in all_lineage_meta:
-        if lm_entry.parent_tensors:
-            for parent_link in lm_entry.parent_tensors:
-                if parent_link.tensor_id == tensor_id and parent_link.relationship == "new_version_of":
-                    versioned_td = storage_instance.get_tensor_descriptor(lm_entry.tensor_id)
-                    if versioned_td and versioned_td not in results: # Avoid duplicates if somehow current_td was a version of itself
-                        results.append(versioned_td)
+    current_td = storage.get_tensor_descriptor(tensor_id)
+    if not current_td: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"TensorDescriptor ID {tensor_id} not found.")
+    results.append(current_td)
+    child_ids = storage.get_child_tensor_ids(tensor_id)
+    for child_id in child_ids:
+        child_lineage = storage.get_lineage_metadata(child_id)
+        if child_lineage and any(p.tensor_id == tensor_id and p.relationship == "new_version_of" for p in child_lineage.parent_tensors):
+            child_td_obj = storage.get_tensor_descriptor(child_id)
+            if child_td_obj: results.append(child_td_obj)
     return results
 
+class LineageRelationshipRequest(BaseModel): source_tensor_id: UUID; target_tensor_id: UUID; relationship_type: str; details: Optional[Dict[str, Any]] = None
 
-class LineageRelationshipRequest(BaseModel):
-    source_tensor_id: UUID
-    target_tensor_id: UUID
-    relationship_type: str
-    details: Optional[Dict[str, Any]] = None
+@router_version_lineage.post("/lineage/relationships/", status_code=status.HTTP_201_CREATED)
+async def create_lineage_relationship(
+    req: LineageRelationshipRequest, storage: MetadataStorage = Depends(get_storage_instance),
+    api_key: str = Depends(verify_api_key)
+):
+    audit_details = req.dict()
+    if not storage.get_tensor_descriptor(req.source_tensor_id):
+        log_audit_event("CREATE_LINEAGE_REL_FAILED_SRC_NOT_FOUND", api_key, details=audit_details)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Source TD {req.source_tensor_id} not found.")
+    if not storage.get_tensor_descriptor(req.target_tensor_id):
+        log_audit_event("CREATE_LINEAGE_REL_FAILED_TGT_NOT_FOUND", api_key, details=audit_details)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Target TD {req.target_tensor_id} not found.")
 
-@router_version_lineage.post("/lineage/relationships/", status_code=201,
-                               summary="Create a Lineage Relationship",
-                               description="Adds a parent-child lineage relationship between two tensors.")
-async def create_lineage_relationship(req: LineageRelationshipRequest): # type: ignore
-    source_td = storage_instance.get_tensor_descriptor(req.source_tensor_id)
-    target_td = storage_instance.get_tensor_descriptor(req.target_tensor_id)
-
-    if not source_td:
-        raise HTTPException(status_code=404, detail=f"Source TensorDescriptor ID {req.source_tensor_id} not found.")
-    if not target_td:
-        raise HTTPException(status_code=404, detail=f"Target TensorDescriptor ID {req.target_tensor_id} not found.")
-
-    target_lineage = storage_instance.get_lineage_metadata(req.target_tensor_id)
-    if not target_lineage:
-        target_lineage = LineageMetadata(tensor_id=req.target_tensor_id, parent_tensors=[])
-
-    # Avoid duplicate relationships
-    existing_link = next((p for p in target_lineage.parent_tensors if p.tensor_id == req.source_tensor_id and p.relationship == req.relationship_type), None)
-    if existing_link:
-        # Potentially update details if provided, or just return 200 OK.
-        if req.details and existing_link.details != req.details: # Pydantic models don't have details on ParentTensorLink
-             # ParentTensorLink does not have a 'details' field in its current schema.
-             # If it did, one might update: existing_link.details = req.details
-             pass # No details to update on ParentTensorLink
+    target_lineage = storage.get_lineage_metadata(req.target_tensor_id) or LineageMetadata(tensor_id=req.target_tensor_id)
+    if any(p.tensor_id == req.source_tensor_id and p.relationship == req.relationship_type for p in target_lineage.parent_tensors):
         return {"message": "Relationship already exists.", "lineage": target_lineage}
 
-
-    new_parent_link = ParentTensorLink(tensor_id=req.source_tensor_id, relationship=req.relationship_type)
-    target_lineage.parent_tensors.append(new_parent_link)
-
+    target_lineage.parent_tensors.append(ParentTensorLink(tensor_id=req.source_tensor_id, relationship=req.relationship_type))
     try:
-        if storage_instance.get_lineage_metadata(req.target_tensor_id):
-            storage_instance.update_lineage_metadata(req.target_tensor_id, parent_tensors=target_lineage.parent_tensors)
-        else:
-            storage_instance.add_lineage_metadata(target_lineage)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        storage.add_lineage_metadata(target_lineage)
+        log_audit_event("CREATE_LINEAGE_RELATIONSHIP", api_key, str(req.target_tensor_id), details=audit_details)
+        return {"message": "Lineage relationship created/updated.", "lineage": storage.get_lineage_metadata(req.target_tensor_id)}
+    except (ValidationError, ValueError) as e:
+        log_audit_event("CREATE_LINEAGE_REL_FAILED_VALIDATION", api_key, str(req.target_tensor_id), {**audit_details, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    return {"message": "Lineage relationship created/updated.", "lineage": target_lineage}
+@router_version_lineage.get("/tensors/{tensor_id}/lineage/parents", response_model=List[TensorDescriptor])
+async def get_parent_tensors(tensor_id: UUID = Path(...), storage: MetadataStorage = Depends(get_storage_instance)):
+    if not storage.get_tensor_descriptor(tensor_id): raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"TD {tensor_id} not found.")
+    parent_ids = storage.get_parent_tensor_ids(tensor_id)
+    return [td for pid in parent_ids if (td := storage.get_tensor_descriptor(pid)) is not None]
 
-
-@router_version_lineage.get("/tensors/{tensor_id}/lineage/parents", response_model=List[TensorDescriptor],
-                              summary="Get Parent Tensors",
-                              description="Retrieves the full TensorDescriptor objects for all direct parent tensors of the given tensor.")
-async def get_parent_tensors(tensor_id: UUID = Path(..., description="The UUID of the tensor.")): # type: ignore
-    if not storage_instance.get_tensor_descriptor(tensor_id):
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found.")
-
-    parent_ids = storage_instance.get_parent_tensor_ids(tensor_id)
-    parent_descriptors = [storage_instance.get_tensor_descriptor(pid) for pid in parent_ids if storage_instance.get_tensor_descriptor(pid)]
-    return parent_descriptors
-
-@router_version_lineage.get("/tensors/{tensor_id}/lineage/children", response_model=List[TensorDescriptor],
-                              summary="Get Child Tensors",
-                              description="Retrieves the full TensorDescriptor objects for all direct child tensors of the given tensor.")
-async def get_child_tensors(tensor_id: UUID = Path(..., description="The UUID of the tensor.")): # type: ignore
-    if not storage_instance.get_tensor_descriptor(tensor_id):
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found.")
-
-    child_ids = storage_instance.get_child_tensor_ids(tensor_id)
-    child_descriptors = [storage_instance.get_tensor_descriptor(cid) for cid in child_ids if storage_instance.get_tensor_descriptor(cid)]
-    return child_descriptors
-
+@router_version_lineage.get("/tensors/{tensor_id}/lineage/children", response_model=List[TensorDescriptor])
+async def get_child_tensors(tensor_id: UUID = Path(...), storage: MetadataStorage = Depends(get_storage_instance)):
+    if not storage.get_tensor_descriptor(tensor_id): raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"TD {tensor_id} not found.")
+    child_ids = storage.get_child_tensor_ids(tensor_id)
+    return [td for cid in child_ids if (td := storage.get_tensor_descriptor(cid)) is not None]
 
 # --- Router for Extended Metadata (CRUD per type) ---
-router_extended_metadata = APIRouter(
-    prefix="/tensor_descriptors/{tensor_id}", # Nested under tensor_descriptors
-    tags=["Extended Metadata"]
-)
+router_extended_metadata = APIRouter(prefix="/tensor_descriptors/{tensor_id}", tags=["Extended Metadata (Per Tensor)"])
 
-# Helper to check if TensorDescriptor exists
-def _get_td_or_404(tensor_id: UUID):
-    td = storage_instance.get_tensor_descriptor(tensor_id)
+def _get_td_or_404_for_extended_meta(tensor_id: UUID, storage: MetadataStorage, api_key: Optional[str]=None, action_prefix: str = ""): # Renamed from previous version
+    td = storage.get_tensor_descriptor(tensor_id)
     if not td:
-        raise HTTPException(status_code=404, detail=f"TensorDescriptor with ID {tensor_id} not found.")
+        if api_key and action_prefix: log_audit_event(f"{action_prefix}_METADATA_FAILED_TD_NOT_FOUND", user=api_key, tensor_id=str(tensor_id)) # Generic prefix
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Parent TensorDescriptor ID {tensor_id} not found.")
     return td
 
-# --- LineageMetadata CRUD ---
-@router_extended_metadata.post("/lineage", response_model=LineageMetadata, status_code=201,
-                                summary="Create or Replace Lineage Metadata",
-                                description="Creates new lineage metadata for a tensor or fully replaces existing lineage metadata.")
-async def upsert_lineage_metadata(
-    tensor_id: UUID = Path(..., description="The UUID of the TensorDescriptor."), # type: ignore
-    lineage_in: LineageMetadata # Full model for POST/PUT like behavior
-):
-    _get_td_or_404(tensor_id)
-    if lineage_in.tensor_id != tensor_id:
-        raise HTTPException(status_code=400, detail=f"tensor_id in path ({tensor_id}) does not match tensor_id in body ({lineage_in.tensor_id}).")
+async def _upsert_extended_metadata(tensor_id: UUID, metadata_name_cap: str, metadata_in: Any, storage: MetadataStorage, api_key: str):
+    _get_td_or_404_for_extended_meta(tensor_id, storage, api_key, f"UPSERT_{metadata_name_cap}")
+    if metadata_in.tensor_id != tensor_id:
+        log_audit_event(f"UPSERT_{metadata_name_cap}_FAILED_ID_MISMATCH", api_key, str(tensor_id), {"body_id": str(metadata_in.tensor_id)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Path tensor_id and body tensor_id must match.")
     try:
-        # The add_lineage_metadata in storage now acts as upsert (full replace)
-        storage_instance.add_lineage_metadata(lineage_in)
-        return lineage_in
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        add_method = getattr(storage, f"add_{metadata_name_cap.lower()}_metadata")
+        add_method(metadata_in)
+        log_audit_event(f"UPSERT_{metadata_name_cap}_METADATA", api_key, str(tensor_id))
+        return metadata_in
+    except (ValidationError, ValueError) as e:
+        log_audit_event(f"UPSERT_{metadata_name_cap}_FAILED", api_key, str(tensor_id), {"error": str(e)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST if isinstance(e, ValueError) else status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
-@router_extended_metadata.get("/lineage", response_model=LineageMetadata,
-                               summary="Get Lineage Metadata",
-                               description="Retrieves the lineage metadata for a specific tensor.")
-async def get_lineage_metadata(tensor_id: UUID = Path(..., description="The UUID of the TensorDescriptor.")): #type: ignore
-    _get_td_or_404(tensor_id)
-    lineage = storage_instance.get_lineage_metadata(tensor_id)
-    if not lineage:
-        raise HTTPException(status_code=404, detail=f"LineageMetadata not found for tensor ID {tensor_id}.")
-    return lineage
+async def _get_extended_metadata_ep(tensor_id: UUID, metadata_name_cap: str, storage: MetadataStorage): # Renamed to avoid clash
+    _get_td_or_404_for_extended_meta(tensor_id, storage)
+    get_method = getattr(storage, f"get_{metadata_name_cap.lower()}_metadata")
+    meta = get_method(tensor_id)
+    if not meta: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{metadata_name_cap}Metadata not found for tensor {tensor_id}.")
+    return meta
 
-@router_extended_metadata.patch("/lineage", response_model=LineageMetadata,
-                                 summary="Update Lineage Metadata (Partial)",
-                                 description="Partially updates the lineage metadata for a specific tensor.")
-async def patch_lineage_metadata(
-    tensor_id: UUID = Path(..., description="The UUID of the TensorDescriptor."), #type: ignore
-    updates: Dict[str, Any] = Body(..., description="Fields to update.") #type: ignore
-):
-    _get_td_or_404(tensor_id)
-    if not storage_instance.get_lineage_metadata(tensor_id): # Check if it exists before trying to update
-         raise HTTPException(status_code=404, detail=f"LineageMetadata not found for tensor ID {tensor_id} to update.")
+async def _patch_extended_metadata(tensor_id: UUID, metadata_name_cap: str, updates: Dict[str, Any], storage: MetadataStorage, api_key: str):
+    _get_td_or_404_for_extended_meta(tensor_id, storage, api_key, f"PATCH_{metadata_name_cap}")
+    get_method = getattr(storage, f"get_{metadata_name_cap.lower()}_metadata")
+    if not get_method(tensor_id):
+        log_audit_event(f"PATCH_{metadata_name_cap}_FAILED_NOT_FOUND", api_key, str(tensor_id))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{metadata_name_cap}Metadata not found for update.")
     try:
-        updated_lineage = storage_instance.update_lineage_metadata(tensor_id, **updates)
-        if not updated_lineage: # Should not happen if previous check passed, but good for safety
-            raise HTTPException(status_code=404, detail=f"Failed to update LineageMetadata for tensor ID {tensor_id}.")
-        return updated_lineage
-    except ValueError as e: # Catches validation errors from Pydantic model in storage.update
-        raise HTTPException(status_code=422, detail=str(e))
+        update_method = getattr(storage, f"update_{metadata_name_cap.lower()}_metadata")
+        updated_meta = update_method(tensor_id, **updates)
+        log_audit_event(f"PATCH_{metadata_name_cap}_METADATA", api_key, str(tensor_id), {"updated_fields": list(updates.keys())})
+        return updated_meta
+    except (ValidationError, ValueError) as e:
+        log_audit_event(f"PATCH_{metadata_name_cap}_FAILED_VALIDATION", api_key, str(tensor_id), {"error": str(e)})
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY if isinstance(e, ValidationError) else status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+async def _delete_extended_metadata(tensor_id: UUID, metadata_name_cap: str, storage: MetadataStorage, api_key: str):
+    _get_td_or_404_for_extended_meta(tensor_id, storage, api_key, f"DELETE_{metadata_name_cap}")
+    delete_method = getattr(storage, f"delete_{metadata_name_cap.lower()}_metadata")
+    if not delete_method(tensor_id):
+        log_audit_event(f"DELETE_{metadata_name_cap}_FAILED_NOT_FOUND", api_key, str(tensor_id))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{metadata_name_cap}Metadata not found for delete.")
+    log_audit_event(f"DELETE_{metadata_name_cap}_METADATA", api_key, str(tensor_id))
+    return None
 
-@router_extended_metadata.delete("/lineage", status_code=204,
-                                  summary="Delete Lineage Metadata",
-                                  description="Deletes the lineage metadata for a specific tensor.")
-async def delete_lineage_metadata(tensor_id: UUID = Path(..., description="The UUID of the TensorDescriptor.")): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.delete_lineage_metadata(tensor_id):
-        raise HTTPException(status_code=404, detail=f"LineageMetadata not found for tensor ID {tensor_id} to delete.")
-    return None # FastAPI will return 204 No Content
+# Explicit CRUD endpoints for each extended metadata type
+@router_extended_metadata.post("/lineage", response_model=LineageMetadata, status_code=status.HTTP_201_CREATED)
+async def upsert_lineage_metadata_ep(tensor_id: UUID=Path(...), lineage_in: LineageMetadata=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _upsert_extended_metadata(tensor_id, "Lineage", lineage_in, storage, api_key)
+@router_extended_metadata.get("/lineage", response_model=LineageMetadata)
+async def get_lineage_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance)):
+    return await _get_extended_metadata_ep(tensor_id, "Lineage", storage)
+@router_extended_metadata.patch("/lineage", response_model=LineageMetadata)
+async def patch_lineage_metadata_ep(tensor_id: UUID=Path(...), updates: Dict[str,Any]=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _patch_extended_metadata(tensor_id, "Lineage", updates, storage, api_key)
+@router_extended_metadata.delete("/lineage", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_lineage_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _delete_extended_metadata(tensor_id, "Lineage", storage, api_key)
 
-
-# --- ComputationalMetadata CRUD (Pattern repeated) ---
-@router_extended_metadata.post("/computational", response_model=ComputationalMetadata, status_code=201)
-async def upsert_computational_metadata(tensor_id: UUID, computational_in: ComputationalMetadata): #type: ignore
-    _get_td_or_404(tensor_id)
-    if computational_in.tensor_id != tensor_id: raise HTTPException(status_code=400, detail="Path tensor_id and body tensor_id mismatch.")
-    try: storage_instance.add_computational_metadata(computational_in); return computational_in
-    except ValueError as e: raise HTTPException(status_code=400, detail=str(e))
-
+@router_extended_metadata.post("/computational", response_model=ComputationalMetadata, status_code=status.HTTP_201_CREATED)
+async def upsert_computational_metadata_ep(tensor_id: UUID=Path(...), computational_in: ComputationalMetadata=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _upsert_extended_metadata(tensor_id, "Computational", computational_in, storage, api_key)
 @router_extended_metadata.get("/computational", response_model=ComputationalMetadata)
-async def get_computational_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id); meta = storage_instance.get_computational_metadata(tensor_id)
-    if not meta: raise HTTPException(status_code=404, detail="ComputationalMetadata not found.")
-    return meta
-
+async def get_computational_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance)):
+    return await _get_extended_metadata_ep(tensor_id, "Computational", storage)
 @router_extended_metadata.patch("/computational", response_model=ComputationalMetadata)
-async def patch_computational_metadata(tensor_id: UUID, updates: Dict[str, Any]): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.get_computational_metadata(tensor_id): raise HTTPException(status_code=404, detail="ComputationalMetadata not found for update.")
-    try: updated = storage_instance.update_computational_metadata(tensor_id, **updates); return updated
-    except ValueError as e: raise HTTPException(status_code=422, detail=str(e))
+async def patch_computational_metadata_ep(tensor_id: UUID=Path(...), updates: Dict[str,Any]=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _patch_extended_metadata(tensor_id, "Computational", updates, storage, api_key)
+@router_extended_metadata.delete("/computational", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_computational_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _delete_extended_metadata(tensor_id, "Computational", storage, api_key)
 
-@router_extended_metadata.delete("/computational", status_code=204)
-async def delete_computational_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.delete_computational_metadata(tensor_id): raise HTTPException(status_code=404, detail="ComputationalMetadata not found for delete.")
-    return None
-
-# --- QualityMetadata CRUD ---
-@router_extended_metadata.post("/quality", response_model=QualityMetadata, status_code=201)
-async def upsert_quality_metadata(tensor_id: UUID, quality_in: QualityMetadata): #type: ignore
-    _get_td_or_404(tensor_id);
-    if quality_in.tensor_id != tensor_id: raise HTTPException(status_code=400, detail="Path tensor_id and body tensor_id mismatch.")
-    try: storage_instance.add_quality_metadata(quality_in); return quality_in
-    except ValueError as e: raise HTTPException(status_code=400, detail=str(e))
-
+@router_extended_metadata.post("/quality", response_model=QualityMetadata, status_code=status.HTTP_201_CREATED)
+async def upsert_quality_metadata_ep(tensor_id: UUID=Path(...), quality_in: QualityMetadata=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _upsert_extended_metadata(tensor_id, "Quality", quality_in, storage, api_key)
 @router_extended_metadata.get("/quality", response_model=QualityMetadata)
-async def get_quality_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id); meta = storage_instance.get_quality_metadata(tensor_id)
-    if not meta: raise HTTPException(status_code=404, detail="QualityMetadata not found.")
-    return meta
-
+async def get_quality_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance)):
+    return await _get_extended_metadata_ep(tensor_id, "Quality", storage)
 @router_extended_metadata.patch("/quality", response_model=QualityMetadata)
-async def patch_quality_metadata(tensor_id: UUID, updates: Dict[str, Any]): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.get_quality_metadata(tensor_id): raise HTTPException(status_code=404, detail="QualityMetadata not found for update.")
-    try: updated = storage_instance.update_quality_metadata(tensor_id, **updates); return updated
-    except ValueError as e: raise HTTPException(status_code=422, detail=str(e))
+async def patch_quality_metadata_ep(tensor_id: UUID=Path(...), updates: Dict[str,Any]=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _patch_extended_metadata(tensor_id, "Quality", updates, storage, api_key)
+@router_extended_metadata.delete("/quality", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quality_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _delete_extended_metadata(tensor_id, "Quality", storage, api_key)
 
-@router_extended_metadata.delete("/quality", status_code=204)
-async def delete_quality_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.delete_quality_metadata(tensor_id): raise HTTPException(status_code=404, detail="QualityMetadata not found for delete.")
-    return None
-
-# --- RelationalMetadata CRUD ---
-@router_extended_metadata.post("/relational", response_model=RelationalMetadata, status_code=201)
-async def upsert_relational_metadata(tensor_id: UUID, relational_in: RelationalMetadata): #type: ignore
-    _get_td_or_404(tensor_id)
-    if relational_in.tensor_id != tensor_id: raise HTTPException(status_code=400, detail="Path tensor_id and body tensor_id mismatch.")
-    try: storage_instance.add_relational_metadata(relational_in); return relational_in
-    except ValueError as e: raise HTTPException(status_code=400, detail=str(e))
-
+@router_extended_metadata.post("/relational", response_model=RelationalMetadata, status_code=status.HTTP_201_CREATED)
+async def upsert_relational_metadata_ep(tensor_id: UUID=Path(...), relational_in: RelationalMetadata=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _upsert_extended_metadata(tensor_id, "Relational", relational_in, storage, api_key)
 @router_extended_metadata.get("/relational", response_model=RelationalMetadata)
-async def get_relational_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id); meta = storage_instance.get_relational_metadata(tensor_id)
-    if not meta: raise HTTPException(status_code=404, detail="RelationalMetadata not found.")
-    return meta
-
+async def get_relational_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance)):
+    return await _get_extended_metadata_ep(tensor_id, "Relational", storage)
 @router_extended_metadata.patch("/relational", response_model=RelationalMetadata)
-async def patch_relational_metadata(tensor_id: UUID, updates: Dict[str, Any]): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.get_relational_metadata(tensor_id): raise HTTPException(status_code=404, detail="RelationalMetadata not found for update.")
-    try: updated = storage_instance.update_relational_metadata(tensor_id, **updates); return updated
-    except ValueError as e: raise HTTPException(status_code=422, detail=str(e))
+async def patch_relational_metadata_ep(tensor_id: UUID=Path(...), updates: Dict[str,Any]=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _patch_extended_metadata(tensor_id, "Relational", updates, storage, api_key)
+@router_extended_metadata.delete("/relational", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_relational_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _delete_extended_metadata(tensor_id, "Relational", storage, api_key)
 
-@router_extended_metadata.delete("/relational", status_code=204)
-async def delete_relational_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.delete_relational_metadata(tensor_id): raise HTTPException(status_code=404, detail="RelationalMetadata not found for delete.")
-    return None
-
-# --- UsageMetadata CRUD ---
-@router_extended_metadata.post("/usage", response_model=UsageMetadata, status_code=201)
-async def upsert_usage_metadata(tensor_id: UUID, usage_in: UsageMetadata): #type: ignore
-    _get_td_or_404(tensor_id)
-    if usage_in.tensor_id != tensor_id: raise HTTPException(status_code=400, detail="Path tensor_id and body tensor_id mismatch.")
-    try: storage_instance.add_usage_metadata(usage_in); return usage_in
-    except ValueError as e: raise HTTPException(status_code=400, detail=str(e))
-
+@router_extended_metadata.post("/usage", response_model=UsageMetadata, status_code=status.HTTP_201_CREATED)
+async def upsert_usage_metadata_ep(tensor_id: UUID=Path(...), usage_in: UsageMetadata=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _upsert_extended_metadata(tensor_id, "Usage", usage_in, storage, api_key)
 @router_extended_metadata.get("/usage", response_model=UsageMetadata)
-async def get_usage_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id); meta = storage_instance.get_usage_metadata(tensor_id)
-    if not meta: raise HTTPException(status_code=404, detail="UsageMetadata not found.")
-    return meta
-
+async def get_usage_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance)):
+    return await _get_extended_metadata_ep(tensor_id, "Usage", storage)
 @router_extended_metadata.patch("/usage", response_model=UsageMetadata)
-async def patch_usage_metadata(tensor_id: UUID, updates: Dict[str, Any]): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.get_usage_metadata(tensor_id): raise HTTPException(status_code=404, detail="UsageMetadata not found for update.")
+async def patch_usage_metadata_ep(tensor_id: UUID=Path(...), updates: Dict[str,Any]=Body(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _patch_extended_metadata(tensor_id, "Usage", updates, storage, api_key)
+@router_extended_metadata.delete("/usage", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_usage_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
+    return await _delete_extended_metadata(tensor_id, "Usage", storage, api_key)
+
+# --- I/O Router for Export/Import ---
+router_io = APIRouter(prefix="/tensors", tags=["Import/Export"])
+
+@router_io.get("/export", response_model=TensorusExportData)
+async def export_tensor_metadata(
+    tensor_ids_str: Optional[str] = Query(None, alias="tensor_ids"), # Changed FastAPIQuery to Query
+    storage: MetadataStorage = Depends(get_storage_instance)
+):
+    parsed_tensor_ids: Optional[List[UUID]] = None
+    if tensor_ids_str:
+        try: parsed_tensor_ids = [UUID(tid.strip()) for tid in tensor_ids_str.split(',')]
+        except ValueError: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid UUID format in tensor_ids.")
+    export_data = storage.get_export_data(tensor_ids=parsed_tensor_ids)
+    filename = f"tensorus_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return JSONResponse(content=export_data.model_dump(mode="json"), headers=headers)
+
+@router_io.post("/import", summary="Import Tensor Metadata")
+async def import_tensor_metadata(
+    import_data_payload: TensorusExportData,
+    conflict_strategy: str = Query("skip", enum=["skip", "overwrite"]), # Changed FastAPIQuery to Query
+    storage: MetadataStorage = Depends(get_storage_instance),
+    api_key: str = Depends(verify_api_key)
+):
     try:
-        # The update_usage_metadata method in storage handles specific logic for access_history and derived fields.
-        updated = storage_instance.update_usage_metadata(tensor_id, **updates)
-        return updated
-    except ValueError as e: raise HTTPException(status_code=422, detail=str(e))
+        result_summary = storage.import_data(import_data_payload, conflict_strategy=conflict_strategy)
+        log_audit_event("IMPORT_DATA", api_key, details={"strategy": conflict_strategy, "summary": result_summary})
+        return result_summary
+    except ValueError as e:
+        log_audit_event("IMPORT_DATA_FAILED", api_key, details={"strategy": conflict_strategy, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotImplementedError:
+        log_audit_event("IMPORT_DATA_FAILED_NOT_IMPLEMENTED", api_key, details={"strategy": conflict_strategy})
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Import not implemented for current backend.")
+    except Exception as e:
+        log_audit_event("IMPORT_DATA_FAILED_UNEXPECTED", api_key, details={"strategy": conflict_strategy, "error": str(e)})
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error during import: {e}")
 
-@router_extended_metadata.delete("/usage", status_code=204)
-async def delete_usage_metadata(tensor_id: UUID): #type: ignore
-    _get_td_or_404(tensor_id)
-    if not storage_instance.delete_usage_metadata(tensor_id): raise HTTPException(status_code=404, detail="UsageMetadata not found for delete.")
-    return None
-
-# Note: A general DELETE for all semantic metadata of a tensor might be too broad.
-# Deleting a TensorDescriptor already handles deletion of its associated semantic metadata.
-# If a specific endpoint for deleting *all* semantic metadata entries for a tensor is needed,
-# it can be added here, e.g., DELETE /semantic_metadata/{tensor_id}
-# However, this is usually handled by deleting the parent TensorDescriptor.
-# For now, we focus on deleting specific named entries.
-import uuid # Added for the create_tensor_descriptor change
+# --- Management Router for Health and Metrics ---
+router_management = APIRouter(tags=["Management"])
+class HealthResponse(PydanticBaseModel): status: str; backend: str; detail: Optional[str] = None
+@router_management.get("/health", response_model=HealthResponse)
+async def health_check(storage: MetadataStorage = Depends(get_storage_instance)):
+    is_healthy, backend_type = storage.check_health()
+    if is_healthy: return HealthResponse(status="ok", backend=backend_type)
+    else: return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                              content=HealthResponse(status="error", backend=backend_type, detail="Storage backend connection failed.").model_dump())
+class MetricsResponse(PydanticBaseModel):
+    total_tensor_descriptors: int; semantic_metadata_count: int; lineage_metadata_count: int
+    computational_metadata_count: int; quality_metadata_count: int; relational_metadata_count: int; usage_metadata_count: int
+@router_management.get("/metrics", response_model=MetricsResponse)
+async def get_metrics(storage: MetadataStorage = Depends(get_storage_instance)):
+    return MetricsResponse(
+        total_tensor_descriptors=storage.get_tensor_descriptors_count(),
+        semantic_metadata_count=storage.get_extended_metadata_count("SemanticMetadata"),
+        lineage_metadata_count=storage.get_extended_metadata_count("LineageMetadata"),
+        computational_metadata_count=storage.get_extended_metadata_count("ComputationalMetadata"),
+        quality_metadata_count=storage.get_extended_metadata_count("QualityMetadata"),
+        relational_metadata_count=storage.get_extended_metadata_count("RelationalMetadata"),
+        usage_metadata_count=storage.get_extended_metadata_count("UsageMetadata")
+    )

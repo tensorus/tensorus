@@ -4,8 +4,14 @@ from uuid import UUID
 from .schemas import (
     TensorDescriptor, SemanticMetadata,
     LineageMetadata, ComputationalMetadata, QualityMetadata,
-    RelationalMetadata, UsageMetadata
+    RelationalMetadata, UsageMetadata,
+    TensorDescriptor # For search results
 )
+from .storage_abc import MetadataStorage
+from .schemas_iodata import TensorusExportData, TensorusExportEntry # Import I/O schemas
+import copy
+from uuid import UUID # Ensure UUID is imported for type hints if not already
+from typing import List, Optional, Dict, Any # Ensure these are imported for type hints
 
 # In-memory storage using dictionaries
 _tensor_descriptors: Dict[UUID, TensorDescriptor] = {}
@@ -19,7 +25,7 @@ _relational_metadata_store: Dict[UUID, RelationalMetadata] = {}
 _usage_metadata_store: Dict[UUID, UsageMetadata] = {}
 
 
-class InMemoryStorage:
+class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
     def add_tensor_descriptor(self, descriptor: TensorDescriptor) -> None:
         """Adds a TensorDescriptor to the in-memory store."""
         if descriptor.tensor_id in _tensor_descriptors:
@@ -497,6 +503,134 @@ class InMemoryStorage:
                         child_ids.append(other_td_id)
                         break # Found as parent, no need to check other parent_links for this other_td_id
         return child_ids
+
+    # --- Export/Import Methods ---
+    def get_export_data(self, tensor_ids: Optional[List[UUID]] = None) -> TensorusExportData:
+        export_entries: List[TensorusExportEntry] = []
+
+        ids_to_export = tensor_ids
+        if ids_to_export is None: # Export all
+            ids_to_export = list(_tensor_descriptors.keys())
+
+        for td_id in ids_to_export:
+            td = self.get_tensor_descriptor(td_id)
+            if not td:
+                continue # Skip if tensor descriptor not found for a given ID
+
+            entry = TensorusExportEntry(
+                tensor_descriptor=td,
+                semantic_metadata=self.get_semantic_metadata(td_id), # Returns list
+                lineage_metadata=self.get_lineage_metadata(td_id),
+                computational_metadata=self.get_computational_metadata(td_id),
+                quality_metadata=self.get_quality_metadata(td_id),
+                relational_metadata=self.get_relational_metadata(td_id),
+                usage_metadata=self.get_usage_metadata(td_id)
+            )
+            export_entries.append(entry)
+
+        return TensorusExportData(entries=export_entries)
+
+    def import_data(self, data: TensorusExportData, conflict_strategy: str = "skip") -> Dict[str, int]:
+        if conflict_strategy not in ["skip", "overwrite"]:
+            raise ValueError("Invalid conflict_strategy. Must be 'skip' or 'overwrite'.")
+
+        summary = {"imported": 0, "skipped": 0, "overwritten": 0, "failed": 0}
+
+        for entry in data.entries:
+            td_id = entry.tensor_descriptor.tensor_id
+            existing_td = self.get_tensor_descriptor(td_id)
+
+            try:
+                if existing_td:
+                    if conflict_strategy == "skip":
+                        summary["skipped"] += 1
+                        continue
+                    elif conflict_strategy == "overwrite":
+                        # Delete existing tensor and all its metadata first
+                        self.delete_tensor_descriptor(td_id)
+                        # Note: delete_tensor_descriptor also clears associated extended metadata
+                        summary["overwritten"] += 1
+
+                # Add TensorDescriptor
+                self.add_tensor_descriptor(entry.tensor_descriptor)
+
+                # Add SemanticMetadata (list)
+                if entry.semantic_metadata:
+                    # Clear existing semantic metadata for this tensor_id if overwriting,
+                    # or handle conflicts per item if semantic names are unique constraints.
+                    # Current add_semantic_metadata appends or raises if name conflicts.
+                    # For a clean import/overwrite, might need to delete existing semantic first.
+                    if existing_td and conflict_strategy == "overwrite":
+                         # Assuming _semantic_metadata is the dict storing List[SemanticMetadata]
+                        if td_id in _semantic_metadata:
+                            _semantic_metadata[td_id] = []
+
+                    for sm_item in entry.semantic_metadata:
+                        try: # Individual semantic items might conflict by name
+                            self.add_semantic_metadata(sm_item)
+                        except ValueError as e: # e.g. name conflict
+                             # If overwrite, maybe update existing semantic entry by name?
+                             # For now, just count as part of failure or skip.
+                             print(f"Skipping semantic metadata '{sm_item.name}' for {td_id} due to: {e}")
+
+
+                # Add other extended metadata (one-to-one)
+                # add_..._metadata methods in InMemoryStorage now perform upsert.
+                if entry.lineage_metadata: self.add_lineage_metadata(entry.lineage_metadata)
+                if entry.computational_metadata: self.add_computational_metadata(entry.computational_metadata)
+                if entry.quality_metadata: self.add_quality_metadata(entry.quality_metadata)
+                if entry.relational_metadata: self.add_relational_metadata(entry.relational_metadata)
+                if entry.usage_metadata: self.add_usage_metadata(entry.usage_metadata)
+
+                if not existing_td or conflict_strategy != "overwrite": # Count as imported if new or not explicitly overwritten
+                    summary["imported"] +=1
+
+            except Exception as e:
+                # Log error for this specific entry e.g. entry.tensor_descriptor.tensor_id
+                print(f"Failed to import entry for tensor_id {td_id}: {e}")
+                summary["failed"] += 1
+
+        return summary
+
+    # --- Health and Metrics Methods ---
+    def check_health(self) -> tuple[bool, str]:
+        # InMemoryStorage is always healthy if it's running.
+        return True, "in_memory"
+
+    def get_tensor_descriptors_count(self) -> int:
+        return len(_tensor_descriptors)
+
+    def get_extended_metadata_count(self, metadata_model_name: str) -> int:
+        # Map model name to its corresponding store dictionary
+        store_map = {
+            "LineageMetadata": _lineage_metadata_store,
+            "ComputationalMetadata": _computational_metadata_store,
+            "QualityMetadata": _quality_metadata_store,
+            "RelationalMetadata": _relational_metadata_store,
+            "UsageMetadata": _usage_metadata_store,
+            "SemanticMetadata": _semantic_metadata # Note: Semantic is List per tensor_id
+        }
+        target_store = store_map.get(metadata_model_name)
+        if target_store is not None:
+            if metadata_model_name == "SemanticMetadata":
+                # Sum of lengths of all lists in _semantic_metadata dictionary
+                return sum(len(v_list) for v_list in target_store.values())
+            return len(target_store)
+
+        # Fallback or error for unknown model name
+        # Could also count SemanticMetadata entries differently (e.g., unique tensor_ids having semantic data)
+        # For now, if model name is not in map, return 0 or raise error.
+        # Let's raise error for clarity if a specific known type is misspelled.
+        # However, the ABC doesn't restrict model_name, so 0 is safer.
+        # For this specific implementation, if it's not one of the above, it's not tracked this way.
+        valid_model_names = ["LineageMetadata", "ComputationalMetadata", "QualityMetadata", "RelationalMetadata", "UsageMetadata", "SemanticMetadata"]
+        if metadata_model_name not in valid_model_names:
+            # This could be a programming error if an unexpected name is passed.
+            # Or, if the method is meant to be robust to any string, return 0.
+            # For now, let's be strict for known types and allow others to return 0.
+             print(f"Warning: get_extended_metadata_count called with unhandled model name '{metadata_model_name}' by InMemoryStorage.")
+
+        return 0 # Default for unmapped or non-existent types in this InMemory impl.
 
 
 # Global instance of the storage
