@@ -11,6 +11,7 @@ from tensorus.tensor_storage import (
     TensorStorage,
     DatasetNotFoundError,
     TensorNotFoundError,
+    SchemaValidationError,
 )  # Assuming tensor_storage.py is accessible
 
 class TestTensorStorageInMemory(unittest.TestCase):
@@ -39,6 +40,29 @@ class TestTensorStorageInMemory(unittest.TestCase):
         # Test creating a duplicate dataset
         with self.assertRaises(ValueError):
             self.storage.create_dataset(self.dataset_name1)
+
+    def test_schema_enforcement(self):
+        schema = {
+            "shape": [3, 10],
+            "dtype": str(self.tensor1.dtype),
+            "metadata": {"source": "str", "value": "int"},
+        }
+        self.storage.create_dataset(self.dataset_name1, schema=schema)
+
+        # Valid insert
+        self.storage.insert(self.dataset_name1, self.tensor1, {"source": "s", "value": 1})
+
+        # Missing metadata field
+        with self.assertRaises(SchemaValidationError):
+            self.storage.insert(self.dataset_name1, self.tensor1, {"source": "s"})
+
+        # Wrong dtype
+        with self.assertRaises(SchemaValidationError):
+            self.storage.insert(self.dataset_name1, self.tensor1.double(), {"source": "s", "value": 1})
+
+        # Wrong shape
+        with self.assertRaises(SchemaValidationError):
+            self.storage.insert(self.dataset_name1, torch.rand(2, 10), {"source": "s", "value": 1})
 
     def test_insert_tensor(self):
         self.storage.create_dataset(self.dataset_name1)

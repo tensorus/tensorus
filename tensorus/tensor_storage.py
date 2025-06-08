@@ -15,6 +15,19 @@ class DatasetNotFoundError(ValueError):
 class TensorNotFoundError(ValueError):
     """Raised when a requested tensor record cannot be found."""
 
+class SchemaValidationError(ValueError):
+    """Raised when inserted data does not comply with the dataset schema."""
+
+# Simple mapping from string names to Python types for schema validation
+_TYPE_MAP = {
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+    "list": list,
+    "dict": dict,
+}
+
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -77,7 +90,8 @@ class TensorStorage:
             # - Metadata (dicts, lists) is typically already CPU-based and serializable.
             data_to_save = {
                 "tensors": [t.clone().cpu() for t in self.datasets[dataset_name]["tensors"]],
-                "metadata": self.datasets[dataset_name]["metadata"]
+                "metadata": self.datasets[dataset_name]["metadata"],
+                "schema": self.datasets[dataset_name].get("schema")
             }
             torch.save(data_to_save, file_path)
             logging.info(f"Dataset '{dataset_name}' saved successfully to {file_path}")
@@ -104,7 +118,8 @@ class TensorStorage:
                 if isinstance(loaded_data, dict) and "tensors" in loaded_data and "metadata" in loaded_data:
                     self.datasets[dataset_name] = {
                         "tensors": loaded_data["tensors"],
-                        "metadata": loaded_data["metadata"]
+                        "metadata": loaded_data["metadata"],
+                        "schema": loaded_data.get("schema")
                     }
                     logging.info(f"Dataset '{dataset_name}' loaded successfully from {file_path}")
                 else:
@@ -132,23 +147,26 @@ class TensorStorage:
             return file_path.exists()
         return False
 
-    def create_dataset(self, name: str) -> None:
-         """
-         Creates a new, empty dataset.
- 
-         Args:
-             name (str): The unique name for the new dataset.
- 
-         Raises:
-             ValueError: If a dataset with the same name already exists.
-         """
-         if name in self.datasets:
-             logging.warning(f"Attempted to create dataset '{name}' which already exists.")
-             raise ValueError(f"Dataset '{name}' already exists.")
- 
-         self.datasets[name] = {"tensors": [], "metadata": []}
-         logging.info(f"Dataset '{name}' created successfully.")
-         self._save_dataset(name) # Save after creation
+    def create_dataset(self, name: str, schema: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Creates a new, empty dataset. Optionally associates a schema used for
+        validating future insertions.
+
+        Args:
+            name (str): The unique name for the new dataset.
+            schema (Optional[Dict[str, Any]]): Optional schema definition with
+                keys ``shape``, ``dtype`` and ``metadata``.
+
+        Raises:
+            ValueError: If a dataset with the same name already exists.
+        """
+        if name in self.datasets:
+            logging.warning(f"Attempted to create dataset '{name}' which already exists.")
+            raise ValueError(f"Dataset '{name}' already exists.")
+
+        self.datasets[name] = {"tensors": [], "metadata": [], "schema": schema}
+        logging.info(f"Dataset '{name}' created successfully.")
+        self._save_dataset(name) # Save after creation
  
     def insert(self, name: str, tensor: torch.Tensor, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
@@ -189,6 +207,29 @@ class TensorStorage:
         else:
             # Make a copy to avoid modifying the caller's dictionary
             metadata = metadata.copy()
+
+        # Validate against dataset schema if present
+        schema = self.datasets[name].get("schema")
+        if schema:
+            if "shape" in schema and tuple(tensor.shape) != tuple(schema["shape"]):
+                raise SchemaValidationError(
+                    f"Tensor shape {tuple(tensor.shape)} does not match schema shape {schema['shape']} for dataset '{name}'."
+                )
+            if "dtype" in schema and str(tensor.dtype) != schema["dtype"]:
+                raise SchemaValidationError(
+                    f"Tensor dtype {tensor.dtype} does not match schema dtype {schema['dtype']} for dataset '{name}'."
+                )
+            if "metadata" in schema:
+                for field, type_name in schema["metadata"].items():
+                    if field not in metadata:
+                        raise SchemaValidationError(
+                            f"Metadata missing required field '{field}' for dataset '{name}'."
+                        )
+                    expected_type = _TYPE_MAP.get(type_name)
+                    if expected_type and not isinstance(metadata[field], expected_type):
+                        raise SchemaValidationError(
+                            f"Metadata field '{field}' expected type {type_name}, got {type(metadata[field]).__name__}."
+                        )
 
         # Generate essential, non-overridable metadata fields
         system_record_id = str(uuid.uuid4()) # System-generated record_id is authoritative
