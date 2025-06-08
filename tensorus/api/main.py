@@ -7,7 +7,8 @@ from .endpoints import (
     router_version_lineage,
     router_extended_metadata,
     router_io,
-    router_management # Import the new management router
+    router_management,
+    router_analytics # Import the new analytics router
 )
 # Import storage_instance and PostgresMetadataStorage for shutdown event
 from tensorus.metadata import storage_instance
@@ -36,7 +37,8 @@ app.include_router(router_search_aggregate)
 app.include_router(router_version_lineage)
 app.include_router(router_extended_metadata)
 app.include_router(router_io)
-app.include_router(router_management) # Register the management router
+app.include_router(router_management)
+app.include_router(router_analytics) # Register the analytics router
 
 @app.get("/", tags=["Root"], summary="Root Endpoint", description="Returns a welcome message for the Tensorus API.")
 async def read_root():

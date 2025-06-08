@@ -544,10 +544,145 @@ class PostgresMetadataStorage(MetadataStorage):
         # or at least per TensorusExportEntry.
         raise NotImplementedError("import_data is not yet fully implemented for PostgresMetadataStorage.")
 
+    # --- Analytics Methods (Postgres Implementations) ---
+    def get_co_occurring_tags(self, min_co_occurrence: int = 2, limit: int = 10) -> Dict[str, List[Dict[str, Any]]]:
+        # This query is complex and can be inefficient on large datasets without specific optimizations.
+        # It unnests tags, creates pairs, counts them, then formats the output.
+        query = """
+            WITH tensor_tags AS (
+                SELECT tensor_id, unnest(tags) AS tag FROM tensor_descriptors WHERE cardinality(tags) >= 2
+            ),
+            tag_pairs AS (
+                SELECT
+                    t1.tensor_id,
+                    LEAST(t1.tag, t2.tag) AS tag_a,
+                    GREATEST(t1.tag, t2.tag) AS tag_b
+                FROM tensor_tags t1
+                JOIN tensor_tags t2 ON t1.tensor_id = t2.tensor_id AND t1.tag < t2.tag
+            ),
+            pair_counts AS (
+                SELECT tag_a, tag_b, COUNT(*) AS co_occurrence_count
+                FROM tag_pairs
+                GROUP BY tag_a, tag_b
+                HAVING COUNT(*) >= %(min_co_occurrence)s
+            ),
+            ranked_pairs AS (
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY tag_a ORDER BY co_occurrence_count DESC, tag_b) as rn_a,
+                       ROW_NUMBER() OVER (PARTITION BY tag_b ORDER BY co_occurrence_count DESC, tag_a) as rn_b
+                FROM pair_counts
+            )
+            -- This final SELECT is tricky to get into the desired nested Dict structure directly from SQL.
+            -- It's often easier to process the pair_counts or ranked_pairs in Python.
+            -- For now, let's fetch ranked pairs and process in Python.
+            SELECT tag_a, tag_b, co_occurrence_count FROM ranked_pairs
+            WHERE rn_a <= %(limit)s OR rn_b <= %(limit)s;
+            -- This limit logic is not perfect for the desired output structure directly.
+            -- A simpler approach: just get all pairs above min_co_occurrence and limit/process in Python.
+            -- Simpler query for pair counts:
+            -- SELECT tag_a, tag_b, COUNT(*) AS co_occurrence_count
+            -- FROM tag_pairs
+            -- GROUP BY tag_a, tag_b
+            -- HAVING COUNT(*) >= %(min_co_occurrence)s
+            -- ORDER BY co_occurrence_count DESC;
+            -- Then process this result in Python to build the nested dict and apply limits.
+        """
+        # Using the simpler query for pair counts
+        simpler_query = """
+            WITH tensor_tags AS (
+                SELECT tensor_id, unnest(tags) AS tag FROM tensor_descriptors WHERE cardinality(tags) >= 2
+            ),
+            tag_pairs AS (
+                SELECT LEAST(t1.tag, t2.tag) AS tag_a, GREATEST(t1.tag, t2.tag) AS tag_b
+                FROM tensor_tags t1 JOIN tensor_tags t2 ON t1.tensor_id = t2.tensor_id AND t1.tag < t2.tag
+            )
+            SELECT tag_a, tag_b, COUNT(*) AS co_occurrence_count
+            FROM tag_pairs GROUP BY tag_a, tag_b
+            HAVING COUNT(*) >= %(min_co_occurrence)s
+            ORDER BY tag_a, co_occurrence_count DESC;
+        """
+        params = {"min_co_occurrence": min_co_occurrence, "limit": limit} # Limit used in Python processing
+
+        rows = self._execute_query(simpler_query, params, fetch="all") # type: ignore
+
+        co_occurrence_map: Dict[str, List[Dict[str, Any]]] = {}
+        if rows:
+            for row in rows:
+                tag_a, tag_b, count = row['tag_a'], row['tag_b'], row['co_occurrence_count']
+                # Add for tag_a
+                if tag_a not in co_occurrence_map: co_occurrence_map[tag_a] = []
+                if len(co_occurrence_map[tag_a]) < limit:
+                    co_occurrence_map[tag_a].append({"tag": tag_b, "count": count})
+                # Add for tag_b
+                if tag_b not in co_occurrence_map: co_occurrence_map[tag_b] = []
+                if len(co_occurrence_map[tag_b]) < limit:
+                     co_occurrence_map[tag_b].append({"tag": tag_a, "count": count})
+
+        # Sort internal lists (already sorted by query for tag_a, but not for tag_b's list)
+        for tag_key in co_occurrence_map:
+            co_occurrence_map[tag_key].sort(key=lambda x: x["count"], reverse=True)
+
+        return {k: v for k, v in co_occurrence_map.items() if v} # Filter out tags with no co-occurrences meeting criteria
+
+
+    def get_stale_tensors(self, threshold_days: int, limit: int = 100) -> List[TensorDescriptor]:
+        query = """
+            SELECT td.*
+            FROM tensor_descriptors td
+            LEFT JOIN usage_metadata um ON td.tensor_id = um.tensor_id
+            WHERE COALESCE( (um.data->>'last_accessed_at')::TIMESTAMPTZ, td.last_modified_timestamp ) < (NOW() - INTERVAL '1 day' * %(threshold_days)s)
+            ORDER BY COALESCE( (um.data->>'last_accessed_at')::TIMESTAMPTZ, td.last_modified_timestamp ) ASC
+            LIMIT %(limit)s;
+        """
+        params = {"threshold_days": threshold_days, "limit": limit}
+        rows = self._execute_query(query, params, fetch="all") # type: ignore
+
+        results = []
+        if rows:
+            for row in rows:
+                data = dict(row)
+                data['data_type'] = DataType(data['data_type'])
+                data['storage_format'] = StorageFormat(data['storage_format'])
+                if data.get('access_control'): data['access_control'] = AccessControl(**data['access_control'])
+                if data.get('compression_info'): data['compression_info'] = CompressionInfo(**data['compression_info'])
+                results.append(TensorDescriptor(**data))
+        return results
+
+    def get_complex_tensors(self, min_parent_count: Optional[int] = None, min_transformation_steps: Optional[int] = None, limit: int = 100) -> List[TensorDescriptor]:
+        if min_parent_count is None and min_transformation_steps is None:
+            raise ValueError("At least one criterion (min_parent_count or min_transformation_steps) must be provided.")
+
+        conditions = []
+        params: Dict[str, Any] = {"limit": limit}
+
+        base_query = "SELECT td.* FROM tensor_descriptors td LEFT JOIN lineage_metadata lm ON td.tensor_id = lm.tensor_id"
+
+        if min_parent_count is not None:
+            conditions.append("jsonb_array_length(lm.data->'parent_tensors') >= %(min_parent_count)s")
+            params["min_parent_count"] = min_parent_count
+
+        if min_transformation_steps is not None:
+            conditions.append("jsonb_array_length(lm.data->'transformation_history') >= %(min_transformation_steps)s")
+            params["min_transformation_steps"] = min_transformation_steps
+
+        query = f"{base_query} WHERE ({' OR '.join(conditions)}) LIMIT %(limit)s;"
+
+        rows = self._execute_query(query, params, fetch="all") # type: ignore
+        results = []
+        if rows:
+            for row in rows:
+                data = dict(row)
+                data['data_type'] = DataType(data['data_type'])
+                data['storage_format'] = StorageFormat(data['storage_format'])
+                if data.get('access_control'): data['access_control'] = AccessControl(**data['access_control'])
+                if data.get('compression_info'): data['compression_info'] = CompressionInfo(**data['compression_info'])
+                results.append(TensorDescriptor(**data))
+        return results
+
     # --- Health and Metrics Methods (Postgres Implementations) ---
     def check_health(self) -> tuple[bool, str]:
         try:
-            self._execute_query("SELECT 1;", fetch=None) # Simple query to check connectivity
+            self._execute_query("SELECT 1;", fetch=None)
             return True, "postgres"
         except Exception as e:
             # Log error e

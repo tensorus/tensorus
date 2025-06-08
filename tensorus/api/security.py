@@ -1,9 +1,11 @@
-from fastapi import Security, HTTPException, status
+from fastapi import Security, HTTPException, status, Depends
 from fastapi.security.api_key import APIKeyHeader
-from typing import Optional
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional, Dict, Any # Added Dict, Any for JWT payload
 
 from tensorus.config import settings
 
+# --- API Key Authentication ---
 api_key_header_auth = APIKeyHeader(name=settings.API_KEY_HEADER_NAME, auto_error=False)
 
 async def verify_api_key(api_key: Optional[str] = Security(api_key_header_auth)):
@@ -21,21 +23,72 @@ async def verify_api_key(api_key: Optional[str] = Security(api_key_header_auth))
         # For this subtask, if VALID_API_KEYS is empty, let's make it so NO key is valid, enforcing configuration.
         # To disable auth, one would comment out the `Depends(verify_api_key)` from endpoints.
         # If settings.VALID_API_KEYS is an empty list, no key will ever be valid.
-        pass # Fall through to checks below. If list is empty, key will not be in it.
-
-
+    # This means endpoints protected by this will be inaccessible if VALID_API_KEYS is empty.
+    # This is a design choice: require configuration for keys to be active.
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API Key"
         )
-
-    if api_key not in settings.VALID_API_KEYS:
+    if not settings.VALID_API_KEYS or api_key not in settings.VALID_API_KEYS:
+        # If list is empty OR key is not in the list
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API Key"
         )
-    return api_key # Return the key itself, can be used for logging user/actor.
+    return api_key
+
+
+# --- JWT Token Authentication (Conceptual) ---
+oauth2_scheme = HTTPBearer(auto_error=False) # auto_error=False means it won't raise error if token is missing
+
+async def verify_jwt_token(token: Optional[HTTPAuthorizationCredentials] = Security(oauth2_scheme)) -> Dict[str, Any]:
+    """
+    Conceptual JWT token verification dependency.
+    - If JWT auth is disabled, denies access if an endpoint specifically requires it (unless in dev dummy mode).
+    - If enabled and in dev dummy mode, allows any bearer token string.
+    - If enabled and not in dev dummy mode, raises 501 Not Implemented (actual validation needed here).
+    """
+    if not settings.AUTH_JWT_ENABLED:
+        # If JWT auth is globally disabled:
+        # If an endpoint *still* tries to use this JWT verifier, it means it expects JWT.
+        # So, deny access because the system isn't configured for it.
+        # However, if AUTH_DEV_MODE_ALLOW_DUMMY_JWT is true, we might let it pass for local dev convenience
+        # even if AUTH_JWT_ENABLED is false (treating dummy mode as an override).
+        if settings.AUTH_DEV_MODE_ALLOW_DUMMY_JWT and token: # Token provided, dummy mode on
+             return {"sub": "dummy_jwt_user_jwt_disabled_but_dev_mode", "username": "dummy_dev_jwt", "token_type": "dummy_bearer_dev"}
+
+        # Standard behavior: if JWT is not enabled, this verifier should fail if called.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, # Or 403 Forbidden
+            detail="JWT authentication is not enabled or configured for this service."
+        )
+
+    # JWT Auth is enabled, proceed.
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated via JWT (No token provided)"
+        )
+
+    if settings.AUTH_DEV_MODE_ALLOW_DUMMY_JWT:
+        # In dev dummy mode, if a token string is present (any string), allow it.
+        return {"sub": "dummy_jwt_user", "username": "dummy_jwt_user", "token_type": "dummy_bearer", "token_value": token.credentials}
+
+    # Placeholder for actual JWT validation logic
+    # In a real implementation, you would:
+    # 1. Fetch JWKS from settings.AUTH_JWT_JWKS_URI
+    # 2. Decode and validate the token (signature, issuer, audience, expiry) using python-jose or similar.
+    # 3. Extract claims and return them.
+    print(f"Attempted JWT validation for token: {token.credentials[:20]}...") # Log first 20 chars for privacy
+    print(f"Config: Issuer={settings.AUTH_JWT_ISSUER}, Audience={settings.AUTH_JWT_AUDIENCE}, Algo={settings.AUTH_JWT_ALGORITHM}, JWKS={settings.AUTH_JWT_JWKS_URI}")
+    log_audit_event(action="JWT_VALIDATION_ATTEMPT", user="unknown_jwt_user", details={"message": "Actual JWT validation not implemented. Placeholder."})
+
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Actual JWT validation not implemented. Set TENSORUS_AUTH_DEV_MODE_ALLOW_DUMMY_JWT=True for development pass-through."
+    )
+
 
 # Example of how to use it in an endpoint:
 # from fastapi import Depends

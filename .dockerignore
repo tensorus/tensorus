@@ -1,0 +1,62 @@
+# Git files
+.git/
+.gitignore
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+env/
+venv/
+.venv/
+
+# IDE and editor specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets or local configuration (should be passed via environment variables)
+.env
+secrets/
+*.pem
+*.key
+
+# Log files
+*.log
+tensorus_audit.log # Specifically exclude this if it's generated locally
+
+# Test files and reports (unless you want to run tests in the image)
+tests/
+htmlcov/
+.pytest_cache/
+.coverage
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Docker files themselves (no need to copy into the image)
+Dockerfile
+docker-compose.yml
+
+# Other project specific files/folders to exclude
+# E.g., notebooks/, docs/, etc.
+# data/ # If you have a local data folder not needed in the image
+# mcp_tensorus_server/ # Exclude if not part of the Python API image
+# package.json # Exclude if not part of the Python API image
+# setup.sh # Exclude if not part of the Python API image
+# DEMO.md # Exclude if not part of the Python API image
+# LICENSE # Usually good to include, but can be excluded if desired
+# README.md # Usually good to include, but can be excluded if desired
+# pages/ # If these are Streamlit pages not served by this Docker image.
+
+# If `app.py` at root is a Streamlit launcher, and not part of this specific API service, exclude it too.
+# Assuming `app.py` from the root is not part of this specific service being Dockerized.
+app.py

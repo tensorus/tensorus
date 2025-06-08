@@ -532,3 +532,65 @@ async def get_metrics(storage: MetadataStorage = Depends(get_storage_instance)):
         relational_metadata_count=storage.get_extended_metadata_count("RelationalMetadata"),
         usage_metadata_count=storage.get_extended_metadata_count("UsageMetadata")
     )
+
+# --- Analytics Router ---
+router_analytics = APIRouter(
+    prefix="/analytics",
+    tags=["Analytics"]
+)
+
+@router_analytics.get("/co_occurring_tags", response_model=Dict[str, List[Dict[str, Any]]],
+                       summary="Get Co-occurring Tags",
+                       description="Finds tags that frequently co-occur with other tags on tensor descriptors.")
+async def api_get_co_occurring_tags(
+    min_co_occurrence: int = Query(2, ge=1, description="Minimum number of times tags must appear together."),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of co-occurring tags to return for each primary tag."),
+    storage: MetadataStorage = Depends(get_storage_instance)
+):
+    try:
+        return storage.get_co_occurring_tags(min_co_occurrence=min_co_occurrence, limit=limit)
+    except NotImplementedError:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Co-occurring tags analytics not implemented for the current storage backend.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error calculating co-occurring tags: {e}")
+
+
+@router_analytics.get("/stale_tensors", response_model=List[TensorDescriptor],
+                       summary="Get Stale Tensors",
+                       description="Finds tensors that have not been accessed or modified for a given number of days.")
+async def api_get_stale_tensors(
+    threshold_days: int = Query(90, ge=1, description="Number of days to consider a tensor stale."),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of stale tensors to return."),
+    storage: MetadataStorage = Depends(get_storage_instance)
+):
+    try:
+        return storage.get_stale_tensors(threshold_days=threshold_days, limit=limit)
+    except NotImplementedError:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Stale tensor analytics not implemented for the current storage backend.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching stale tensors: {e}")
+
+
+@router_analytics.get("/complex_tensors", response_model=List[TensorDescriptor],
+                       summary="Get Complex Tensors",
+                       description="Finds tensors considered complex based on lineage (number of parents or transformation steps).")
+async def api_get_complex_tensors(
+    min_parent_count: Optional[int] = Query(None, ge=0, description="Minimum number of parent tensors."),
+    min_transformation_steps: Optional[int] = Query(None, ge=0, description="Minimum number of transformation steps."),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of complex tensors to return."),
+    storage: MetadataStorage = Depends(get_storage_instance)
+):
+    if min_parent_count is None and min_transformation_steps is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one criterion (min_parent_count or min_transformation_steps) must be provided.")
+    try:
+        return storage.get_complex_tensors(
+            min_parent_count=min_parent_count,
+            min_transformation_steps=min_transformation_steps,
+            limit=limit
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotImplementedError:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Complex tensor analytics not implemented for the current storage backend.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching complex tensors: {e}")
