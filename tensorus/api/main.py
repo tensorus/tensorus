@@ -5,8 +5,14 @@ from .endpoints import (
     router_semantic_metadata,
     router_search_aggregate,
     router_version_lineage,
-    router_extended_metadata # Import the new router for extended metadata CRUD
+    router_extended_metadata,
+    router_io,
+    router_management # Import the new management router
 )
+# Import storage_instance and PostgresMetadataStorage for shutdown event
+from tensorus.metadata import storage_instance
+from tensorus.metadata.postgres_storage import PostgresMetadataStorage
+
 
 app = FastAPI(
     title="Tensorus API",
@@ -28,11 +34,26 @@ app.include_router(router_tensor_descriptor)
 app.include_router(router_semantic_metadata)
 app.include_router(router_search_aggregate)
 app.include_router(router_version_lineage)
-app.include_router(router_extended_metadata) # Register the new router
+app.include_router(router_extended_metadata)
+app.include_router(router_io)
+app.include_router(router_management) # Register the management router
 
 @app.get("/", tags=["Root"], summary="Root Endpoint", description="Returns a welcome message for the Tensorus API.")
 async def read_root():
     return {"message": "Welcome to the Tensorus API"}
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """
+    Handles application shutdown events.
+    Specifically, closes the PostgreSQL connection pool if it's in use.
+    """
+    if isinstance(storage_instance, PostgresMetadataStorage):
+        print("Shutting down FastAPI app: Closing PostgreSQL connection pool.")
+        storage_instance.close_pool()
+    else:
+        print("Shutting down FastAPI app: No PostgreSQL pool to close.")
+
 
 # To run this application (for development):
 # uvicorn tensorus.api.main:app --reload --port 8000
