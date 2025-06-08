@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 
-from .endpoints import router_tensor_descriptor, router_semantic_metadata
+from .endpoints import (
+    router_tensor_descriptor,
+    router_semantic_metadata,
+    router_search_aggregate,
+    router_version_lineage,
+    router_extended_metadata # Import the new router for extended metadata CRUD
+)
 
 app = FastAPI(
     title="Tensorus API",
@@ -20,6 +26,9 @@ app = FastAPI(
 # Include the routers
 app.include_router(router_tensor_descriptor)
 app.include_router(router_semantic_metadata)
+app.include_router(router_search_aggregate)
+app.include_router(router_version_lineage)
+app.include_router(router_extended_metadata) # Register the new router
 
 @app.get("/", tags=["Root"], summary="Root Endpoint", description="Returns a welcome message for the Tensorus API.")
 async def read_root():
