@@ -171,5 +171,18 @@ class MetadataStorage(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_extended_metadata_count(self, metadata_model_name: str) -> int: # e.g., "LineageMetadata"
+    def get_extended_metadata_count(self, metadata_model_name: str) -> int:
+        pass
+
+    # --- Analytics Methods ---
+    @abc.abstractmethod
+    def get_co_occurring_tags(self, min_co_occurrence: int = 2, limit: int = 10) -> Dict[str, List[Dict[str, Any]]]:
+        pass
+
+    @abc.abstractmethod
+    def get_stale_tensors(self, threshold_days: int, limit: int = 100) -> List[TensorDescriptor]:
+        pass
+
+    @abc.abstractmethod
+    def get_complex_tensors(self, min_parent_count: Optional[int] = None, min_transformation_steps: Optional[int] = None, limit: int = 100) -> List[TensorDescriptor]:
         pass

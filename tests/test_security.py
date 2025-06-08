@@ -109,50 +109,96 @@ def test_unprotected_route_accessible(test_app_client: TestClient):
 # or re-initialize `api_key_header_auth` within the test after monkeypatching settings.
 # The current monkeypatch of `api_key_header_auth.name` is a direct workaround.
 
-# Example of testing the dependency directly (not via TestClient)
-# This requires careful mocking of what FastAPI's Security(...) does.
-# from fastapi.exceptions import HTTPException as FastApiHTTPException
-#
-# async def run_verify_dependency(api_key_value: Optional[str], header_name_in_security: str):
-#     # Simulate how FastAPI calls the dependency with Security wrapper
-#     # This is a simplified simulation.
-#     # The actual `Security(api_key_header_auth)` part is complex.
-#     # It's usually better to test via TestClient.
-#     temp_header_scheme = APIKeyHeader(name=header_name_in_security, auto_error=False)
-#
-#     # This is not how `Security` works. `Security` uses the scheme to extract the key.
-#     # The dependency `verify_api_key` *receives* the extracted key.
-#     # So, we should call verify_api_key directly with the extracted value.
-#
-#     # Correct way to test dependency in isolation:
-#     # Call verify_api_key as if FastAPI has already extracted the key using the scheme.
-#     try:
-#         return await verify_api_key(api_key_value)
-#     except FastApiHTTPException: # Catch FastAPI's HTTPException
-#         raise
-#
-# @pytest.mark.asyncio
-# async def test_verify_api_key_direct_valid(monkeypatch):
-#     monkeypatch.setattr(global_settings, 'VALID_API_KEYS', ["directkey"])
-#     # No need to patch API_KEY_HEADER_NAME for direct call, as extraction is skipped
-#
-#     result = await run_verify_dependency("directkey", "any_header_name_for_scheme")
-#     assert result == "directkey"
-#
-# @pytest.mark.asyncio
-# async def test_verify_api_key_direct_invalid(monkeypatch):
-#     monkeypatch.setattr(global_settings, 'VALID_API_KEYS', ["directkey"])
-#     with pytest.raises(HTTPException) as excinfo:
-#         await run_verify_dependency("wrongkey", "any_header_name_for_scheme")
-#     assert excinfo.value.status_code == 401
-#     assert excinfo.value.detail == "Invalid API Key"
-#
-# @pytest.mark.asyncio
-# async def test_verify_api_key_direct_missing(monkeypatch):
-#     monkeypatch.setattr(global_settings, 'VALID_API_KEYS', ["directkey"])
-#     with pytest.raises(HTTPException) as excinfo:
-#         await run_verify_dependency(None, "any_header_name_for_scheme") # Simulate key not found by scheme
-#     assert excinfo.value.status_code == 401
-#     assert excinfo.value.detail == "Missing API Key"
+# --- Tests for verify_jwt_token ---
 
-# The TestClient approach is generally preferred as it tests the dependency in its actual FastAPI integration context.
+# Helper to create a test app with a JWT protected route
+def create_test_app_with_jwt_route():
+    app = FastAPI()
+    from tensorus.api.security import verify_jwt_token # Import here to use patched settings if any
+
+    @app.get("/jwt_protected")
+    async def jwt_protected_route(token_payload: Dict[str, Any] = FastAPISecurity(verify_jwt_token)):
+        return {"message": "JWT Access granted", "claims": token_payload}
+    return app
+
+@pytest.fixture
+def jwt_test_app_client():
+    app = create_test_app_with_jwt_route()
+    with TestClient(app) as client:
+        yield client
+
+def test_verify_jwt_disabled_dev_mode_no_token(jwt_test_app_client: TestClient, monkeypatch):
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_ENABLED', False)
+    monkeypatch.setattr(global_settings, 'AUTH_DEV_MODE_ALLOW_DUMMY_JWT', True)
+
+    # Even in dev dummy mode, if JWT is expected (by endpoint using the dependency) but not provided,
+    # and JWT is globally disabled, the current verify_jwt_token logic raises 503 (service unavailable)
+    # because it's seen as a misconfiguration: endpoint wants JWT but system says JWT is off.
+    # If a token *were* provided, it would return dummy claims.
+    response = jwt_test_app_client.get("/jwt_protected")
+    assert response.status_code == 503
+    assert "JWT authentication is not enabled" in response.json()["detail"]
+
+def test_verify_jwt_disabled_dev_mode_with_token(jwt_test_app_client: TestClient, monkeypatch):
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_ENABLED', False)
+    monkeypatch.setattr(global_settings, 'AUTH_DEV_MODE_ALLOW_DUMMY_JWT', True)
+
+    headers = {"Authorization": "Bearer anydummytoken"}
+    response = jwt_test_app_client.get("/jwt_protected", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "JWT Access granted"
+    assert data["claims"]["sub"] == "dummy_jwt_user_jwt_disabled_but_dev_mode"
+
+def test_verify_jwt_disabled_no_dev_mode(jwt_test_app_client: TestClient, monkeypatch):
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_ENABLED', False)
+    monkeypatch.setattr(global_settings, 'AUTH_DEV_MODE_ALLOW_DUMMY_JWT', False)
+
+    headers = {"Authorization": "Bearer anytoken"} # Token is irrelevant here
+    response = jwt_test_app_client.get("/jwt_protected", headers=headers)
+    assert response.status_code == 503
+    assert "JWT authentication is not enabled" in response.json()["detail"]
+
+
+def test_verify_jwt_enabled_dev_mode_dummy_token(jwt_test_app_client: TestClient, monkeypatch):
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_ENABLED', True)
+    monkeypatch.setattr(global_settings, 'AUTH_DEV_MODE_ALLOW_DUMMY_JWT', True)
+
+    headers = {"Authorization": "Bearer sometokenstring"}
+    response = jwt_test_app_client.get("/jwt_protected", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "JWT Access granted"
+    assert data["claims"]["sub"] == "dummy_jwt_user"
+    assert data["claims"]["token_value"] == "sometokenstring"
+
+def test_verify_jwt_enabled_dev_mode_no_token(jwt_test_app_client: TestClient, monkeypatch):
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_ENABLED', True)
+    monkeypatch.setattr(global_settings, 'AUTH_DEV_MODE_ALLOW_DUMMY_JWT', True)
+    # oauth2_scheme has auto_error=False, so dependency receives None if no token
+    # verify_jwt_token then raises 401 if token is None and JWT is enabled.
+
+    response = jwt_test_app_client.get("/jwt_protected")
+    assert response.status_code == 401
+    assert "Not authenticated via JWT (No token provided)" in response.json()["detail"]
+
+
+def test_verify_jwt_enabled_prod_mode_raises_not_implemented(jwt_test_app_client: TestClient, monkeypatch):
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_ENABLED', True)
+    monkeypatch.setattr(global_settings, 'AUTH_DEV_MODE_ALLOW_DUMMY_JWT', False)
+    # Actual validation settings don't matter here as it will hit NotImplemented
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_JWKS_URI', "http://dummy.jwks/uri")
+
+
+    headers = {"Authorization": "Bearer actualjwttokenstring"}
+    response = jwt_test_app_client.get("/jwt_protected", headers=headers)
+    assert response.status_code == 501
+    assert "Actual JWT validation not implemented" in response.json()["detail"]
+
+def test_verify_jwt_enabled_prod_mode_no_token(jwt_test_app_client: TestClient, monkeypatch):
+    monkeypatch.setattr(global_settings, 'AUTH_JWT_ENABLED', True)
+    monkeypatch.setattr(global_settings, 'AUTH_DEV_MODE_ALLOW_DUMMY_JWT', False)
+
+    response = jwt_test_app_client.get("/jwt_protected") # No token
+    assert response.status_code == 401
+    assert "Not authenticated via JWT (No token provided)" in response.json()["detail"]

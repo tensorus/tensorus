@@ -1,0 +1,11 @@
+site_name: Tensorus Metadata System
+site_description: Documentation for the Tensorus Metadata System.
+nav:
+    - Home: index.md
+    - Installation: installation.md
+    - API Guide: api_guide.md
+    - Metadata Schemas: metadata_schemas.md
+theme: readthedocs
+# Optional: Add repo_url, edit_uri for "Edit on GitHub" links if relevant
+# repo_url: https://github.com/your_username/tensorus
+# edit_uri: edit/main/docs/

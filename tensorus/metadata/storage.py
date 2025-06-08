@@ -630,7 +630,91 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
             # For now, let's be strict for known types and allow others to return 0.
              print(f"Warning: get_extended_metadata_count called with unhandled model name '{metadata_model_name}' by InMemoryStorage.")
 
-        return 0 # Default for unmapped or non-existent types in this InMemory impl.
+        return 0
+
+    # --- Analytics Methods ---
+    def get_co_occurring_tags(self, min_co_occurrence: int = 2, limit: int = 10) -> Dict[str, List[Dict[str, Any]]]:
+        tag_pairs_count: Dict[tuple[str, str], int] = {}
+        all_tags_set: set[str] = set()
+
+        for td in _tensor_descriptors.values():
+            if td.tags and len(td.tags) >= 2:
+                sorted_tags = sorted(list(set(td.tags))) # Unique tags, sorted to make pairs canonical (tagA, tagB)
+                all_tags_set.update(sorted_tags)
+                for i in range(len(sorted_tags)):
+                    for j in range(i + 1, len(sorted_tags)):
+                        pair = (sorted_tags[i], sorted_tags[j])
+                        tag_pairs_count[pair] = tag_pairs_count.get(pair, 0) + 1
+
+        # Organize results by primary tag
+        co_occurrence_map: Dict[str, List[Dict[str, Any]]] = {tag: [] for tag in all_tags_set}
+
+        sorted_pairs = sorted(tag_pairs_count.items(), key=lambda item: item[1], reverse=True)
+
+        for (tag1, tag2), count in sorted_pairs:
+            if count >= min_co_occurrence:
+                # Add to tag1's list
+                if len(co_occurrence_map[tag1]) < limit: # Respect limit per primary tag
+                    co_occurrence_map[tag1].append({"tag": tag2, "count": count})
+                # Add to tag2's list
+                if len(co_occurrence_map[tag2]) < limit: # Respect limit per primary tag
+                     co_occurrence_map[tag2].append({"tag": tag1, "count": count})
+
+        # Sort sub-lists by count
+        for tag_key in co_occurrence_map:
+            co_occurrence_map[tag_key].sort(key=lambda x: x["count"], reverse=True)
+            # Ensure the overall limit isn't just per sub-list but rather total number of primary tags shown,
+            # or total pairs. The current limit is per sub-list.
+            # If a global limit on the number of primary tags returned is needed:
+            # final_limited_map = {k: co_occurrence_map[k] for k in list(co_occurrence_map.keys())[:limit] if co_occurrence_map[k]}
+            # return final_limited_map
+
+        # Return only tags that have co-occurring partners satisfying the criteria
+        return {k: v for k, v in co_occurrence_map.items() if v}
+
+
+    def get_stale_tensors(self, threshold_days: int, limit: int = 100) -> List[TensorDescriptor]:
+        stale_tensors: List[TensorDescriptor] = []
+        threshold_datetime = datetime.utcnow() - timedelta(days=threshold_days)
+
+        for td_id, td in _tensor_descriptors.items():
+            last_relevant_timestamp = td.last_modified_timestamp # Default to last_modified
+
+            usage_meta = self.get_usage_metadata(td_id)
+            if usage_meta and usage_meta.last_accessed_at:
+                last_relevant_timestamp = max(last_relevant_timestamp, usage_meta.last_accessed_at)
+
+            if last_relevant_timestamp < threshold_datetime:
+                stale_tensors.append(td)
+
+        # Sort by the last_relevant_timestamp (oldest first) and apply limit
+        stale_tensors.sort(key=lambda t: (
+            max(t.last_modified_timestamp, self.get_usage_metadata(t.tensor_id).last_accessed_at if self.get_usage_metadata(t.tensor_id) and self.get_usage_metadata(t.tensor_id).last_accessed_at else datetime.min)
+        ))
+        return stale_tensors[:limit]
+
+    def get_complex_tensors(self, min_parent_count: Optional[int] = None, min_transformation_steps: Optional[int] = None, limit: int = 100) -> List[TensorDescriptor]:
+        if min_parent_count is None and min_transformation_steps is None:
+            raise ValueError("At least one criterion (min_parent_count or min_transformation_steps) must be provided.")
+
+        complex_tensors: List[TensorDescriptor] = []
+        for td_id, td in _tensor_descriptors.items():
+            is_complex = False
+            lineage_meta = self.get_lineage_metadata(td_id)
+
+            if lineage_meta:
+                if min_parent_count is not None and len(lineage_meta.parent_tensors) >= min_parent_count:
+                    is_complex = True
+                if not is_complex and min_transformation_steps is not None and len(lineage_meta.transformation_history) >= min_transformation_steps:
+                    is_complex = True
+
+            if is_complex:
+                complex_tensors.append(td)
+
+            if len(complex_tensors) >= limit:
+                break
+
+        return complex_tensors
 
 
 # Global instance of the storage

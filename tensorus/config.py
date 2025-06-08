@@ -74,6 +74,14 @@ class SettingsV1(BaseSettings):
         # or rely on a custom parser if it's just "key1,key2".
         # For simplicity now, assume it's loaded as a list if correctly formatted in env or default is used.
 
+    # JWT Authentication (Conceptual Settings)
+    AUTH_JWT_ENABLED: bool = False
+    AUTH_JWT_ISSUER: Optional[str] = None
+    AUTH_JWT_AUDIENCE: Optional[str] = None
+    AUTH_JWT_ALGORITHM: str = "RS256"
+    AUTH_JWT_JWKS_URI: Optional[str] = None
+    AUTH_DEV_MODE_ALLOW_DUMMY_JWT: bool = False
+
 
 # Use SettingsV1 for Pydantic v1.x compatibility
 settings = SettingsV1()

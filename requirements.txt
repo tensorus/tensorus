@@ -20,6 +20,8 @@ fastapi>=0.90.0
 pydantic>=1.10.0,<2.0.0
 # ASGI Server (standard includes extras like watchfiles for reload)
 uvicorn[standard]>=0.20.0
+# For PostgreSQL connectivity (used by PostgresMetadataStorage)
+psycopg2-binary>=2.9.0
 # Optional: Needed if using FastAPI file uploads via forms
 # python-multipart>=0.0.5
 
