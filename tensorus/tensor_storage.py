@@ -442,15 +442,19 @@ class TensorStorage:
 
     def update_tensor_metadata(self, dataset_name: str, record_id: str, new_metadata: Dict[str, Any]) -> bool:
         """
-        Updates the metadata for a specific tensor in a dataset.
+        Replace the metadata for a specific tensor in a dataset.
+
+        The provided ``new_metadata`` dictionary completely overwrites the
+        existing metadata for the record, except that the original
+        ``record_id`` is always preserved.  If ``record_id`` is present in
+        ``new_metadata`` it is ignored and a warning is logged.
 
         Args:
             dataset_name (str): The name of the dataset containing the tensor.
             record_id (str): The unique ID of the tensor record to update.
-            new_metadata (Dict[str, Any]): A dictionary containing the new metadata
-                                           fields to add or update. The 'record_id'
-                                           field, if present in `new_metadata`, will be
-                                           ignored to prevent changing the unique ID.
+            new_metadata (Dict[str, Any]): The new metadata dictionary to store
+                for the tensor. ``record_id`` inside this dictionary (if any) is
+                ignored.
 
         Returns:
             bool: True if the metadata was updated successfully.
@@ -469,25 +473,25 @@ class TensorStorage:
         found_record = False
         for i, meta_item in enumerate(dataset["metadata"]):
             if meta_item.get("record_id") == record_id:
-                # User cannot change 'record_id' via this method.
-                # If 'record_id' is in new_metadata, log a warning and remove it.
+                # Prevent changing the record_id
                 if "record_id" in new_metadata:
                     logging.warning(
                         f"Attempt to change 'record_id' for record '{record_id}' in dataset '{dataset_name}' "
-                        "during metadata update was ignored."
+                        f"during metadata update was ignored."
                     )
-                    # Use a copy to avoid modifying the caller's dictionary if it's reused
-                    current_new_metadata = new_metadata.copy()
-                    del current_new_metadata["record_id"]
+                    metadata_replacement = new_metadata.copy()
+                    del metadata_replacement["record_id"]
                 else:
-                    current_new_metadata = new_metadata
+                    metadata_replacement = new_metadata.copy()
 
-                # Update the existing metadata dictionary with the new fields
-                dataset["metadata"][i].update(current_new_metadata)
-                logging.info(f"Metadata updated for record '{record_id}' in dataset '{dataset_name}'.")
-                self._save_dataset(dataset_name) # Persist changes if applicable
+                # Overwrite the metadata dictionary while keeping the original record_id
+                dataset["metadata"][i] = {"record_id": record_id, **metadata_replacement}
+                logging.info(
+                    f"Metadata replaced for record '{record_id}' in dataset '{dataset_name}'."
+                )
+                self._save_dataset(dataset_name)
                 found_record = True
-                break # Exit loop once record is found and updated
+                break
         
         if not found_record:
             logging.warning(

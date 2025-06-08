@@ -142,11 +142,11 @@ class TestTensorStorageInMemory(unittest.TestCase):
         new_meta = {"status": "processed", "value": 10}
         update_success = self.storage.update_tensor_metadata(self.dataset_name1, record_id, new_meta)
         self.assertTrue(update_success)
-        
+
         retrieved = self.storage.get_tensor_by_id(self.dataset_name1, record_id)
         self.assertEqual(retrieved["metadata"]["status"], "processed")
         self.assertEqual(retrieved["metadata"]["value"], 10)
-        self.assertEqual(retrieved["metadata"]["source"], self.meta1["source"]) # Original meta should persist
+        self.assertNotIn("source", retrieved["metadata"])  # Old metadata removed
 
         # Test updating non-existent record_id
         with self.assertRaises(TensorNotFoundError):
@@ -292,8 +292,8 @@ class TestTensorStoragePersistent(unittest.TestCase):
         retrieved = storage2.get_tensor_by_id(self.dataset_name1, record_id)
         self.assertIsNotNone(retrieved)
         self.assertEqual(retrieved["metadata"]["status"], "processed_persistent")
-        self.assertEqual(retrieved["metadata"]["data_type"], "image_updated") # Check overwrite
-        self.assertEqual(retrieved["metadata"]["id"], self.meta1["id"]) # Check original persisted
+        self.assertEqual(retrieved["metadata"]["data_type"], "image_updated")  # Check overwrite
+        self.assertNotIn("id", retrieved["metadata"])  # Old metadata removed
 
     def test_delete_tensor_persists(self):
         self.storage.create_dataset(self.dataset_name1)
@@ -342,7 +342,7 @@ class TestTensorStoragePersistent(unittest.TestCase):
         
         meta_check1 = storage3.get_tensor_by_id(self.dataset_name1, id1)["metadata"]
         self.assertEqual(meta_check1["new_key"], "new_value")
-        self.assertEqual(meta_check1["id"], self.meta1["id"])
+        self.assertNotIn("id", meta_check1)
 
         meta_check2 = storage3.get_tensor_by_id(self.dataset_name1, id2)["metadata"]
         self.assertEqual(meta_check2["id"], self.meta2["id"])
