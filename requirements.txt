@@ -30,6 +30,10 @@ requests>=2.28.0
 # For plotting in the Streamlit UI (Dashboard, Data Explorer)
 plotly>=5.10.0
 
+# --- Testing Dependencies ---
+pytest>=7.0.0
+httpx>=0.23.0 # For FastAPI TestClient
+
 # --- Data Analysis & Modeling ---
 # Optional: For plotting example in rl_agent.py
 matplotlib>=3.5.0
