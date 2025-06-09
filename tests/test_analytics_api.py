@@ -39,13 +39,24 @@ def analytics_setup_data(client_with_clean_storage_analytics: TestClient):
     """
     storage = global_app_storage_instance
 
-    tds_data = [
-        {"tensor_id": uuid4(), "owner": "user1", "tags": ["tagA", "tagB", "tagC"], "last_modified_timestamp": datetime.utcnow() - timedelta(days=10)},
-        {"tensor_id": uuid4(), "owner": "user2", "tags": ["tagB", "tagC", "tagD"], "last_modified_timestamp": datetime.utcnow() - timedelta(days=100)},
-        {"tensor_id": uuid4(), "owner": "user1", "tags": ["tagA", "tagD", "tagE"], "last_modified_timestamp": datetime.utcnow() - timedelta(days=5)},
-        {"tensor_id": uuid4(), "owner": "user3", "tags": ["tagX", "tagY"], "last_modified_timestamp": datetime.utcnow() - timedelta(days=200)},
-        {"tensor_id": uuid4(), "owner": "user4", "tags": ["tagA", "tagB"], "last_modified_timestamp": datetime.utcnow() - timedelta(days=1)}, # Recent
-    ]
+    tds_data = []
+    for days_ago, owner, tags in [
+        (10, "user1", ["tagA", "tagB", "tagC"]),
+        (100, "user2", ["tagB", "tagC", "tagD"]),
+        (5, "user1", ["tagA", "tagD", "tagE"]),
+        (200, "user3", ["tagX", "tagY"]),
+        (1, "user4", ["tagA", "tagB", "tagD"]),  # Recent; includes tagD for co-occurrence tests
+    ]:
+        ts = datetime.utcnow() - timedelta(days=days_ago)
+        tds_data.append(
+            {
+                "tensor_id": uuid4(),
+                "owner": owner,
+                "tags": tags,
+                "creation_timestamp": ts,
+                "last_modified_timestamp": ts,
+            }
+        )
 
     created_tds = []
     for i, data in enumerate(tds_data):
@@ -140,7 +151,7 @@ def test_get_stale_tensors_default_threshold(client_with_clean_storage_analytics
     # td[1] ("tagB", "tagC", "tagD"): modified 100d ago, accessed 150d ago -> STALE (last_relevant is 100d ago)
     # td[2] ("tagA", "tagD", "tagE"): modified 5d ago, accessed 300d ago -> NOT STALE
     # td[3] ("tagX", "tagY"): modified 200d ago, no usage data -> STALE
-    # td[4] ("tagA", "tagB"): modified 1d ago, no usage data -> NOT STALE
+    # td[4] ("tagA", "tagB", "tagD"): modified 1d ago, no usage data -> NOT STALE
     response = client_with_clean_storage_analytics.get("/analytics/stale_tensors")
     assert response.status_code == 200
     data = response.json()
