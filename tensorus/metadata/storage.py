@@ -292,8 +292,11 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
             else:
                 final_data_for_validation[key] = value
 
-        if 'tensor_id' in final_data_for_validation and UUID(final_data_for_validation['tensor_id']) != tensor_id:
-            raise ValueError("Cannot change tensor_id during update.")
+        if 'tensor_id' in final_data_for_validation:
+            existing_id = final_data_for_validation['tensor_id']
+            existing_uuid = existing_id if isinstance(existing_id, UUID) else UUID(str(existing_id))
+            if existing_uuid != tensor_id:
+                raise ValueError("Cannot change tensor_id during update.")
         final_data_for_validation['tensor_id'] = tensor_id # Ensure it's the correct UUID object
 
         try:

@@ -15,16 +15,9 @@ async def verify_api_key(api_key: Optional[str] = Security(api_key_header_auth))
     Returns the API key string if valid.
     """
     if not settings.VALID_API_KEYS:
-        # If no API keys are configured, allow access (development mode or no auth intended)
-        # Or, to enforce keys always, raise HTTPException here or configure a default deny key.
-        # For this exercise, if list is empty, we'll consider it as "no auth configured".
-        # However, a production system should probably deny if the list is empty but auth is intended.
-        # Let's change this to: if VALID_API_KEYS is empty, it means no keys are valid (unless specific "allow all" logic).
-        # For this subtask, if VALID_API_KEYS is empty, let's make it so NO key is valid, enforcing configuration.
-        # To disable auth, one would comment out the `Depends(verify_api_key)` from endpoints.
-        # If settings.VALID_API_KEYS is an empty list, no key will ever be valid.
-    # This means endpoints protected by this will be inaccessible if VALID_API_KEYS is empty.
-    # This is a design choice: require configuration for keys to be active.
+        # If no API keys are configured, treat as no valid keys configured.
+        # Endpoints depending on this will be inaccessible unless keys are provided.
+        pass
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

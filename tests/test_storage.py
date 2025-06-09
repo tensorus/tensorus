@@ -92,13 +92,159 @@ def test_delete_lineage_metadata(mem_storage: InMemoryStorage, base_td: TensorDe
     assert mem_storage.get_lineage_metadata(base_td.tensor_id) is None
     assert mem_storage.delete_lineage_metadata(base_td.tensor_id) is False # Already deleted
 
-# Repeat similar test patterns for Computational, Quality, Relational, Usage metadata
-# For brevity, only one representative set (Lineage) is fully expanded here.
-# Assume similar tests would be written for:
-# - ComputationalMetadata (sample_cm, test_add_get_cm, test_update_cm, test_delete_cm)
-# - QualityMetadata (sample_qm, test_add_get_qm, test_update_qm, test_delete_qm)
-# - RelationalMetadata (sample_rm, test_add_get_rm, test_update_rm, test_delete_rm)
-# - UsageMetadata (sample_um, test_add_get_um, test_update_um, test_delete_um)
+# --- ComputationalMetadata Storage Tests ---
+@pytest.fixture
+def sample_cm(base_td: TensorDescriptor) -> ComputationalMetadata:
+    return ComputationalMetadata(
+        tensor_id=base_td.tensor_id,
+        algorithm="CNN",
+        computation_time_seconds=5.0,
+        parameters={"lr": 0.01}
+    )
+
+def test_add_get_computational_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_cm: ComputationalMetadata):
+    mem_storage.add_computational_metadata(sample_cm)
+    retrieved = mem_storage.get_computational_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.algorithm == "CNN"
+    assert retrieved.parameters["lr"] == 0.01
+
+def test_add_computational_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_cm: ComputationalMetadata):
+    mem_storage.add_computational_metadata(sample_cm)
+    new_cm = ComputationalMetadata(**{**sample_cm.dict(), "algorithm": "RNN"})
+    mem_storage.add_computational_metadata(new_cm)
+    retrieved = mem_storage.get_computational_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.algorithm == "RNN"
+
+def test_update_computational_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_cm: ComputationalMetadata):
+    mem_storage.add_computational_metadata(sample_cm)
+    updated = mem_storage.update_computational_metadata(base_td.tensor_id, algorithm="Updated", parameters={"dropout": 0.2})
+    assert updated is not None
+    assert updated.algorithm == "Updated"
+    assert updated.parameters["dropout"] == 0.2
+
+def test_delete_computational_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_cm: ComputationalMetadata):
+    mem_storage.add_computational_metadata(sample_cm)
+    assert mem_storage.delete_computational_metadata(base_td.tensor_id) is True
+    assert mem_storage.get_computational_metadata(base_td.tensor_id) is None
+    assert mem_storage.delete_computational_metadata(base_td.tensor_id) is False
+
+# --- QualityMetadata Storage Tests ---
+@pytest.fixture
+def sample_qm(base_td: TensorDescriptor) -> QualityMetadata:
+    return QualityMetadata(
+        tensor_id=base_td.tensor_id,
+        statistics=QualityStatistics(mean=0.5),
+        missing_values=MissingValuesInfo(count=0, percentage=0.0),
+        confidence_score=0.9
+    )
+
+def test_add_get_quality_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_qm: QualityMetadata):
+    mem_storage.add_quality_metadata(sample_qm)
+    retrieved = mem_storage.get_quality_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.confidence_score == 0.9
+
+def test_add_quality_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_qm: QualityMetadata):
+    mem_storage.add_quality_metadata(sample_qm)
+    new_qm = QualityMetadata(**{**sample_qm.dict(), "noise_level": 0.1})
+    mem_storage.add_quality_metadata(new_qm)
+    retrieved = mem_storage.get_quality_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.noise_level == 0.1
+
+def test_update_quality_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_qm: QualityMetadata):
+    mem_storage.add_quality_metadata(sample_qm)
+    updated = mem_storage.update_quality_metadata(base_td.tensor_id, noise_level=0.2)
+    assert updated is not None
+    assert updated.noise_level == 0.2
+    assert updated.confidence_score == 0.9
+
+def test_delete_quality_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_qm: QualityMetadata):
+    mem_storage.add_quality_metadata(sample_qm)
+    assert mem_storage.delete_quality_metadata(base_td.tensor_id) is True
+    assert mem_storage.get_quality_metadata(base_td.tensor_id) is None
+    assert mem_storage.delete_quality_metadata(base_td.tensor_id) is False
+
+# --- RelationalMetadata Storage Tests ---
+@pytest.fixture
+def sample_rm(base_td: TensorDescriptor) -> RelationalMetadata:
+    return RelationalMetadata(
+        tensor_id=base_td.tensor_id,
+        related_tensors=[RelatedTensorLink(related_tensor_id=uuid4(), relationship_type="related")],
+        collections=["setA"],
+        dependencies=[uuid4()],
+        dataset_context="dataset1"
+    )
+
+def test_add_get_relational_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_rm: RelationalMetadata):
+    mem_storage.add_relational_metadata(sample_rm)
+    retrieved = mem_storage.get_relational_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.dataset_context == "dataset1"
+
+def test_add_relational_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_rm: RelationalMetadata):
+    mem_storage.add_relational_metadata(sample_rm)
+    new_rm = RelationalMetadata(**{**sample_rm.dict(), "collections": ["setB"]})
+    mem_storage.add_relational_metadata(new_rm)
+    retrieved = mem_storage.get_relational_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.collections == ["setB"]
+
+def test_update_relational_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_rm: RelationalMetadata):
+    mem_storage.add_relational_metadata(sample_rm)
+    updated = mem_storage.update_relational_metadata(base_td.tensor_id, dataset_context="dataset2")
+    assert updated is not None
+    assert updated.dataset_context == "dataset2"
+
+def test_delete_relational_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_rm: RelationalMetadata):
+    mem_storage.add_relational_metadata(sample_rm)
+    assert mem_storage.delete_relational_metadata(base_td.tensor_id) is True
+    assert mem_storage.get_relational_metadata(base_td.tensor_id) is None
+    assert mem_storage.delete_relational_metadata(base_td.tensor_id) is False
+
+# --- UsageMetadata Storage Tests ---
+@pytest.fixture
+def sample_um(base_td: TensorDescriptor) -> UsageMetadata:
+    now = datetime.utcnow()
+    return UsageMetadata(
+        tensor_id=base_td.tensor_id,
+        access_history=[UsageAccessRecord(user_or_service="tester", operation_type="read", accessed_at=now)],
+        application_references=["app1"],
+        purpose={"training": "modelA"}
+    )
+
+def test_add_get_usage_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_um: UsageMetadata):
+    mem_storage.add_usage_metadata(sample_um)
+    retrieved = mem_storage.get_usage_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.usage_frequency == 1
+    assert retrieved.application_references == ["app1"]
+
+def test_add_usage_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_um: UsageMetadata):
+    mem_storage.add_usage_metadata(sample_um)
+    new_record = UsageAccessRecord(user_or_service="tester2", operation_type="write", accessed_at=datetime.utcnow())
+    new_um = UsageMetadata(**{**sample_um.dict(), "access_history": [new_record]})
+    mem_storage.add_usage_metadata(new_um)
+    retrieved = mem_storage.get_usage_metadata(base_td.tensor_id)
+    assert retrieved is not None
+    assert retrieved.usage_frequency == 1
+    assert retrieved.access_history[0].user_or_service == "tester2"
+
+def test_update_usage_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_um: UsageMetadata):
+    mem_storage.add_usage_metadata(sample_um)
+    new_access = UsageAccessRecord(user_or_service="user_x", operation_type="read", accessed_at=datetime.utcnow())
+    updated = mem_storage.update_usage_metadata(base_td.tensor_id, access_history=sample_um.access_history + [new_access])
+    assert updated is not None
+    assert updated.usage_frequency == 2
+    assert updated.access_history[-1].user_or_service == "user_x"
+
+def test_delete_usage_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_um: UsageMetadata):
+    mem_storage.add_usage_metadata(sample_um)
+    assert mem_storage.delete_usage_metadata(base_td.tensor_id) is True
+    assert mem_storage.get_usage_metadata(base_td.tensor_id) is None
+    assert mem_storage.delete_usage_metadata(base_td.tensor_id) is False
 
 
 # --- Test Cascade Delete ---
