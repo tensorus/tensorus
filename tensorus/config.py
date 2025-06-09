@@ -59,6 +59,7 @@ class SettingsV1(BaseSettings):
     # API Security
     VALID_API_KEYS: list[str] = [] # Comma-separated string in env, e.g., "key1,key2,key3"
     API_KEY_HEADER_NAME: str = "X-API-KEY"
+    AUDIT_LOG_PATH: str = "tensorus_audit.log"
 
 
     class Config:

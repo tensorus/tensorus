@@ -1,6 +1,7 @@
 import logging
 from typing import Optional, Dict, Any
 import sys
+from tensorus.config import settings
 
 # Configure basic logger
 # In a real app, this might be more complex (e.g., JSON logging, log rotation, external service)
@@ -10,8 +11,7 @@ LOG_DEFAULT_HANDLERS = [logging.StreamHandler(sys.stdout)] # Log to stdout by de
 # Attempt to create a log file handler.
 # This is a simple file logger; in production, consider more robust solutions.
 try:
-    # TODO: Make log file path configurable via settings
-    file_handler = logging.FileHandler("tensorus_audit.log")
+    file_handler = logging.FileHandler(settings.AUDIT_LOG_PATH)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
     LOG_DEFAULT_HANDLERS.append(file_handler)
 except IOError:

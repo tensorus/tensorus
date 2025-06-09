@@ -14,9 +14,9 @@ tensorly
 Pillow>=9.0.0
 
 # --- API Layer Dependencies ---
-fastapi>=0.90.0
-# Lock Pydantic < 2.0 for broad FastAPI compatibility, adjust if using newer FastAPI explicitly with Pydantic v2
-pydantic>=1.10.0,<2.0.0
+# FastAPI with Pydantic v2 support
+fastapi>=0.110.0
+pydantic>=2.0.0
 # ASGI Server (standard includes extras like watchfiles for reload)
 uvicorn[standard]>=0.20.0
 # For PostgreSQL connectivity (used by PostgresMetadataStorage)
