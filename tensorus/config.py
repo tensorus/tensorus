@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+from pydantic import field_validator
 
 class Settings(BaseSettings):
     # Configuration for environment variable prefix, .env file, etc.
@@ -62,18 +63,15 @@ class SettingsV1(BaseSettings):
     AUDIT_LOG_PATH: str = "tensorus_audit.log"
 
 
-    class Config:
-        env_prefix = "TENSORUS_" # Variables like TENSORUS_STORAGE_BACKEND
-        case_sensitive = False
-        # For Pydantic v1, list[str] from env var needs a custom parser if it's comma-separated.
-        # Pydantic settings v2 handles this better with `SettingsConfigDict(env_nested_delimiter='__')` for dicts
-        # and auto-parses comma-separated strings to lists for `list[str]` types.
-        # For Pydantic v1, we might need to parse it manually after loading or expect space-separated.
-        # Or, use a string and parse it where needed.
-        # Let's assume VALID_API_KEYS will be set as a JSON string list in env for auto-parsing by Pydantic v1,
-        # e.g. TENSORUS_VALID_API_KEYS='["key1", "key2"]'
-        # or rely on a custom parser if it's just "key1,key2".
-        # For simplicity now, assume it's loaded as a list if correctly formatted in env or default is used.
+
+
+    model_config = SettingsConfigDict(env_prefix="TENSORUS_", case_sensitive=False, enable_decoding=False)
+
+    @field_validator("VALID_API_KEYS", mode="before")
+    def split_valid_api_keys(cls, v):
+        if isinstance(v, str):
+            return [key.strip() for key in v.split(',') if key.strip()]
+        return v
 
     # JWT Authentication (Conceptual Settings)
     AUTH_JWT_ENABLED: bool = False
