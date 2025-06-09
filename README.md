@@ -16,8 +16,8 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 *   **API-Driven:** A FastAPI backend provides a RESTful API for interacting with Tensorus.
 *   **Streamlit UI:** A user-friendly Streamlit frontend for exploring data and controlling agents.
 *   **Tensor Operations:** A comprehensive library of robust tensor operations for common manipulations. See [Basic Tensor Operations](#basic-tensor-operations) for details.
-*   **Model System:** Lightweight framework with a model registry and built-in
-    linear and logistic regression models.
+*   **Model System:** Optional model registry with example models provided in a
+    separate package. See [Tensorus Models](https://github.com/tensorus/models).
 *   **Metadata System:** Rich Pydantic schemas and storage backends for semantic, lineage, computational, quality, relational, and usage metadata.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
 *   **Model Context Protocol (MCP) Server:** Provides a standardized interface for AI agents and LLMs to interact with Tensorus capabilities (tensor storage and operations) using the Model Context Protocol. (See [MCP Server Details](#mcp-server-details) below).
@@ -94,7 +94,7 @@ graph TD
     %% Model System
     subgraph Model_Layer ["Model System"]
         Registry[Model Registry]
-        Builtins[Built-in Models]
+        ModelsPkg[Models Package]
     end
 
     %% Tensor Operations Library
@@ -115,9 +115,9 @@ graph TD
     API -->|Direct Query| TS_query
 
     %% Model System Interactions
-    Registry -->|Uses Models| Builtins
+    Registry -->|Uses Models| ModelsPkg
     Registry -->|Load/Save| TS
-    Builtins -->|Tensor Ops| TOps
+    ModelsPkg -->|Tensor Ops| TOps
 
     %% Agent Storage Interactions
     IA -->|Data Ingestion| TS_insert
@@ -406,182 +406,20 @@ The Streamlit UI provides a user-friendly interface for:
     *   `task_type`: Type of task ('regression' or 'classification').
     *   `results_dataset`: Dataset name for storing results.
 
-### Model System
 
-The `tensorus.models` package provides a minimal framework for training and
-managing models directly within Tensorus. The framework consists of:
+### Tensorus Models
 
-* **`TensorusModel` base class** defining `fit`, `predict`, `save` and `load`
-  methods.
-* **Model registry** accessed via `register_model` and `get_model` for looking
-  up models by name.
-* **Built-in models** implemented with PyTorch, NumPy and scikit-learn:
-    * `LinearRegressionModel` - standard linear regression.
-    * `LogisticRegressionModel` - logistic regression classifier.
-    * `RidgeRegressionModel` - linear regression with L2 regularization.
-    * `LassoRegressionModel` - linear regression with L1 regularization.
-    * `ElasticNetRegressionModel` - linear regression with mixed L1/L2 regularization.
-    * `DecisionTreeClassifierModel` - decision tree classifier.
-    * `DecisionTreeRegressorModel` - decision tree regressor.
-    * `KMeansClusteringModel` - k-means clustering algorithm.
-    * `DBSCANClusteringModel` - density-based clustering.
-    * `AgglomerativeClusteringModel` - hierarchical agglomerative clustering.
-    * `GaussianMixtureModel` - mixture of Gaussians.
-    * `SVMClassifierModel` - support vector machine classifier.
-    * `SVRModel` - support vector regression.
-    * `RandomForestClassifierModel` - ensemble of trees for classification.
-    * `RandomForestRegressorModel` - ensemble of trees for regression.
-    * `KNNClassifierModel` - k-nearest neighbors classifier.
-    * `GaussianNBClassifierModel` - Gaussian naive Bayes classifier.
-    * `LDAClassifierModel` - linear discriminant analysis.
-    * `QDAClassifierModel` - quadratic discriminant analysis.
-    * `PCADecompositionModel` - principal component analysis.
-    * `TSNEEmbeddingModel` - t-SNE dimensionality reduction.
-    * `UMAPEmbeddingModel` - UMAP dimensionality reduction.
-    * `IsolationForestModel` - isolation forest anomaly detector.
-    * `OneClassSVMModel` - one-class SVM anomaly detector.
-    * `MLPClassifierModel` - simple neural network classifier.
-    * `StackedRBMClassifierModel` - stacked Restricted Boltzmann Machines classifier.
-    * `ARIMAModel` - ARIMA time series model.
-    * `SARIMAModel` - seasonal ARIMA model.
-    * `ExponentialSmoothingModel` - Holt-Winters exponential smoothing.
-    * `GARCHModel` - generalized autoregressive conditional heteroskedasticity.
-    * `PoissonRegressorModel` - Poisson regression for count data.
-    * `PolynomialRegressionModel` - polynomial regression.
-    * `GradientBoostingClassifierModel` - gradient boosted trees for classification.
-    * `GradientBoostingRegressorModel` - gradient boosted trees for regression.
-    * `XGBoostClassifierModel` - XGBoost classifier.
-    * `XGBoostRegressorModel` - XGBoost regressor.
-    * `LightGBMClassifierModel` - LightGBM classifier.
-    * `LightGBMRegressorModel` - LightGBM regressor.
-    * `CatBoostClassifierModel` - CatBoost classifier.
-    * `CatBoostRegressorModel` - CatBoost regressor.
-    * `FactorAnalysisModel` - factor analysis.
-    * `CCAModel` - canonical correlation analysis.
-    * `Word2VecModel` - Word2Vec embeddings.
-    * `GloVeModel` - GloVe embeddings.
-    * `LabelPropagationModel` - label propagation semi-supervised classifier.
-    * `SelfTrainingClassifierModel` - self-training semi-supervised classifier.
-    * `VAEModel` - variational autoencoder.
-    * `GANModel` - generative adversarial network.
-    * `DiffusionModel` - diffusion-based generative model.
-    * `FlowBasedModel` - normalizing flow generative model.
-    * `GCNClassifierModel` - graph convolutional network classifier.
-    * `GATClassifierModel` - graph attention network classifier.
-    * `NamedEntityRecognitionModel` - simple NER tagger.
-    * `LeNetModel` - classic LeNet CNN.
-    * `AlexNetModel` - AlexNet CNN.
-    * `VGGModel` - VGG CNN.
-    * `ResNetModel` - ResNet CNN.
-    * `MobileNetModel` - MobileNet CNN.
-    * `EfficientNetModel` - EfficientNet CNN.
-    * `FasterRCNNModel` - object detection with Faster R-CNN (inference only).
-    * `YOLOv5Detector` - object detection with YOLOv5.
-    * `UNetSegmentationModel` - UNet image segmentation (inference only).
-    * `CollaborativeFilteringModel` - classic collaborative filtering.
-    * `MatrixFactorizationModel` - matrix factorization recommender.
-    * `NeuralCollaborativeFilteringModel` - neural collaborative filtering.
-    * `NeuroSymbolicModel` - hybrid neuro-symbolic model.
-    * `PhysicsInformedNNModel` - physics-informed neural network.
-    * `StackedGeneralizationModel` - stacking ensemble.
-    * `MixtureOfExpertsModel` - mixture of experts ensemble.
-    * `LSTMClassifierModel` - LSTM-based classifier.
-    * `GRUClassifierModel` - GRU-based classifier.
-    * `CoxPHModel` - Cox proportional hazards survival model.
-    * `AnovaModel` - analysis of variance.
-    * `ManovaModel` - multivariate ANOVA.
-    * `MixedEffectsModel` - mixed effects regression.
-    * `StructuralEquationModel` - structural equation modeling.
-    * `TransformerModel` - generic Transformer encoder-decoder.
-    * `BERTModel` - BERT classifier.
-    * `GPTModel` - GPT language model.
-    * `T5Model` - T5 text-to-text model.
-    * `VisionTransformerModel` - vision transformer.
-    * `LargeLanguageModelWrapper` - wrapper around HuggingFace causal language models.
-    * `MultimodalFoundationModel` - CLIP-style multimodal encoder.
-    * `FedAvgModel` - federated averaging aggregator.
+The collection of example models previously bundled with Tensorus now lives in
+a separate repository: [tensorus/models](https://github.com/tensorus/models).
+Install it with:
 
-Models can easily load their training data from a dataset and write prediction
-results back to `TensorStorage` using the helper functions in
-`tensorus.models.utils`.
-
-### Model Utilities
-
-`tensorus.models.utils` provides small helpers for working with datasets in
-`TensorStorage` when training models.  The snippet below loads features and
-targets and stores predictions back into the storage:
-
-```python
-from tensorus.tensor_storage import TensorStorage
-from tensorus.models.linear_regression import LinearRegressionModel
-from tensorus.models.utils import load_xy_from_storage, store_predictions
-
-storage = TensorStorage()
-X, y = load_xy_from_storage(storage, "my_dataset", target_field="label")
-model = LinearRegressionModel()
-model.fit(X, y)
-preds = model.predict(X)
-store_predictions(storage, "my_predictions", preds,
-                  model_name="LinearRegressionModel")
+```bash
+pip install tensorus-models
 ```
 
-### StackedRBMClassifierModel Usage
-
-```python
-import torch
-from torchvision import transforms
-from torchvision.datasets import FakeData
-from tensorus.models.stacked_rbm_classifier import StackedRBMClassifierModel
-
-dataset = FakeData(size=100, image_size=(1, 28, 28), num_classes=10,
-                   transform=transforms.Compose([
-                       transforms.ToTensor(),
-                       transforms.Lambda(lambda x: x.view(-1))
-                   ]))
-X = torch.stack([dataset[i][0] for i in range(100)])
-y = torch.tensor([dataset[i][1] for i in range(100)])
-
-model = StackedRBMClassifierModel(layer_sizes=[784, 64], n_classes=10,
-                                  rbm_epochs=1, fine_tune_epochs=1,
-                                  batch_size=10)
-model.fit(X, y)
-preds = model.predict(X)
-model.save("rbm.pt")
-```
-
-### LargeLanguageModelWrapper Usage
-
-```python
-from tensorus.models.large_language_model import LargeLanguageModelWrapper
-
-model = LargeLanguageModelWrapper(model_name="gpt2")
-text = model.generate(["Hello world"])[0]
-print(text)
-```
-
-### MultimodalFoundationModel Usage
-
-```python
-from PIL import Image
-from tensorus.models.multimodal_foundation import MultimodalFoundationModel
-
-img = Image.new("RGB", (224, 224))
-model = MultimodalFoundationModel()
-similarity = model.predict([img], ["a plain image"])
-```
-
-### FedAvgModel Usage Considerations
-
-```python
-import torch.nn as nn
-from tensorus.models.fedavg_model import FedAvgModel
-
-global_net = nn.Linear(10, 2)
-aggregator = FedAvgModel(global_net)
-
-# client_state_dicts would be collected from remote clients
-aggregator.fit(client_state_dicts)
-```
+When the package is installed, Tensorus will automatically import it. Set the
+environment variable `TENSORUS_MINIMAL_IMPORT=1` before importing Tensorus to
+skip this optional dependency and keep startup lightweight.
 
 ## Basic Tensor Operations
 

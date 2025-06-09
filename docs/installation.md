@@ -27,8 +27,14 @@ The easiest way to get Tensorus and its PostgreSQL backend running locally is by
     ```bash
     pip install -r requirements.txt
     ```
-5.  Set up the necessary environment variables (see Configuration below).
-6.  Run the application using Uvicorn:
+5.  *(Optional)* Install the example models package. The built-in models that
+    were previously part of this repository now live at
+    [https://github.com/tensorus/models](https://github.com/tensorus/models):
+    ```bash
+    pip install tensorus-models
+    ```
+6.  Set up the necessary environment variables (see Configuration below).
+7.  Run the application using Uvicorn:
     ```bash
     uvicorn tensorus.api.main:app --host 0.0.0.0 --port 8000 --reload # for development
     ```
@@ -48,6 +54,8 @@ Tensorus is configured via environment variables. Key variables include:
 *   `TENSORUS_POSTGRES_DSN`: Alternative DSN connection string for PostgreSQL.
 *   `TENSORUS_VALID_API_KEYS`: Comma-separated list of valid API keys for write operations (e.g., `key1,key2,anotherkey`). If empty or not set, write operations requiring API keys will be inaccessible.
 *   `TENSORUS_API_KEY_HEADER_NAME`: HTTP header name for the API key (default: `X-API-KEY`).
+*   `TENSORUS_MINIMAL_IMPORT`: Set to any value to skip importing the optional
+    `tensorus-models` package for a lightweight installation.
 
 ### JWT Authentication (Conceptual - For Future Use)
 *   `TENSORUS_AUTH_JWT_ENABLED`: `True` or `False` (default `False`).
