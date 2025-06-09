@@ -235,7 +235,7 @@ def test_import_data_postgres_not_implemented(client_with_clean_storage: TestCli
 
     response = client_with_clean_storage.post("/tensors/import", json=import_payload.model_dump(mode="json"), headers=headers)
     assert response.status_code == 501
-    assert "Import functionality is not implemented" in response.json()["detail"]
+    assert "Import not implemented for current backend." in response.json()["detail"]
 
     # Clean up the override
     if original_dependency:
