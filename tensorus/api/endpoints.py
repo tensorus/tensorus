@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Annotated, Literal
 from uuid import UUID
 from datetime import datetime
 
@@ -499,7 +499,7 @@ async def export_tensor_metadata(
 @router_io.post("/import", summary="Import Tensor Metadata")
 async def import_tensor_metadata(
     import_data_payload: TensorusExportData,
-    conflict_strategy: str = Query("skip", enum=["skip", "overwrite"]), # Changed FastAPIQuery to Query
+    conflict_strategy: Annotated[Literal["skip", "overwrite"], Query("skip")],
     storage: MetadataStorage = Depends(get_storage_instance),
     api_key: str = Depends(verify_api_key)
 ):
@@ -507,9 +507,6 @@ async def import_tensor_metadata(
         result_summary = storage.import_data(import_data_payload, conflict_strategy=conflict_strategy)
         log_audit_event("IMPORT_DATA", api_key, details={"strategy": conflict_strategy, "summary": result_summary})
         return result_summary
-    except ValueError as e:
-        log_audit_event("IMPORT_DATA_FAILED", api_key, details={"strategy": conflict_strategy, "error": str(e)})
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except NotImplementedError:
         log_audit_event("IMPORT_DATA_FAILED_NOT_IMPLEMENTED", api_key, details={"strategy": conflict_strategy})
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Import not implemented for current backend.")
