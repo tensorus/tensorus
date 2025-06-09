@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:integration": "jest --testTimeout=30000 tests_integration/test_mcp_integration.js"
+    "test:integration": "jest --testTimeout=30000 tests_integration/test_mcp_integration.test.js"
   },
   "keywords": [],
   "author": "",
