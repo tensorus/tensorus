@@ -1,0 +1,40 @@
+name: Models Repository Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  test-models:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout core repo
+        uses: actions/checkout@v4
+        with:
+          path: core
+      - name: Checkout models repo
+        uses: actions/checkout@v4
+        with:
+          repository: tensorus/models
+          path: models
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install -r core/requirements.txt
+          python -m pip install -r core/requirements-test.txt
+      - name: Prepare models package
+        run: |
+          mkdir -p models/tensorus
+          cp -r core/tensorus models/tensorus
+          mkdir -p models/tensorus/models
+          cp models/*.py models/tensorus/models/
+          cp models/__init__.py models/tensorus/models/__init__.py
+      - name: Run models tests
+        working-directory: models
+        env:
+          PYTHONPATH: ${{ github.workspace }}/models
+        run: pytest -v tests
