@@ -499,7 +499,7 @@ async def export_tensor_metadata(
 @router_io.post("/import", summary="Import Tensor Metadata")
 async def import_tensor_metadata(
     import_data_payload: TensorusExportData,
-    conflict_strategy: Annotated[Literal["skip", "overwrite"], Query("skip")],
+    conflict_strategy: Annotated[Literal["skip", "overwrite"], Query()] = "skip",
     storage: MetadataStorage = Depends(get_storage_instance),
     api_key: str = Depends(verify_api_key)
 ):
@@ -509,7 +509,7 @@ async def import_tensor_metadata(
         return result_summary
     except NotImplementedError:
         log_audit_event("IMPORT_DATA_FAILED_NOT_IMPLEMENTED", api_key, details={"strategy": conflict_strategy})
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Import not implemented for current backend.")
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Import functionality is not implemented")
     except Exception as e:
         log_audit_event("IMPORT_DATA_FAILED_UNEXPECTED", api_key, details={"strategy": conflict_strategy, "error": str(e)})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error during import: {e}")
