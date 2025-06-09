@@ -115,13 +115,16 @@ def test_export_invalid_uuid_format(client_with_clean_storage: TestClient):
 # --- /tensors/import Endpoint Tests ---
 API_KEY = "test_io_key_for_real" # Different from security tests to avoid clash if run together
 
-@pytest.fixture(scope="module", autouse=True) # Apply to all tests in this module
-def setup_io_api_keys_module(monkeypatch):
-    # Using module scope to set keys once for all I/O tests
-    monkeypatch.setattr(global_settings, 'VALID_API_KEYS', [API_KEY])
-    monkeypatch.setattr(global_settings, 'API_KEY_HEADER_NAME', "X-API-KEY")
+@pytest.fixture(scope="module", autouse=True)  # Apply to all tests in this module
+def setup_io_api_keys_module():
+    """Set API key settings for I/O API tests using a local MonkeyPatch."""
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(global_settings, "VALID_API_KEYS", [API_KEY])
+    monkeypatch.setattr(global_settings, "API_KEY_HEADER_NAME", "X-API-KEY")
     from tensorus.api.security import api_key_header_auth as global_api_key_header_auth
-    monkeypatch.setattr(global_api_key_header_auth, 'name', "X-API-KEY")
+    monkeypatch.setattr(global_api_key_header_auth, "name", "X-API-KEY")
+    yield
+    monkeypatch.undo()
 
 
 def test_import_data_skip_strategy(client_with_clean_storage: TestClient, sample_td_1: TensorDescriptor):
