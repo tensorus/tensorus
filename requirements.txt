@@ -5,7 +5,6 @@
 torch>=1.13.0
 torchvision>=0.14.0
 segmentation-models-pytorch
-torch-geometric
 transformers
 numpy>=1.21.0
 tensorly
@@ -40,16 +39,12 @@ httpx>=0.23.0 # For FastAPI TestClient
 # Optional: For plotting example in rl_agent.py
 matplotlib>=3.5.0
 # For Time Series Analysis (ARIMA model)
-statsmodels>=0.13.0
 scikit-learn>=1.3.0
 umap-learn
 pandas>=1.5.0
 arch>=5.7
 lifelines>=0.28
 semopy>=2.3
-xgboost
-lightgbm
-catboost
 gensim
 joblib
 opencv-python

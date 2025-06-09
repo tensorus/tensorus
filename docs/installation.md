@@ -27,6 +27,11 @@ The easiest way to get Tensorus and its PostgreSQL backend running locally is by
     ```bash
     pip install -r requirements.txt
     ```
+    Heavy machine-learning libraries used by the optional models are not
+    installed by default. Install them with the `[models]` extra when needed:
+    ```bash
+    pip install -e .[models]
+    ```
 5.  *(Optional)* Install the example models package. The built-in models that
     were previously part of this repository now live at
     [https://github.com/tensorus/models](https://github.com/tensorus/models):
