@@ -61,7 +61,7 @@ def _create_td_via_api(client: TestClient, headers: Dict, **overrides) -> Dict:
 
 # --- Audit Logging Tests (Integrated into existing API tests where applicable) ---
 
-@patch('tensorus.audit.log_audit_event') # Path to where log_audit_event is defined
+@patch('tensorus.api.endpoints.log_audit_event') # Path to where log_audit_event is defined
 def test_create_tensor_descriptor_audit_log(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_id = uuid4()
@@ -79,7 +79,7 @@ def test_create_tensor_descriptor_audit_log(mock_log_audit_event: MagicMock, cli
         details={"owner": "audit_log_user", "data_type": "float32"}
     )
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_update_tensor_descriptor_audit_log(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers, owner="original_owner_audit") # Use helper
@@ -90,13 +90,13 @@ def test_update_tensor_descriptor_audit_log(mock_log_audit_event: MagicMock, cli
     assert response.status_code == 200
 
     mock_log_audit_event.assert_called_with(
-        action="UPDATE_TENSOR_DESCRIPTOR",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=td_id_str,
-        details={"updated_fields": ["owner", "tags"]} # Order might vary, so check as set if issues
+        "UPDATE_TENSOR_DESCRIPTOR",
+        API_KEY_FOR_MAIN_API_TESTS,
+        td_id_str,
+        {"updated_fields": ["owner", "tags"]}
     )
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_delete_tensor_descriptor_audit_log(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers, owner="delete_audit_user")
@@ -106,13 +106,13 @@ def test_delete_tensor_descriptor_audit_log(mock_log_audit_event: MagicMock, cli
     assert response.status_code == 200
 
     mock_log_audit_event.assert_called_with(
-        action="DELETE_TENSOR_DESCRIPTOR",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=td_id_str
+        "DELETE_TENSOR_DESCRIPTOR",
+        API_KEY_FOR_MAIN_API_TESTS,
+        td_id_str
     )
 
 # Example for an extended metadata type: Lineage
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_upsert_lineage_metadata_audit_log(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers)
@@ -123,12 +123,12 @@ def test_upsert_lineage_metadata_audit_log(mock_log_audit_event: MagicMock, clie
     assert response.status_code == 201
 
     mock_log_audit_event.assert_called_with(
-        action="UPSERT_Lineage_METADATA", # Note: Generic helper uses capitalized name
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=str(td_id)
+        "UPSERT_Lineage_METADATA",
+        API_KEY_FOR_MAIN_API_TESTS,
+        str(td_id)
     )
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_patch_lineage_metadata_audit_log(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers)
@@ -144,14 +144,14 @@ def test_patch_lineage_metadata_audit_log(mock_log_audit_event: MagicMock, clien
     assert response.status_code == 200
 
     mock_log_audit_event.assert_called_with(
-        action="PATCH_Lineage_METADATA",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=str(td_id),
-        details={"updated_fields": list(patch_payload.keys())} # Order might vary
+        "PATCH_Lineage_METADATA",
+        API_KEY_FOR_MAIN_API_TESTS,
+        str(td_id),
+        {"updated_fields": list(patch_payload.keys())}
     )
 
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_delete_lineage_metadata_audit_log(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers)
@@ -165,13 +165,13 @@ def test_delete_lineage_metadata_audit_log(mock_log_audit_event: MagicMock, clie
     assert response.status_code == 204
 
     mock_log_audit_event.assert_called_with(
-        action="DELETE_Lineage_METADATA",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=str(td_id)
+        "DELETE_Lineage_METADATA",
+        API_KEY_FOR_MAIN_API_TESTS,
+        str(td_id)
     )
 
 # Test import audit log
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_import_data_audit_log(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_id = uuid4()
@@ -185,8 +185,8 @@ def test_import_data_audit_log(mock_log_audit_event: MagicMock, client_with_clea
     summary = response.json()
 
     mock_log_audit_event.assert_called_with(
-        action="IMPORT_DATA",
-        user=API_KEY_FOR_MAIN_API_TESTS,
+        "IMPORT_DATA",
+        API_KEY_FOR_MAIN_API_TESTS,
         details={"strategy": "skip", "summary": summary}
     )
 
@@ -196,7 +196,7 @@ def test_import_data_audit_log(mock_log_audit_event: MagicMock, client_with_clea
 # The existing test structure of test_api.py would be preserved, and audit checks added to relevant tests.
 
 # Example: Abridged version of a test from previous phase, now with audit log check
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_create_semantic_metadata_audit(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers, owner="semantic_audit_user")
@@ -209,13 +209,13 @@ def test_create_semantic_metadata_audit(mock_log_audit_event: MagicMock, client_
     assert response.status_code == 201
 
     mock_log_audit_event.assert_called_with(
-        action="CREATE_SEMANTIC_METADATA",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=str(td_id),
-        details={"name": "audit_sem_meta"}
+        "CREATE_SEMANTIC_METADATA",
+        API_KEY_FOR_MAIN_API_TESTS,
+        str(td_id),
+        {"name": "audit_sem_meta"}
     )
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_update_semantic_metadata_audit(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers)
@@ -232,13 +232,13 @@ def test_update_semantic_metadata_audit(mock_log_audit_event: MagicMock, client_
     assert response.status_code == 200
 
     mock_log_audit_event.assert_called_with(
-        action="UPDATE_SEMANTIC_METADATA",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=str(td_id),
-        details={"original_name": sm_name, "updated_fields": update_payload}
+        "UPDATE_SEMANTIC_METADATA",
+        API_KEY_FOR_MAIN_API_TESTS,
+        str(td_id),
+        {"original_name": sm_name, "updated_fields": update_payload}
     )
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_delete_semantic_metadata_audit(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     td_data = _create_td_via_api(client_with_clean_storage, headers=headers)
@@ -252,13 +252,13 @@ def test_delete_semantic_metadata_audit(mock_log_audit_event: MagicMock, client_
     assert response.status_code == 204 # No content for successful delete
 
     mock_log_audit_event.assert_called_with(
-        action="DELETE_SEMANTIC_METADATA",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=str(td_id),
-        details={"name": sm_name}
+        "DELETE_SEMANTIC_METADATA",
+        API_KEY_FOR_MAIN_API_TESTS,
+        str(td_id),
+        {"name": sm_name}
     )
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_create_tensor_version_audit(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     parent_td_data = _create_td_via_api(client_with_clean_storage, headers=headers, owner="version_parent_audit")
@@ -272,17 +272,16 @@ def test_create_tensor_version_audit(mock_log_audit_event: MagicMock, client_wit
     new_version_id = new_version_data["tensor_id"]
 
     mock_log_audit_event.assert_called_with(
-        action="CREATE_TENSOR_VERSION",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=new_version_id,
-        details={
-            "parent_tensor_id": parent_id_str,
-            "new_version_string": "vAuditTest",
-            "new_owner": parent_td_data["owner"] # Owner is copied by default in create_tensor_version
+        "CREATE_TENSOR_VERSION",
+        API_KEY_FOR_MAIN_API_TESTS,
+        new_version_id,
+        {
+            "parent_id": parent_id_str,
+            "version": "vAuditTest"
         }
     )
 
-@patch('tensorus.audit.log_audit_event')
+@patch('tensorus.api.endpoints.log_audit_event')
 def test_create_lineage_relationship_audit(mock_log_audit_event: MagicMock, client_with_clean_storage: TestClient):
     headers = {"X-API-KEY": API_KEY_FOR_MAIN_API_TESTS}
     source_td_data = _create_td_via_api(client_with_clean_storage, headers=headers, owner="src_lineage_audit")
@@ -301,15 +300,15 @@ def test_create_lineage_relationship_audit(mock_log_audit_event: MagicMock, clie
 
     # Details in log should match relationship_payload after being dict()
     expected_details = {
-        "source_tensor_id": source_id_str,
-        "target_tensor_id": target_id_str,
+        "source_tensor_id": UUID(source_id_str),
+        "target_tensor_id": UUID(target_id_str),
         "relationship_type": "derived_for_audit",
-        "details": None # Assuming details is None if not provided
+        "details": None
     }
     mock_log_audit_event.assert_called_with(
-        action="CREATE_LINEAGE_RELATIONSHIP",
-        user=API_KEY_FOR_MAIN_API_TESTS,
-        tensor_id=target_id_str, # Logged against the target tensor
+        "CREATE_LINEAGE_RELATIONSHIP",
+        API_KEY_FOR_MAIN_API_TESTS,
+        target_id_str,
         details=expected_details
     )
 
