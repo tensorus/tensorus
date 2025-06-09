@@ -1,5 +1,6 @@
 from typing import Dict, Optional, List, Any
 from uuid import UUID
+import logging
 
 from .schemas import (
     TensorDescriptor, SemanticMetadata,
@@ -9,6 +10,11 @@ from .schemas import (
 from .storage_abc import MetadataStorage
 from .schemas_iodata import TensorusExportData, TensorusExportEntry
 import copy
+
+# Configure module level logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # In-memory storage using dictionaries
 _tensor_descriptors: Dict[UUID, TensorDescriptor] = {}
@@ -568,7 +574,9 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
                         except ValueError as e: # e.g. name conflict
                              # If overwrite, maybe update existing semantic entry by name?
                              # For now, just count as part of failure or skip.
-                             print(f"Skipping semantic metadata '{sm_item.name}' for {td_id} due to: {e}")
+                             logger.warning(
+                                 f"Skipping semantic metadata '{sm_item.name}' for {td_id} due to: {e}"
+                             )
 
 
                 # Add other extended metadata (one-to-one)
@@ -584,7 +592,7 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
 
             except Exception as e:
                 # Log error for this specific entry e.g. entry.tensor_descriptor.tensor_id
-                print(f"Failed to import entry for tensor_id {td_id}: {e}")
+                logger.error(f"Failed to import entry for tensor_id {td_id}: {e}")
                 summary["failed"] += 1
 
         return summary
@@ -625,7 +633,9 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
             # This could be a programming error if an unexpected name is passed.
             # Or, if the method is meant to be robust to any string, return 0.
             # For now, let's be strict for known types and allow others to return 0.
-             print(f"Warning: get_extended_metadata_count called with unhandled model name '{metadata_model_name}' by InMemoryStorage.")
+             logger.warning(
+                 f"get_extended_metadata_count called with unhandled model name '{metadata_model_name}' by InMemoryStorage."
+             )
 
         return 0
 

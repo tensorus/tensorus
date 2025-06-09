@@ -1,9 +1,10 @@
 import psycopg2
 import psycopg2.pool
-import psycopg2.extras # For dict cursor
+import psycopg2.extras  # For dict cursor
 import json
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+import logging
 
 from .storage_abc import MetadataStorage
 from .schemas import (
@@ -12,6 +13,11 @@ from .schemas import (
     RelationalMetadata, UsageMetadata # Import other extended types for method signatures
 )
 import copy # Ensure copy is imported, as it was added to InMemoryStorage and might be useful here too.
+
+# Configure module level logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 __all__ = ["PostgresMetadataStorage"]
 
@@ -685,8 +691,7 @@ class PostgresMetadataStorage(MetadataStorage):
             self._execute_query("SELECT 1;", fetch=None)
             return True, "postgres"
         except Exception as e:
-            # Log error e
-            print(f"Postgres health check failed: {e}")
+            logger.error(f"Postgres health check failed: {e}")
             return False, "postgres"
 
     def get_tensor_descriptors_count(self) -> int:
@@ -709,7 +714,9 @@ class PostgresMetadataStorage(MetadataStorage):
 
         if not table_name:
             # Or raise error, or log warning
-            print(f"Warning: get_extended_metadata_count called for unmapped model name '{metadata_model_name}' in Postgres.")
+            logger.warning(
+                f"get_extended_metadata_count called for unmapped model name '{metadata_model_name}' in Postgres."
+            )
             return 0
 
         query = f"SELECT COUNT(*) as count FROM {table_name};" # Ensure table_name is not from user input directly
@@ -725,10 +732,10 @@ class PostgresMetadataStorage(MetadataStorage):
         self._execute_query("DELETE FROM relational_metadata;") # Corrected self_execute_query
         self._execute_query("DELETE FROM usage_metadata;")
         self._execute_query("DELETE FROM tensor_descriptors;")
-        print("Postgres tables cleared (conceptually).")
+        logger.info("Postgres tables cleared (conceptually).")
 
     def close_pool(self):
         if self.pool:
             self.pool.closeall()
             self.pool = None
-            print("PostgreSQL connection pool closed.")
+            logger.info("PostgreSQL connection pool closed.")
