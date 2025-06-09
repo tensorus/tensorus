@@ -1,17 +1,14 @@
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from uuid import UUID
 
 from .schemas import (
     TensorDescriptor, SemanticMetadata,
     LineageMetadata, ComputationalMetadata, QualityMetadata,
     RelationalMetadata, UsageMetadata,
-    TensorDescriptor # For search results
 )
 from .storage_abc import MetadataStorage
-from .schemas_iodata import TensorusExportData, TensorusExportEntry # Import I/O schemas
+from .schemas_iodata import TensorusExportData, TensorusExportEntry
 import copy
-from uuid import UUID # Ensure UUID is imported for type hints if not already
-from typing import List, Optional, Dict, Any # Ensure these are imported for type hints
 
 # In-memory storage using dictionaries
 _tensor_descriptors: Dict[UUID, TensorDescriptor] = {}
@@ -715,10 +712,3 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
                 break
 
         return complex_tensors
-
-
-# Global instance of the storage
-# This makes it easy to use across different parts of an application (if simple)
-# For more complex scenarios, dependency injection or a more robust service locator pattern would be better.
-# For more complex scenarios, dependency injection or a more robust service locator pattern would be better.
-storage_instance = InMemoryStorage()
