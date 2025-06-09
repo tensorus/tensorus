@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from uuid import UUID, uuid4
 from datetime import datetime
 
@@ -234,20 +234,3 @@ class UsageMetadata(BaseModel):
             return len(values['access_history']) # Simple count, could be more complex
         return v if v is not None else 0
 
-
-# Helper for Pydantic v1/v2 compatibility
-from typing import Any
-try:
-    from pydantic import field_validator # type: ignore
-    PYDANTIC_V2 = True
-    def validator_v1_v2(*fields, **kwargs): # type: ignore
-        return field_validator(*fields, **kwargs) # For Pydantic v2
-except ImportError:
-    from pydantic import validator # type: ignore
-    PYDANTIC_V2 = False
-    def validator_v1_v2(*fields, **kwargs): # type: ignore
-        # For Pydantic v1, 'always=True' is not a direct param of decorator
-        # but can be handled inside the validator logic or by how it's called.
-        # The 'values' argument behavior also differs.
-        # This shim simplifies the decorator call but doesn't fully bridge the internal differences.
-        return validator(*fields, **kwargs)
