@@ -227,18 +227,30 @@ def test_import_data_postgres_not_implemented(client_with_clean_storage: TestCli
     # `client_with_clean_storage.app` provides the app instance used by the client.
     original_dependency = app.dependency_overrides.get(get_storage_instance)
     app.dependency_overrides[get_storage_instance] = lambda: mock_postgres_storage
+    try:
+        td_id = uuid4()
+        entry = TensorusExportEntry(
+            tensor_descriptor=TensorDescriptor(
+                tensor_id=td_id,
+                dimensionality=0,
+                shape=[],
+                data_type=DataType.BOOLEAN,
+                owner="x",
+                byte_size=0,
+            )
+        )
+        import_payload = TensorusExportData(entries=[entry])
+        headers = {"X-API-KEY": API_KEY}
 
-    td_id = uuid4()
-    entry = TensorusExportEntry(tensor_descriptor=TensorDescriptor(tensor_id=td_id, dimensionality=0, shape=[], data_type=DataType.BOOLEAN, owner="x", byte_size=0))
-    import_payload = TensorusExportData(entries=[entry])
-    headers = {"X-API-KEY": API_KEY}
-
-    response = client_with_clean_storage.post("/tensors/import", json=import_payload.model_dump(mode="json"), headers=headers)
-    assert response.status_code == 501
-    assert "Import functionality is not implemented" in response.json()["detail"]
-
-    # Clean up the override
-    if original_dependency:
-        app.dependency_overrides[get_storage_instance] = original_dependency
-    else:
-        del app.dependency_overrides[get_storage_instance]
+        response = client_with_clean_storage.post(
+            "/tensors/import",
+            json=import_payload.model_dump(mode="json"),
+            headers=headers,
+        )
+        assert response.status_code == 501
+        assert "Import functionality is not implemented" in response.json()["detail"]
+    finally:
+        if original_dependency:
+            app.dependency_overrides[get_storage_instance] = original_dependency
+        else:
+            del app.dependency_overrides[get_storage_instance]
