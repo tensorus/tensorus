@@ -208,15 +208,13 @@ def test_usage_metadata_sync_validators():
     # Simple list append won't trigger it.
     # The current UsageMetadata validators are `always=True`, so they run on init/validate.
     # To test this properly, one might do:
-    um_revalidated = UsageMetadata.parse_obj(um.dict()) # Pydantic V1 way
-    # um_revalidated = UsageMetadata.model_validate(um.model_dump()) # Pydantic V2 way
+    um_revalidated = UsageMetadata.model_validate(um.model_dump())
 
     assert um_revalidated.usage_frequency == 1
     assert um_revalidated.last_accessed_at == t1
 
     um_revalidated.access_history.append(UsageAccessRecord(user_or_service="u2", operation_type="write", accessed_at=t2))
-    um_final = UsageMetadata.parse_obj(um_revalidated.dict()) # Pydantic V1
-    # um_final = UsageMetadata.model_validate(um_revalidated.model_dump()) # Pydantic V2
+    um_final = UsageMetadata.model_validate(um_revalidated.model_dump())
 
     assert um_final.usage_frequency == 2
     assert um_final.last_accessed_at == t2

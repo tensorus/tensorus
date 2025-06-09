@@ -67,7 +67,7 @@ def test_add_get_lineage_metadata(mem_storage: InMemoryStorage, base_td: TensorD
 def test_add_lineage_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_lm: LineageMetadata):
     mem_storage.add_lineage_metadata(sample_lm) # First add
 
-    updated_lm_data = sample_lm.dict()
+    updated_lm_data = sample_lm.model_dump()
     updated_lm_data["version"] = "2.0"
     updated_lm = LineageMetadata(**updated_lm_data)
 
@@ -111,7 +111,7 @@ def test_add_get_computational_metadata(mem_storage: InMemoryStorage, base_td: T
 
 def test_add_computational_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_cm: ComputationalMetadata):
     mem_storage.add_computational_metadata(sample_cm)
-    new_cm = ComputationalMetadata(**{**sample_cm.dict(), "algorithm": "RNN"})
+    new_cm = ComputationalMetadata(**{**sample_cm.model_dump(), "algorithm": "RNN"})
     mem_storage.add_computational_metadata(new_cm)
     retrieved = mem_storage.get_computational_metadata(base_td.tensor_id)
     assert retrieved is not None
@@ -148,7 +148,7 @@ def test_add_get_quality_metadata(mem_storage: InMemoryStorage, base_td: TensorD
 
 def test_add_quality_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_qm: QualityMetadata):
     mem_storage.add_quality_metadata(sample_qm)
-    new_qm = QualityMetadata(**{**sample_qm.dict(), "noise_level": 0.1})
+    new_qm = QualityMetadata(**{**sample_qm.model_dump(), "noise_level": 0.1})
     mem_storage.add_quality_metadata(new_qm)
     retrieved = mem_storage.get_quality_metadata(base_td.tensor_id)
     assert retrieved is not None
@@ -186,7 +186,7 @@ def test_add_get_relational_metadata(mem_storage: InMemoryStorage, base_td: Tens
 
 def test_add_relational_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_rm: RelationalMetadata):
     mem_storage.add_relational_metadata(sample_rm)
-    new_rm = RelationalMetadata(**{**sample_rm.dict(), "collections": ["setB"]})
+    new_rm = RelationalMetadata(**{**sample_rm.model_dump(), "collections": ["setB"]})
     mem_storage.add_relational_metadata(new_rm)
     retrieved = mem_storage.get_relational_metadata(base_td.tensor_id)
     assert retrieved is not None
@@ -225,7 +225,7 @@ def test_add_get_usage_metadata(mem_storage: InMemoryStorage, base_td: TensorDes
 def test_add_usage_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_um: UsageMetadata):
     mem_storage.add_usage_metadata(sample_um)
     new_record = UsageAccessRecord(user_or_service="tester2", operation_type="write", accessed_at=datetime.utcnow())
-    new_um = UsageMetadata(**{**sample_um.dict(), "access_history": [new_record]})
+    new_um = UsageMetadata(**{**sample_um.model_dump(), "access_history": [new_record]})
     mem_storage.add_usage_metadata(new_um)
     retrieved = mem_storage.get_usage_metadata(base_td.tensor_id)
     assert retrieved is not None

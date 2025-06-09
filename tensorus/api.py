@@ -1449,8 +1449,8 @@ async def _store_and_respond_ops(
     default_metadata = {
         "operation": op_name,
         "timestamp": time.time(),
-        "source_tensors": [ref.dict() for ref in input_refs],
-        "source_api_request": request.dict(exclude_none=True) # Log the request for traceability
+        "source_tensors": [ref.model_dump() for ref in input_refs],
+        "source_api_request": request.model_dump(exclude_none=True)  # Log the request for traceability
     }
     final_metadata = {**default_metadata, **(request.output_metadata or {})}
 
