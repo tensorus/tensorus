@@ -22,18 +22,13 @@ def test_settings_default_values():
 def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("TENSORUS_STORAGE_BACKEND", "postgres_test")
     monkeypatch.setenv("TENSORUS_API_KEY_HEADER_NAME", "X-CUSTOM-API-KEY")
-    monkeypatch.setenv("TENSORUS_VALID_API_KEYS", "key_env1,key_env2")
+    monkeypatch.setenv("TENSORUS_VALID_API_KEYS", '["key_env1", "key_env2"]')
     monkeypatch.setenv("TENSORUS_POSTGRES_HOST", "testhost")
     monkeypatch.setenv("TENSORUS_POSTGRES_PORT", "1234")
 
     # Create a new SettingsV1 instance to load these monkeypatched env vars
     # Pydantic v1 BaseSettings loads from env at initialization.
     s = SettingsV1()
-
-    # Re-apply manual parsing for VALID_API_KEYS for this instance
-    raw_keys_env = os.getenv("TENSORUS_VALID_API_KEYS")
-    if raw_keys_env:
-        s.VALID_API_KEYS = [key.strip() for key in raw_keys_env.split(',')]
 
     assert s.STORAGE_BACKEND == "postgres_test"
     assert s.API_KEY_HEADER_NAME == "X-CUSTOM-API-KEY"
@@ -52,55 +47,12 @@ def test_valid_api_keys_parsing_empty_env(monkeypatch):
     # Create a new instance to test its initialization behavior
     s = SettingsV1()
 
-    # Manually trigger the parsing logic similar to what's in config.py
-    raw_keys_env = os.getenv("TENSORUS_VALID_API_KEYS") # Will be None here
-    if raw_keys_env:
-        s.VALID_API_KEYS = [key.strip() for key in raw_keys_env.split(',')]
-    elif not s.VALID_API_KEYS: # This part of logic from config.py is key
-         s.VALID_API_KEYS = []
-
     assert s.VALID_API_KEYS == []
 
 def test_valid_api_keys_json_list_in_env(monkeypatch):
-    # Pydantic v1 can parse JSON strings for complex types if the env var is set like this
     monkeypatch.setenv("TENSORUS_VALID_API_KEYS", '["json_key1", "json_key2"]')
     s = SettingsV1()
-    # The above assumes Pydantic parses it. If it doesn't, the manual split parser would take over.
-    # The manual parser in config.py will run on the global `settings` if `raw_keys` is found.
-    # Let's test the instance `s` without re-running the global manual parser.
-    # Pydantic v1 doesn't auto-parse comma-separated strings to list[str].
-    # It *might* parse a JSON string like '["key1", "key2"]' if the type hint is List[str].
-    # This behavior can be subtle. The manual parser is more robust for comma-separated.
-    assert isinstance(s.VALID_API_KEYS, list)
-    # If Pydantic parsed the JSON string directly:
-    if s.VALID_API_KEYS == ["json_key1", "json_key2"]:
-         assert True
-    # If Pydantic treated it as a single string '["json_key1", "json_key2"]' and then manual parser ran on global settings:
-    # This test becomes tricky due to the global `settings` object and its modification.
-    # For now, we test the direct Pydantic load into a new instance.
-    # If the env var is `TENSORUS_VALID_API_KEYS='["key1","key2"]'`, Pydantic v1 should load it as a list.
-    elif s.VALID_API_KEYS == ['["json_key1", "json_key2"]']: # Pydantic v1 might treat it as a list containing one string
-        # This means the JSON string was not auto-parsed into a list of strings by pydantic itself.
-        # The manual parser in config.py is essential for comma-separated strings.
-        pass # This outcome is also possible depending on exact Pydantic v1 behavior with List[str] from env.
-
-    # Let's test the manual parser's effect explicitly on a new instance if it were applied
-    temp_settings = SettingsV1()
-    raw_keys_env = os.getenv("TENSORUS_VALID_API_KEYS")
-    if raw_keys_env: # This will be '["json_key1", "json_key2"]'
-        # If the manual parser assumes comma-separation, it won't work well with this JSON list string.
-        # This highlights a potential conflict if both JSON list and comma-separated list are expected.
-        # The current manual parser in config.py is for comma-separated strings.
-        # If TENSORUS_VALID_API_KEYS='key1,key2', then manual parse is fine.
-        # If TENSORUS_VALID_API_KEYS='["key1","key2"]', Pydantic should ideally handle it.
-
-        # Let's assume the env var is comma-separated for the manual parser test path
-        monkeypatch.setenv("TENSORUS_VALID_API_KEYS", "comma1,comma2")
-        raw_keys_recheck = os.getenv("TENSORUS_VALID_API_KEYS")
-        parsed_keys = []
-        if raw_keys_recheck:
-            parsed_keys = [key.strip() for key in raw_keys_recheck.split(',')]
-        assert parsed_keys == ["comma1", "comma2"]
+    assert s.VALID_API_KEYS == ["json_key1", "json_key2"]
 
 
 # --- Test Dynamic Storage Instantiation ---
@@ -123,12 +75,11 @@ def reset_global_settings_after_test(monkeypatch):
     # This is hard because `settings = SettingsV1()` in config.py runs only once.
     # A better way would be a settings fixture that provides a fresh SettingsV1 instance.
     global_settings.VALID_API_KEYS = original_valid_keys
-    # Re-run manual parsing logic based on current (restored) env for global_settings
-    # This is to simulate the state as if config.py was re-imported, which is not practical.
+    # Update the global settings list to reflect the restored environment
     raw_keys = os.getenv("TENSORUS_VALID_API_KEYS")
     if raw_keys:
         global_settings.VALID_API_KEYS = [key.strip() for key in raw_keys.split(',')]
-    elif not global_settings.VALID_API_KEYS: # If it was initially [] and env not set
+    else:
         global_settings.VALID_API_KEYS = []
 
 
