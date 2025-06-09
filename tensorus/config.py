@@ -65,7 +65,7 @@ class SettingsV1(BaseSettings):
 
 
 
-    model_config = SettingsConfigDict(env_prefix="TENSORUS_", case_sensitive=False, enable_decoding=False)
+    model_config = SettingsConfigDict(env_prefix="TENSORUS_", case_sensitive=False)
 
     @field_validator("VALID_API_KEYS", mode="before")
     def split_valid_api_keys(cls, v):
