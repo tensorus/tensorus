@@ -142,7 +142,7 @@ async def update_tensor_descriptor(
     tensor_id: UUID = Path(...), updates: TensorDescriptorUpdate = Body(...),
     storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
 ):
-    update_data = updates.dict(exclude_unset=True)
+    update_data = updates.model_dump(exclude_unset=True)
     if not update_data: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
     current = storage.get_tensor_descriptor(tensor_id)
     if not current:
@@ -204,13 +204,19 @@ async def update_named_semantic_metadata_for_tensor(
     storage: MetadataStorage = Depends(get_storage_instance), api_key: str = Depends(verify_api_key)
 ):
     _check_td_exists_for_semantic(tensor_id, storage, api_key, "UPDATE")
-    if not updates.dict(exclude_unset=True): raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+    if not updates.model_dump(exclude_unset=True):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
     if not storage.get_semantic_metadata_by_name(tensor_id, current_name):
         log_audit_event("UPDATE_SEMANTIC_METADATA_FAILED_NOT_FOUND", api_key, str(tensor_id), {"name": current_name})
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SemanticMetadata '{current_name}' not found for tensor {tensor_id}.")
     try:
         updated = storage.update_semantic_metadata(tensor_id, current_name, new_description=updates.description, new_name=updates.name)
-        log_audit_event("UPDATE_SEMANTIC_METADATA", api_key, str(tensor_id), {"original_name": current_name, "updated_fields": updates.dict(exclude_unset=True)})
+        log_audit_event(
+            "UPDATE_SEMANTIC_METADATA",
+            api_key,
+            str(tensor_id),
+            {"original_name": current_name, "updated_fields": updates.model_dump(exclude_unset=True)},
+        )
         return updated
     except (ValidationError, ValueError) as e:
         log_audit_event("UPDATE_SEMANTIC_METADATA_FAILED", api_key, str(tensor_id), {"name": current_name, "error": str(e)})
@@ -270,8 +276,10 @@ async def create_tensor_version(
         log_audit_event("CREATE_TENSOR_VERSION_FAILED_PARENT_NOT_FOUND", api_key, str(tensor_id), {"new_version": version_request.new_version_string})
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Parent TensorDescriptor ID {tensor_id} not found.")
     new_version_id = uuid.uuid4()
-    new_td_data = parent_td.dict(exclude={'tensor_id', 'creation_timestamp', 'last_modified_timestamp'})
-    for field, value in version_request.dict(exclude_unset=True).items():
+    new_td_data = parent_td.model_dump(
+        exclude={"tensor_id", "creation_timestamp", "last_modified_timestamp"}
+    )
+    for field, value in version_request.model_dump(exclude_unset=True).items():
         if field in TensorDescriptor.__fields__ and value is not None: new_td_data[field] = value
         elif field not in ['new_version_string', 'lineage_source_identifier', 'lineage_source_type']:
             if new_td_data.get("metadata") is None: new_td_data["metadata"] = {}
@@ -317,7 +325,7 @@ async def create_lineage_relationship(
     req: LineageRelationshipRequest, storage: MetadataStorage = Depends(get_storage_instance),
     api_key: str = Depends(verify_api_key)
 ):
-    audit_details = req.dict()
+    audit_details = req.model_dump()
     if not storage.get_tensor_descriptor(req.source_tensor_id):
         log_audit_event("CREATE_LINEAGE_REL_FAILED_SRC_NOT_FOUND", api_key, details=audit_details)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Source TD {req.source_tensor_id} not found.")

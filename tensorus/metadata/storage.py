@@ -46,7 +46,7 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
             # Create a new model instance with updated data to trigger Pydantic validation
             try:
                 # Get current data as dict
-                current_data = descriptor.dict() # or .model_dump() in Pydantic v2
+                current_data = descriptor.model_dump()
                 # Apply updates
                 updated_data = {**current_data, **kwargs}
 
@@ -191,7 +191,7 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
         if not existing_metadata:
             return None
 
-        current_data = existing_metadata.dict() # Pydantic v1
+        current_data = existing_metadata.model_dump()
         updated_data = {**current_data, **kwargs}
 
         if 'tensor_id' in kwargs and UUID(kwargs['tensor_id']) != tensor_id:
@@ -266,7 +266,7 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
         if not existing_metadata:
             return None
 
-        current_data = existing_metadata.dict() # Pydantic v1/v2: .model_dump()
+        current_data = existing_metadata.model_dump()
 
         # If 'access_history' is part of kwargs, it means we are modifying it.
         # The Pydantic model for UsageMetadata has validators that derive other fields from access_history.
@@ -286,7 +286,7 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
             if key == "access_history" and isinstance(value, list):
                 # Ensure items in access_history are dicts for Pydantic validation
                 final_data_for_validation[key] = [
-                    item.dict() if hasattr(item, 'dict') else item
+                    item.model_dump() if hasattr(item, "model_dump") else item
                     for item in value
                 ]
             else:
