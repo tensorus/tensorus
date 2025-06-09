@@ -2,7 +2,7 @@ import pytest
 from fastapi import FastAPI, Depends, HTTPException, Security as FastAPISecurity # Renamed to avoid clash
 from fastapi.testclient import TestClient
 from fastapi.security.api_key import APIKeyHeader
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from tensorus.config import settings as global_settings # The global settings instance
 from tensorus.api.security import verify_api_key, api_key_header_auth # The dependency to test

@@ -4,6 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any # Added Dict, Any for JWT payload
 
 from tensorus.config import settings
+from tensorus.audit import log_audit_event
 
 
 class MutableAPIKeyHeader(APIKeyHeader):
