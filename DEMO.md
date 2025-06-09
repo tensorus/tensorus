@@ -136,7 +136,11 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
 **Goal:** Demonstrate end-to-end time series forecasting using generated financial data, Tensorus for storage, an ARIMA model for prediction, and visualization within a dedicated UI page.
 
 **Prerequisites Specific to this Demo:**
-*   Ensure `statsmodels` is installed (it was added to `requirements.txt`). If you haven't updated dependencies: `pip install statsmodels>=0.13.0`.
+*   Ensure `statsmodels` is installed. If you used the standard setup, install it via the optional models extras:
+    ```bash
+    pip install -e .[models]
+    ```
+    or install the `tensorus-models` package which includes it.
 
 **Steps:**
 

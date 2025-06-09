@@ -181,6 +181,10 @@ graph TD
     `requirements-test.txt`, using CPU wheels for PyTorch and
     pinning `httpx` to a compatible version. The script also runs
     `npm install` in `mcp_tensorus_server` (needed for integration tests).
+    Heavy machine-learning libraries (e.g. `xgboost`, `lightgbm`, `catboost`,
+    `statsmodels`, `torch-geometric`) are not installed by default. Install
+    them separately using `pip install tensorus[models]` or by installing the
+    `tensorus-models` package if you need the built-in models.
 
 ### Running the API Server
 

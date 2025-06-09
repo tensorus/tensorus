@@ -28,6 +28,15 @@ classifiers = [
 Homepage = "https://tensorus.com"
 Repository = "https://github.com/tensorus/tensorus"
 
+[project.optional-dependencies]
+models = [
+    "torch-geometric",
+    "xgboost",
+    "lightgbm",
+    "catboost",
+    "statsmodels>=0.13.0"
+]
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
