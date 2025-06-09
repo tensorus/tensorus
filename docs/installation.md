@@ -71,3 +71,18 @@ Tensorus is configured via environment variables. Key variables include:
 *   `TENSORUS_AUTH_DEV_MODE_ALLOW_DUMMY_JWT`: `True` to allow dummy JWTs for development if JWT auth is enabled (default `False`).
 
 Refer to the `docker-compose.yml` for example environment variable settings when running with Docker. For manual setup, export these variables in your shell or use a `.env` file (if your setup supports it, though direct environment variables are primary).
+
+## Running Tests
+
+Tensorus includes Python unit tests and optional Node.js integration tests. The Node-based tests depend on the MCP server's Node packages. Install them from the project root with:
+
+```bash
+./mcp_tensorus_server/setup.sh  # runs npm install inside mcp_tensorus_server
+```
+
+After installing dependencies, run the tests:
+
+```bash
+pytest
+cd mcp_tensorus_server && npm test
+```

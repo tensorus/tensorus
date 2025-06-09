@@ -300,6 +300,12 @@ Tensorus includes Python unit tests and optional Node.js integration tests. To s
 
     This script installs packages from `requirements.txt` and `requirements-test.txt` and runs `npm install` in `mcp_tensorus_server`.
 
+    To install only the Node dependencies required for the integration tests, you can run the setup script inside the MCP server directory:
+
+    ```bash
+    ./mcp_tensorus_server/setup.sh
+    ```
+
 2. Run the Python test suite:
 
     ```bash
