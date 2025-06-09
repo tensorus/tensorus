@@ -18,6 +18,7 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 *   **Tensor Operations:** A comprehensive library of robust tensor operations for common manipulations. See [Basic Tensor Operations](#basic-tensor-operations) for details.
 *   **Model System:** Lightweight framework with a model registry and built-in
     linear and logistic regression models.
+*   **Metadata System:** Rich Pydantic schemas and storage backends for semantic, lineage, computational, quality, relational, and usage metadata.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
 *   **Model Context Protocol (MCP) Server:** Provides a standardized interface for AI agents and LLMs to interact with Tensorus capabilities (tensor storage and operations) using the Model Context Protocol. (See [MCP Server Details](#mcp-server-details) below).
 
@@ -345,6 +346,10 @@ schema = {
 storage.create_dataset("my_ds", schema=schema)
 storage.insert("my_ds", torch.rand(3, 10), {"source": "sensor", "value": 5})
 ```
+
+## Metadata System
+
+Tensorus includes a detailed metadata subsystem for describing tensors beyond their raw data. Each tensor has a `TensorDescriptor` and can be associated with optional semantic, lineage, computational, quality, relational, and usage metadata. The metadata storage backend is pluggable, supporting in-memory storage for quick testing or PostgreSQL for persistence. Search and aggregation utilities allow querying across these metadata fields. See [metadata_schemas.md](docs/metadata_schemas.md) for schema details.
 
 ### Streamlit UI
 
