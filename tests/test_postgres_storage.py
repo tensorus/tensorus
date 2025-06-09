@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
+import psycopg2
 from uuid import uuid4, UUID
 from datetime import datetime
 import json
@@ -280,15 +281,4 @@ def test_pg_get_extended_metadata_count(pg_storage: PostgresMetadataStorage, moc
     # Current logic prints warning and returns 0.
 
     # Ensure execute wasn't called again for "UnknownMeta" after the SemanticMetadata call
-    assert mock_cursor.execute.call_count == 3 # TD_count, Lineage_count, Semantic_count calls
-
-# This test file focuses on the SQL generation logic and parameter passing,
-# not on the full interaction with a live database.`tests/test_postgres_storage.py` has been populated with conceptual tests for `PostgresMetadataStorage`. These tests use `unittest.mock.MagicMock` and `patch` to simulate `psycopg2` pool and cursor objects. The focus is on:
--   Verifying that SQL queries are constructed as expected for various methods (`add_tensor_descriptor`, `get_tensor_descriptor`, `delete_tensor_descriptor`, `add_semantic_metadata`, `_add_jsonb_metadata`, `list_tensor_descriptors` with filters, lineage methods, search, and aggregation).
--   Checking that parameters passed to `cursor.execute` are correct.
--   Simulating database responses (`fetchone`, `fetchall`, `rowcount`) and ensuring that the storage methods parse these responses into the correct Pydantic models or return values.
--   Testing health check and count methods.
-
-This approach allows testing the Python logic of `PostgresMetadataStorage` without requiring a live PostgreSQL database, which is suitable for the current testing environment.
-
-Next, I will update `tests/test_api.py` to include tests for audit logging calls using `unittest.mock.patch` to spy on `tensorus.audit.log_audit_event`. This will involve enhancing existing API tests for write operations. This is the final part of implementing tests for Phase 3 features.
+    assert mock_cursor.execute.call_count == 3  # TD_count, Lineage_count, Semantic_count calls
