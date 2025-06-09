@@ -150,7 +150,7 @@ graph TD
 *   FastAPI
 *   Uvicorn
 *   Streamlit
-*   Pydantic
+*   Pydantic v2
 *   Requests
 *   Pillow (for image preprocessing)
 *   Matplotlib (optional, for plotting RL rewards)
@@ -185,6 +185,8 @@ graph TD
     `statsmodels`, `torch-geometric`) are not installed by default. Install
     them separately using `pip install tensorus[models]` or by installing the
     `tensorus-models` package if you need the built-in models.
+    The audit logger writes to `tensorus_audit.log` by default. Override the
+    path with the `TENSORUS_AUDIT_LOG_PATH` environment variable if desired.
 
 ### Running the API Server
 

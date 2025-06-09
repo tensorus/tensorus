@@ -5,8 +5,20 @@ from typing import Optional, Dict, Any # Added Dict, Any for JWT payload
 
 from tensorus.config import settings
 
+
+class MutableAPIKeyHeader(APIKeyHeader):
+    """APIKeyHeader that allows updating the header name for testing."""
+
+    @property
+    def name(self) -> str:  # type: ignore[override]
+        return self.model.name
+
+    @name.setter
+    def name(self, value: str) -> None:  # type: ignore[override]
+        self.model.name = value
+
 # --- API Key Authentication ---
-api_key_header_auth = APIKeyHeader(name=settings.API_KEY_HEADER_NAME, auto_error=False)
+api_key_header_auth = MutableAPIKeyHeader(name=settings.API_KEY_HEADER_NAME, auto_error=False)
 
 async def verify_api_key(api_key: Optional[str] = Security(api_key_header_auth)):
     """
