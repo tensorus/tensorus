@@ -16,7 +16,10 @@ try:
     LOG_DEFAULT_HANDLERS.append(file_handler)
 except IOError:
     # Handle cases where file cannot be opened (e.g. permissions)
-    print("Warning: Could not open tensorus_audit.log for writing. Audit logs will go to stdout only.", file=sys.stderr)
+    print(
+        f"Warning: Could not open {settings.AUDIT_LOG_PATH} for writing. Audit logs will go to stdout only.",
+        file=sys.stderr,
+    )
 
 
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, handlers=LOG_DEFAULT_HANDLERS)
