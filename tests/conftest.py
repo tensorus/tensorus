@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 # Import the FastAPI app instance
 from tensorus.api.main import app
 # Import the metadata storage instance that the API uses
-from tensorus.metadata.storage import storage_instance as metadata_storage_instance
+from tensorus.metadata import storage_instance as metadata_storage_instance
 # Import the mock tensor connector instance that the API uses
 from tensorus.storage.connectors import mock_tensor_connector_instance
 
