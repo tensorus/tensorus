@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, Any
 from uuid import UUID, uuid4
 from datetime import datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 
 class DataType(str, Enum):
     FLOAT32 = "float32"
@@ -59,20 +59,18 @@ class TensorDescriptor(BaseModel):
     tags: Optional[List[str]] = Field(default_factory=list)
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict) # Generic metadata, allows richer values
 
-    @validator('shape', always=True) # always=True ensures it runs even if shape is not explicitly provided (e.g. during model copy/update)
-    def validate_shape(cls, v, values, **kwargs): # Pydantic v2 uses field_validator, this is for v1
-        # In Pydantic v1, `values` is the dict of other fields.
-        # In Pydantic v2, it's `values: ValidationInfo` object.
-        dimensionality = values.get('dimensionality')
+    @field_validator('shape', mode='before')
+    def validate_shape(cls, v, info: ValidationInfo):
+        dimensionality = info.data.get('dimensionality')
         if dimensionality is not None and len(v) != dimensionality:
             raise ValueError('Shape must have a length equal to dimensionality')
         if not all(isinstance(dim, int) and dim >= 0 for dim in v):
             raise ValueError('All dimensions in shape must be non-negative integers')
         return v
 
-    @validator('last_modified_timestamp', always=True)
-    def validate_last_modified(cls, v, values, **kwargs):
-        creation_timestamp = values.get('creation_timestamp')
+    @field_validator('last_modified_timestamp', mode='before')
+    def validate_last_modified(cls, v, info: ValidationInfo):
+        creation_timestamp = info.data.get('creation_timestamp')
         if creation_timestamp and v < creation_timestamp:
             raise ValueError('Last modified timestamp cannot be before creation timestamp')
         return v
@@ -88,7 +86,7 @@ class SemanticMetadata(BaseModel):
     name: str # Name of this specific semantic annotation (e.g., "primary_class_label", "bounding_boxes")
     description: str
 
-    @validator('name', 'description')
+    @field_validator('name', 'description')
     def check_not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError('Name and description fields cannot be empty or just whitespace.')
@@ -151,7 +149,7 @@ class ComputationalMetadata(BaseModel):
     computation_time_seconds: Optional[float] = None
     hardware_info: Optional[Dict[str, Any]] = Field(default_factory=dict) # e.g., CPU, GPU, RAM
 
-    @validator('computation_time_seconds')
+    @field_validator('computation_time_seconds')
     def check_non_negative_time(cls, v):
         if v is not None and v < 0:
             raise ValueError('Computation time cannot be negative')
@@ -220,17 +218,19 @@ class UsageMetadata(BaseModel):
     application_references: List[str] = Field(default_factory=list) # Names or IDs of applications/models using this tensor
     purpose: Optional[Dict[str, str]] = Field(default_factory=dict) # e.g. {"training_model_X": "feature_set_A"}
 
-    @validator('last_accessed_at', always=True)
-    def sync_last_accessed(cls, v, values):
-        if values.get('access_history'):
-            latest_access = max(record.accessed_at for record in values['access_history'])
+    @field_validator('last_accessed_at', mode='before')
+    def sync_last_accessed(cls, v, info: ValidationInfo):
+        access_history = info.data.get('access_history')
+        if access_history:
+            latest_access = max(record.accessed_at for record in access_history)
             if v is None or latest_access > v:
                 return latest_access
         return v
 
-    @validator('usage_frequency', always=True)
-    def sync_usage_frequency(cls, v, values):
-        if values.get('access_history'):
-            return len(values['access_history']) # Simple count, could be more complex
+    @field_validator('usage_frequency', mode='before')
+    def sync_usage_frequency(cls, v, info: ValidationInfo):
+        access_history = info.data.get('access_history')
+        if access_history:
+            return len(access_history) # Simple count, could be more complex
         return v if v is not None else 0
 

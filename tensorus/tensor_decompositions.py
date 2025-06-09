@@ -396,7 +396,7 @@ class TensorDecompositionOps:
             tensor: Input 3-way tensor to decompose.
             ranks_per_term: List of tuples specifying core ranks for every term.
                 ``ranks_per_term[i]`` corresponds to the shape ``(L_i, M_i, N_i)``
-                of the ``i``\-th core and, consequently, to the number of columns
+                of the ``i``-th core and, consequently, to the number of columns
                 of the factor matrices returned for that term.
 
         Returns:

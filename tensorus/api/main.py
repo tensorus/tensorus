@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+import logging
 from fastapi import FastAPI
 
 from .endpoints import (
@@ -15,9 +17,24 @@ from tensorus.metadata import storage_instance
 from tensorus.metadata.postgres_storage import PostgresMetadataStorage
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Code to run on startup
+    logging.info("Application startup: Lifespan event started.")
+    yield
+    # Code to run on shutdown
+    logging.info("Application shutdown: Attempting to close database connection pool via lifespan.")
+    if isinstance(storage_instance, PostgresMetadataStorage):
+        logging.info("Closing PostgreSQL connection pool.")
+        storage_instance.close_pool() # Assuming close_pool() is synchronous as per existing code
+        logging.info("PostgreSQL connection pool closed.")
+    else:
+        logging.info("No PostgreSQL pool instance found or it's not of expected type.")
+    logging.info("Application shutdown: Lifespan event finished.")
+
 app = FastAPI(
     title="Tensorus API",
-    version="0.1.0",
+    version="0.1.0", # Consider updating version if features are added/changed significantly
     description="API for managing Tensor Descriptors and Semantic Metadata.",
     contact={
         "name": "Tensorus Development Team",
@@ -28,6 +45,7 @@ app = FastAPI(
         "name": "Apache 2.0", # Or your chosen license
         "url": "https://www.apache.org/licenses/LICENSE-2.0.html", # Replace with actual license URL
     },
+    lifespan=lifespan
 )
 
 # Include the routers
@@ -44,18 +62,7 @@ app.include_router(router_analytics) # Register the analytics router
 async def read_root():
     return {"message": "Welcome to the Tensorus API"}
 
-@app.on_event("shutdown")
-def shutdown_event():
-    """
-    Handles application shutdown events.
-    Specifically, closes the PostgreSQL connection pool if it's in use.
-    """
-    if isinstance(storage_instance, PostgresMetadataStorage):
-        print("Shutting down FastAPI app: Closing PostgreSQL connection pool.")
-        storage_instance.close_pool()
-    else:
-        print("Shutting down FastAPI app: No PostgreSQL pool to close.")
-
+# Old shutdown event handler removed. New handling is in lifespan context manager.
 
 # To run this application (for development):
 # uvicorn tensorus.api.main:app --reload --port 8000

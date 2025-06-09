@@ -144,7 +144,7 @@ class TestTensorOps(unittest.TestCase):
     def test_cross_valid(self):
         t1 = torch.tensor([1., 0., 0.])
         t2 = torch.tensor([0., 1., 0.])
-        expected = torch.cross(t1, t2)
+        expected = torch.cross(t1, t2, dim=0)
         result = TensorOps.cross(t1, t2)
         self.assertTrue(torch.equal(result, expected))
 
@@ -351,7 +351,11 @@ class TestTensorOps(unittest.TestCase):
     def test_matrix_inverse(self):
         A = torch.tensor([[4., 7.], [2., 6.]], dtype=torch.float32)
         inv = TensorOps.matrix_inverse(A)
-        self.assertTrue(torch.allclose(A @ inv, torch.eye(2)))
+        expected_identity = torch.eye(2, dtype=torch.float32)
+        actual_result = A @ inv
+        # print(f"Actual result (A @ inv):\n{actual_result}") # Optional: Keep for debugging if needed
+        # print(f"Expected identity:\n{expected_identity}") # Optional: Keep for debugging if needed
+        self.assertTrue(torch.allclose(actual_result, expected_identity))
 
     def test_matrix_inverse_non_square_error(self):
         A = torch.randn(2, 3)
