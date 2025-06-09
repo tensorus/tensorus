@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 from uuid import uuid4, UUID
 from datetime import datetime, timedelta
 import json
-from unittest.mock import patch, call # For spying on audit log
+from unittest.mock import patch, call, MagicMock  # For spying on audit log
+from typing import Dict
 
 from tensorus.api.main import app
 from tensorus.metadata.storage import InMemoryStorage
@@ -23,12 +24,12 @@ from tensorus.metadata import storage_instance as global_app_storage_instance
 
 API_KEY_FOR_MAIN_API_TESTS = "api_key_for_main_tests"
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(autouse=True)
 def setup_api_test_keys(monkeypatch):
     monkeypatch.setattr(global_settings, 'VALID_API_KEYS', [API_KEY_FOR_MAIN_API_TESTS, "test_io_key_for_real"]) # Add key for these tests
     monkeypatch.setattr(global_settings, 'API_KEY_HEADER_NAME', "X-API-KEY")
-    from tensorus.api.security import api_key_header_auth as global_api_key_header_auth # Re-import or patch instance
-    monkeypatch.setattr(global_api_key_header_auth, 'name', "X-API-KEY")
+    from tensorus.api.security import api_key_header_auth as global_api_key_header_auth  # Re-import or patch instance
+    monkeypatch.setattr(global_api_key_header_auth.model, 'name', "X-API-KEY")
 
 
 @pytest.fixture(scope="function")
@@ -312,39 +313,3 @@ def test_create_lineage_relationship_audit(mock_log_audit_event: MagicMock, clie
         details=expected_details
     )
 
-# It's assumed that other tests for functionality (previously in test_api.py) would
-# either be here or in their respective new files (like test_io_api.py, test_management_api.py).
-# This file now primarily demonstrates adding audit log checks to existing API tests.
-# The `_create_td_via_api` helper has been updated to take headers.
-# The API_KEY_FOR_MAIN_API_TESTS is defined for tests in this file.
-# The setup_io_api_keys_module fixture in test_io_api.py will handle keys for those tests.
-# Ensure no fixture name clashes if these files are run together by pytest.
-
-# Note: The original `test_api.py` was very long. This overwrite focuses on demonstrating
-# how audit log testing would be integrated. Many original tests for specific API logic
-# (like advanced query, versioning logic details beyond just the audit call) are omitted for brevity here
-# but would be retained and potentially augmented in a real scenario.`tests/test_api.py` has been updated to include tests for audit logging. This was done by:
--   Patching `tensorus.audit.log_audit_event` using `unittest.mock.patch`.
--   Asserting that `log_audit_event` is called with the expected arguments (action, user, tensor_id, details) for representative write operations:
-    -   `POST /tensor_descriptors/`
-    -   `PUT /tensor_descriptors/{tensor_id}`
-    -   `DELETE /tensor_descriptors/{tensor_id}`
-    -   CRUD operations for an extended metadata type (LineageMetadata was used as an example: POST, PATCH, DELETE).
-    -   `POST /tensors/import` from `router_io`.
-    -   An example for `POST /tensor_descriptors/{tensor_id}/semantic/` was also updated.
--   A module-scoped fixture `setup_api_test_keys` was added to set API keys for these tests.
--   The `_create_td_via_api` helper was updated to accept headers for authentication.
-
-The other test files (`test_postgres_storage.py`, `test_io_api.py`, `test_management_api.py`) are already populated.
-
-This completes the testing requirements for Phase 3 features:
--   Configuration testing in `tests/test_config.py`.
--   API key authentication testing in `tests/test_security.py`.
--   Health and metrics endpoint testing in `tests/test_management_api.py`.
--   Export/Import API endpoint testing in `tests/test_io_api.py`.
--   Conceptual/mocked tests for `PostgresMetadataStorage` in `tests/test_postgres_storage.py`.
--   Audit logging call verification integrated into `tests/test_api.py`.
-
-All planned test activities for this subtask are now complete.
-
-I will now prepare the submission report.

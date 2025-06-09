@@ -1,10 +1,7 @@
 """Tensorus core package."""
 
-import os
+# The repository previously exposed a large collection of models under
+# ``tensorus.models``. These models have been removed, so the package no
+# longer attempts to import them on initialization.
 
-if not os.environ.get("TENSORUS_MINIMAL_IMPORT"):
-    from . import models
-
-    __all__ = ["models"]
-else:
-    __all__ = []
+__all__: list[str] = []
