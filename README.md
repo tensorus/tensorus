@@ -329,6 +329,7 @@ The API provides the following main endpoints:
     *   `POST /datasets/create`: Create a new dataset.
     *   `POST /datasets/{name}/ingest`: Ingest a tensor into a dataset.
     *   `GET /datasets/{name}/fetch`: Retrieve all records from a dataset.
+    *   `GET /datasets/{name}/records`: Retrieve a page of records. Supports `offset` (start index, default `0`) and `limit` (max results, default `100`).
     *   `GET /datasets`: List all available datasets.
 *   **Querying:**
     *   `POST /query`: Execute an NQL query.
