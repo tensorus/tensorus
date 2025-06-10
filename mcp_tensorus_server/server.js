@@ -1,5 +1,6 @@
 const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
+const { ListToolsRequestSchema, CallToolRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
 const axios = require('axios');
 
 const PYTHON_API_BASE_URL = 'http://127.0.0.1:8000'; // Ensure this matches your Python API server
@@ -214,7 +215,7 @@ const mcpServerInstance = new Server(
   { capabilities: { tools: {} } }
 );
 
-mcpServerInstance.setRequestHandler('tools/list', async () => {
+mcpServerInstance.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: toolDefinitions };
 });
 
@@ -397,7 +398,7 @@ async function handleToolCall(name, args) {
     }
   } catch (error) {
     let detailedErrorMessage = error.message;
-    if (axios.isAxiosError(error)) {
+    if (error.isAxiosError || (typeof axios.isAxiosError === 'function' && axios.isAxiosError(error))) {
       console.error(`MCP Server: Axios error calling tool ${name}:`, error.message);
       if (error.response) {
         console.error('MCP Server: Python API Response Error Data:', JSON.stringify(error.response.data, null, 2));
@@ -417,7 +418,7 @@ async function handleToolCall(name, args) {
   }
 }
 
-mcpServerInstance.setRequestHandler('tools/call', async (request) => {
+mcpServerInstance.setRequestHandler(CallToolRequestSchema, async (request) => {
     return handleToolCall(request.params.name, request.params.arguments);
 });
 
@@ -444,5 +445,8 @@ module.exports = {
     server: mcpServerInstance, // Export the server instance
     toolDefinitions,           // Export tool definitions for testing
     handleToolCall,            // Export the handler logic for direct testing
-    PYTHON_API_BASE_URL      // Export for test configuration if needed
+    PYTHON_API_BASE_URL,       // Export for test configuration if needed
+    UNARY_OPS,
+    BINARY_OPS,
+    LIST_OPS
 };
