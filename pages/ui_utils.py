@@ -43,15 +43,15 @@ def list_datasets() -> Optional[List[str]]:
         logger.exception("Unexpected error in list_datasets")
         return None
 
-def fetch_dataset_data(dataset_name: str, max_records: int = 50) -> Optional[List[Dict[str, Any]]]:
-    """Fetches records from a dataset via API, limited after fetching."""
+def fetch_dataset_data(dataset_name: str, offset: int = 0, limit: int = 50) -> Optional[List[Dict[str, Any]]]:
+    """Fetches a page of records from a dataset via API."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/datasets/{dataset_name}/fetch")
+        params = {"offset": offset, "limit": limit}
+        response = requests.get(f"{TENSORUS_API_URL}/datasets/{dataset_name}/records", params=params)
         response.raise_for_status()
         data = response.json()
         if data.get("success"):
-            all_records = data.get("data", [])
-            return all_records[:max_records] # Limit client-side for now
+            return data.get("data", [])
         else:
             st.error(f"API Error fetching '{dataset_name}': {data.get('message')}")
             return None

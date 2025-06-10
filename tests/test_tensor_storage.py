@@ -244,6 +244,22 @@ class TestTensorStorageInMemory(unittest.TestCase):
         with self.assertRaises(DatasetNotFoundError):
             self.storage.sample_dataset("non_existent_dataset", 1)
 
+    def test_get_records_paginated(self):
+        self.storage.create_dataset(self.dataset_name1)
+        ids = [self.storage.insert(self.dataset_name1, torch.tensor([i]), {"i": i}) for i in range(5)]
+
+        first_two = self.storage.get_records_paginated(self.dataset_name1, offset=0, limit=2)
+        self.assertEqual(len(first_two), 2)
+        self.assertEqual(first_two[0]["metadata"]["record_id"], ids[0])
+
+        next_two = self.storage.get_records_paginated(self.dataset_name1, offset=2, limit=2)
+        self.assertEqual(len(next_two), 2)
+        self.assertEqual(next_two[0]["metadata"]["record_id"], ids[2])
+
+        remaining = self.storage.get_records_paginated(self.dataset_name1, offset=4, limit=2)
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0]["metadata"]["record_id"], ids[4])
+        
     def test_count_dataset(self):
         self.storage.create_dataset(self.dataset_name1)
         for _ in range(3):

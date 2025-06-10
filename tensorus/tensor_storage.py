@@ -462,6 +462,30 @@ class TensorStorage:
 
         return sampled_records
 
+    def get_records_paginated(self, name: str, offset: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
+        """Retrieve a slice of records from a dataset.
+
+        Args:
+            name: Dataset name.
+            offset: Starting index of the slice.
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of dictionaries each containing ``tensor`` and ``metadata``.
+
+        Raises:
+            DatasetNotFoundError: If the dataset does not exist.
+        """
+        if name not in self.datasets:
+            logging.error(f"Dataset '{name}' not found for pagination.")
+            raise DatasetNotFoundError(f"Dataset '{name}' does not exist.")
+
+        tensors = self.datasets[name]["tensors"]
+        metadata = self.datasets[name]["metadata"]
+        end = offset + limit if limit is not None else None
+        sliced = list(zip(tensors, metadata))[offset:end]
+        return [{"tensor": t, "metadata": m} for t, m in sliced]
+
     def delete_dataset(self, name: str) -> bool:
         """
         Deletes an entire dataset. Use with caution!
