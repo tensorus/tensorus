@@ -147,6 +147,24 @@ class TensorStorage:
             return file_path.exists()
         return False
 
+    def count(self, dataset_name: str) -> int:
+        """Return the number of tensors stored in a dataset.
+
+        Args:
+            dataset_name: The name of the dataset to count.
+
+        Returns:
+            int: Number of records in the dataset.
+
+        Raises:
+            DatasetNotFoundError: If the dataset does not exist.
+        """
+        if dataset_name not in self.datasets:
+            logging.error(f"Dataset '{dataset_name}' not found for count.")
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' does not exist.")
+
+        return len(self.datasets[dataset_name]["tensors"])
+
     def create_dataset(self, name: str, schema: Optional[Dict[str, Any]] = None) -> None:
         """
         Creates a new, empty dataset. Optionally associates a schema used for

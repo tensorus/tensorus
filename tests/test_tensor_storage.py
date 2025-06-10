@@ -259,6 +259,16 @@ class TestTensorStorageInMemory(unittest.TestCase):
         remaining = self.storage.get_records_paginated(self.dataset_name1, offset=4, limit=2)
         self.assertEqual(len(remaining), 1)
         self.assertEqual(remaining[0]["metadata"]["record_id"], ids[4])
+        
+    def test_count_dataset(self):
+        self.storage.create_dataset(self.dataset_name1)
+        for _ in range(3):
+            self.storage.insert(self.dataset_name1, torch.rand(2))
+
+        self.assertEqual(self.storage.count(self.dataset_name1), 3)
+
+        with self.assertRaises(DatasetNotFoundError):
+            self.storage.count("non_existent")
 
 
 class TestTensorStoragePersistent(unittest.TestCase):
