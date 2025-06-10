@@ -280,7 +280,7 @@ async def create_tensor_version(
         exclude={"tensor_id", "creation_timestamp", "last_modified_timestamp"}
     )
     for field, value in version_request.model_dump(exclude_unset=True).items():
-        if field in TensorDescriptor.__fields__ and value is not None: new_td_data[field] = value
+        if field in TensorDescriptor.model_fields and value is not None: new_td_data[field] = value
         elif field not in ['new_version_string', 'lineage_source_identifier', 'lineage_source_type']:
             if new_td_data.get("metadata") is None: new_td_data["metadata"] = {}
             new_td_data["metadata"][field] = value
