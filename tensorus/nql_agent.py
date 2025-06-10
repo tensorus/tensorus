@@ -26,7 +26,7 @@ import logging
 import torch
 from typing import List, Dict, Any, Optional, Callable, Tuple
 
-from .tensor_storage import TensorStorage # Import our storage module
+from .tensor_storage import TensorStorage, DatasetNotFoundError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -179,12 +179,12 @@ class NQLAgent:
                     "count": count,
                     "results": None  # Counting does not return full records
                 }
-            except ValueError as e:
+            except DatasetNotFoundError as e:
                 logger.error(f"Error during COUNT query: {e}")
                 return {"success": False, "message": str(e), "count": None, "results": None}
             except Exception as e:
-                 logger.error(f"Unexpected error during COUNT query: {e}", exc_info=True)
-                 return {"success": False, "message": f"An unexpected error occurred: {e}", "count": None, "results": None}
+                logger.error(f"Unexpected error during COUNT query: {e}", exc_info=True)
+                return {"success": False, "message": f"An unexpected error occurred: {e}", "count": None, "results": None}
 
 
         # --- 2. Get All Pattern ---

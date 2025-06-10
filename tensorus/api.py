@@ -777,8 +777,25 @@ async def list_datasets(storage: TensorStorage = Depends(get_tensor_storage)):
         logger.info(f"Retrieved dataset list: Count={len(dataset_names)}")
         return ApiResponse(success=True, message="Retrieved dataset list successfully.", data=dataset_names)
     except Exception as e:
-         logger.exception(f"Unexpected error listing datasets: {e}")
-         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error while listing datasets.")
+        logger.exception(f"Unexpected error listing datasets: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error while listing datasets.")
+
+
+@app.get("/datasets/{name}/count", response_model=ApiResponse, tags=["Datasets"])
+async def count_dataset(
+    name: str = Path(..., description="The name of the dataset."),
+    storage: TensorStorage = Depends(get_tensor_storage),
+):
+    """Return the number of records in the specified dataset."""
+    try:
+        count = storage.count(name)
+        return ApiResponse(success=True, message="Dataset count retrieved successfully.", data={"count": count})
+    except DatasetNotFoundError as e:
+        logger.warning(f"Attempted to count non-existent dataset '{name}': {e}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Unexpected error counting dataset '{name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error counting dataset.")
 
 @app.get("/datasets/{dataset_name}/tensors/{record_id}", response_model=TensorOutput, tags=["Tensor Management"])
 async def get_tensor_by_id_api(

@@ -148,7 +148,10 @@ class TensorStorage:
         return False
 
     def count(self, dataset_name: str) -> int:
-        """Return the number of tensors stored in a dataset.
+        """Return the number of records stored in a dataset without loading tensors.
+
+        This method relies only on metadata length for in-memory datasets and
+        falls back to reading metadata from disk if the dataset is not loaded.
 
         Args:
             dataset_name: The name of the dataset to count.
@@ -159,11 +162,25 @@ class TensorStorage:
         Raises:
             DatasetNotFoundError: If the dataset does not exist.
         """
-        if dataset_name not in self.datasets:
-            logging.error(f"Dataset '{dataset_name}' not found for count.")
+        if dataset_name in self.datasets:
+            return len(self.datasets[dataset_name]["metadata"])
+
+        if self.storage_path:
+            file_path = self.storage_path / f"{dataset_name}.pt"
+            if file_path.exists():
+                try:
+                    data = torch.load(file_path, map_location="cpu")
+                    if isinstance(data, dict) and "metadata" in data:
+                        return len(data["metadata"])
+                except Exception as e:
+                    logging.error(
+                        f"Error loading dataset '{dataset_name}' for count: {e}"
+                    )
+            logging.error(f"Dataset '{dataset_name}' not found for count on disk.")
             raise DatasetNotFoundError(f"Dataset '{dataset_name}' does not exist.")
 
-        return len(self.datasets[dataset_name]["tensors"])
+        logging.error(f"Dataset '{dataset_name}' not found for count.")
+        raise DatasetNotFoundError(f"Dataset '{dataset_name}' does not exist.")
 
     def create_dataset(self, name: str, schema: Optional[Dict[str, Any]] = None) -> None:
         """
