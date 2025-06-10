@@ -35,16 +35,34 @@ logger = logging.getLogger(__name__)
 class NQLAgent:
     """Parses simple natural language queries and executes them against TensorStorage."""
 
-    def __init__(self, tensor_storage: TensorStorage):
-        """
-        Initializes the NQL Agent.
+    def __init__(self, tensor_storage: TensorStorage, *, use_llm: bool = False,
+                 llm_pipeline: Optional[Callable] = None):
+        """Initializes the NQL Agent.
 
         Args:
             tensor_storage: An instance of the TensorStorage class.
+            use_llm: Whether to enable LLM-based query rewriting when a query
+                does not match known patterns.
+            llm_pipeline: Optional text generation pipeline. If ``use_llm`` is
+                True and this is ``None`` a default ``transformers.pipeline`` is
+                created.
         """
         if not isinstance(tensor_storage, TensorStorage):
             raise TypeError("tensor_storage must be an instance of TensorStorage")
         self.tensor_storage = tensor_storage
+        self.use_llm = use_llm
+        if self.use_llm:
+            if llm_pipeline is None:
+                try:
+                    from transformers import pipeline
+                    self.llm_pipeline = pipeline("text2text-generation")
+                except Exception as e:
+                    logger.error(f"Failed to initialize default LLM pipeline: {e}")
+                    self.llm_pipeline = None
+            else:
+                self.llm_pipeline = llm_pipeline
+        else:
+            self.llm_pipeline = None
 
         # --- Compile Regex Patterns for Query Parsing ---
         # Pattern to match variations of "get/show/find [all] X from dataset Y"
@@ -114,7 +132,21 @@ class NQLAgent:
         return op_func, value
 
 
-    def process_query(self, query: str) -> Dict[str, Any]:
+    def _llm_rewrite_query(self, query: str) -> str:
+        """Rewrite a query using the configured LLM pipeline."""
+        if not self.llm_pipeline:
+            return query
+        try:
+            result = self.llm_pipeline(query)
+            if isinstance(result, list) and result:
+                result = result[0].get("generated_text") or result[0].get("translation_text")
+            return str(result).strip()
+        except Exception as e:
+            logger.error(f"LLM rewrite failed: {e}")
+            return query
+
+
+    def process_query(self, query: str, _rewrite_attempted: bool = False) -> Dict[str, Any]:
         """
         Processes a natural language query string.
 
@@ -311,6 +343,12 @@ class NQLAgent:
 
         # --- No Match Found ---
         logger.warning(f"Query did not match any known patterns: '{query}'")
+
+        if self.use_llm and not _rewrite_attempted:
+            rewritten = self._llm_rewrite_query(query)
+            if rewritten and rewritten != query:
+                return self.process_query(rewritten, _rewrite_attempted=True)
+
         return {
             "success": False,
             "message": "Sorry, I couldn't understand that query. Try simple commands like 'get all data from my_dataset' or 'find records from my_dataset where key = value'.",
