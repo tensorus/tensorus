@@ -172,15 +172,12 @@ class NQLAgent:
             dataset_name = match.group(1)
             logger.debug(f"Matched COUNT pattern for dataset '{dataset_name}'")
             try:
-                # Inefficient: gets all data just to count.
-                # TODO: Add count method to TensorStorage
-                results = self.tensor_storage.get_dataset_with_metadata(dataset_name)
-                count = len(results)
+                count = self.tensor_storage.count(dataset_name)
                 return {
                     "success": True,
                     "message": f"Found {count} records in dataset '{dataset_name}'.",
                     "count": count,
-                    "results": None # Or optionally return all results if needed?
+                    "results": None  # Counting does not return full records
                 }
             except ValueError as e:
                 logger.error(f"Error during COUNT query: {e}")
