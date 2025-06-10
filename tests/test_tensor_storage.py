@@ -244,6 +244,16 @@ class TestTensorStorageInMemory(unittest.TestCase):
         with self.assertRaises(DatasetNotFoundError):
             self.storage.sample_dataset("non_existent_dataset", 1)
 
+    def test_count_dataset(self):
+        self.storage.create_dataset(self.dataset_name1)
+        for _ in range(3):
+            self.storage.insert(self.dataset_name1, torch.rand(2))
+
+        self.assertEqual(self.storage.count(self.dataset_name1), 3)
+
+        with self.assertRaises(DatasetNotFoundError):
+            self.storage.count("non_existent")
+
 
 class TestTensorStoragePersistent(unittest.TestCase):
     def setUp(self):
