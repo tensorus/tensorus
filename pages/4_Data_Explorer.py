@@ -23,10 +23,27 @@ selected_dataset = st.selectbox("Select Dataset:", datasets)
 if selected_dataset:
     st.subheader(f"Exploring: {selected_dataset}")
 
-    # Fetch data (limited records for UI)
-    # TODO: Implement server-side sampling/pagination via API for large datasets
-    MAX_RECORDS_DISPLAY = 100
-    records = fetch_dataset_data(selected_dataset, max_records=MAX_RECORDS_DISPLAY)
+    PAGE_SIZE = 20
+    page_key = f"page_{selected_dataset}"
+    if page_key not in st.session_state:
+        st.session_state[page_key] = 0
+
+    page = st.session_state[page_key]
+    offset = page * PAGE_SIZE
+    records = fetch_dataset_data(selected_dataset, offset=offset, limit=PAGE_SIZE)
+
+    prev_disabled = page == 0
+    next_disabled = records is None or len(records) < PAGE_SIZE
+
+    col_prev, col_next = st.columns(2)
+    with col_prev:
+        if st.button("Previous", disabled=prev_disabled, key="prev_btn"):
+            st.session_state[page_key] = max(0, page - 1)
+            st.experimental_rerun()
+    with col_next:
+        if st.button("Next", disabled=next_disabled, key="next_btn"):
+            st.session_state[page_key] = page + 1
+            st.experimental_rerun()
 
     if records is None:
         st.error("Failed to fetch data for the selected dataset.")
@@ -35,7 +52,9 @@ if selected_dataset:
         st.info("Selected dataset is empty.")
         st.stop()
 
-    st.info(f"Displaying first {len(records)} records out of potentially more.")
+    start_idx = offset + 1
+    end_idx = offset + len(records)
+    st.info(f"Displaying records {start_idx} - {end_idx} (page {page + 1})")
 
     # Create DataFrame from metadata for filtering/display
     metadata_list = [r['metadata'] for r in records]

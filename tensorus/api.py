@@ -748,6 +748,31 @@ async def fetch_dataset(
          logger.exception(f"Unexpected error fetching dataset '{name}': {e}")
          raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error while fetching dataset.")
 
+
+@app.get("/datasets/{name}/records", response_model=ApiResponse, tags=["Data Retrieval"])
+async def fetch_dataset_records(
+    name: str = Path(..., description="The name of the dataset."),
+    offset: int = Query(0, ge=0, description="Starting offset of records."),
+    limit: int = Query(100, ge=1, description="Maximum number of records to return."),
+    storage: TensorStorage = Depends(get_tensor_storage)
+):
+    """Retrieve records from a dataset using pagination."""
+    try:
+        records = storage.get_records_paginated(name, offset=offset, limit=limit)
+        output_records = []
+        for i, record in enumerate(records):
+            shape, dtype, data_list = tensor_to_list(record["tensor"])
+            record_id = record["metadata"].get("record_id", f"missing_id_{offset+i}")
+            output_records.append(
+                TensorOutput(record_id=record_id, shape=shape, dtype=dtype, data=data_list, metadata=record["metadata"])
+            )
+        return ApiResponse(success=True, message="Records retrieved successfully.", data=output_records)
+    except DatasetNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Unexpected error fetching records for dataset '{name}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal error retrieving records.")
+
 @app.get("/datasets", response_model=ApiResponse, tags=["Datasets"])
 async def list_datasets(storage: TensorStorage = Depends(get_tensor_storage)):
     """
