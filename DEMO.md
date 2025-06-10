@@ -42,8 +42,8 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
 5.  **Verify via API (Optional):**
     *   Use `curl` or Postman to fetch the tensor details. First, list datasets to find `ingested_data_api`, then fetch its records, identify the `record_id` for `cat.jpg` from its metadata.
         ```bash
-        # Example: List records in the dataset to find the ID
-        curl http://127.0.0.1:8000/datasets/ingested_data_api/fetch 
+        # Example: List records in the dataset to find the ID (paged)
+        curl "http://127.0.0.1:8000/datasets/ingested_data_api/records?offset=0&limit=100"
         # Then use the ID:
         # curl http://127.0.0.1:8000/datasets/ingested_data_api/tensors/{record_id_of_cat_jpg}
         ```
