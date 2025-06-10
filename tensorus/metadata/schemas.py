@@ -3,7 +3,7 @@ from typing import List, Dict, Optional, Any
 from uuid import UUID, uuid4
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator, ValidationInfo
+from pydantic import BaseModel, Field, field_validator, model_validator, ValidationInfo
 
 class DataType(str, Enum):
     FLOAT32 = "float32"
@@ -68,11 +68,21 @@ class TensorDescriptor(BaseModel):
             raise ValueError('All dimensions in shape must be non-negative integers')
         return v
 
-    @field_validator('last_modified_timestamp', mode='before')
-    def validate_last_modified(cls, v, info: ValidationInfo):
-        creation_timestamp = info.data.get('creation_timestamp')
-        if creation_timestamp and v < creation_timestamp:
+    @field_validator('last_modified_timestamp') # Defaults to mode='after'
+    def validate_last_modified(cls, v: datetime, info: ValidationInfo): # v is now datetime
+        # Ensure creation_timestamp is also datetime if accessed from info.data
+        # However, it's better to rely on already validated fields if possible,
+        # or ensure this validator runs after creation_timestamp is validated and converted.
+        # For direct comparison, both should be datetime.
+        # Pydantic v2 typically ensures other fields referenced in model_validator or
+        # late-stage field_validators are already validated/coerced.
+        # Assuming creation_timestamp in info.data is already a datetime due to its type hint and default_factory
+        creation_timestamp_from_data = info.data.get('creation_timestamp')
+        if isinstance(creation_timestamp_from_data, datetime) and v < creation_timestamp_from_data:
             raise ValueError('Last modified timestamp cannot be before creation timestamp')
+        # If creation_timestamp is not yet a datetime (e.g. if it was also mode='before' and a string),
+        # this comparison would also fail. Best practice is mode='after' for inter-field validation
+        # when types are critical.
         return v
 
     def update_last_modified(self):
@@ -218,19 +228,23 @@ class UsageMetadata(BaseModel):
     application_references: List[str] = Field(default_factory=list) # Names or IDs of applications/models using this tensor
     purpose: Optional[Dict[str, str]] = Field(default_factory=dict) # e.g. {"training_model_X": "feature_set_A"}
 
-    @field_validator('last_accessed_at', mode='before')
-    def sync_last_accessed(cls, v, info: ValidationInfo):
-        access_history = info.data.get('access_history')
-        if access_history:
-            latest_access = max(record.accessed_at for record in access_history)
-            if v is None or latest_access > v:
-                return latest_access
-        return v
+    @model_validator(mode='after')
+    def sync_derived_usage_fields(self) -> 'UsageMetadata':
+        if self.access_history: # This will be the fully validated list of UsageAccessRecord objects
+            # Update usage_frequency
+            self.usage_frequency = len(self.access_history)
 
-    @field_validator('usage_frequency', mode='before')
-    def sync_usage_frequency(cls, v, info: ValidationInfo):
-        access_history = info.data.get('access_history')
-        if access_history:
-            return len(access_history) # Simple count, could be more complex
-        return v if v is not None else 0
+            # Update last_accessed_at
+            latest_access_in_history = max(record.accessed_at for record in self.access_history)
+            if self.last_accessed_at is None or latest_access_in_history > self.last_accessed_at:
+                self.last_accessed_at = latest_access_in_history
+        else:
+            # If there's no access_history, ensure frequency is 0 if not explicitly set otherwise
+            # and last_accessed_at remains as is (or None).
+            # The default Field(default=0) for usage_frequency should handle the initial case.
+            # If an empty list is provided for access_history, this will correctly set frequency to 0.
+            self.usage_frequency = 0
+            # self.last_accessed_at will retain its input or default None if access_history is empty
+
+        return self
 
