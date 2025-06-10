@@ -374,6 +374,20 @@ The Streamlit UI provides a user-friendly interface for:
 *   **NQL Chat:** Enter natural language queries and view results.
 *   **Data Explorer:** Browse datasets, preview data, and perform tensor operations.
 
+## Natural Query Language (NQL)
+
+Tensorus ships with a simple regex‑based Natural Query Language for retrieving
+tensors by metadata. You can issue NQL queries via the API or from the "NQL
+Chat" page in the Streamlit UI.
+
+### Enabling LLM rewriting
+
+Set `NQL_USE_LLM=true` before starting the API server or Streamlit UI to enable
+experimental LLM rewriting of natural language queries. Optionally specify a
+model with `NQL_LLM_MODEL=<model-name>` (e.g., `google/flan-t5-base`). This
+feature relies on the heavy `transformers` dependency and may trigger a model
+download the first time it runs, which can take some time.
+
 ## Agent Details
 
 ### Data Ingestion Agent
