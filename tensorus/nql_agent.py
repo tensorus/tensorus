@@ -72,16 +72,16 @@ class NQLAgent:
         )
 
         # Pattern for basic metadata filtering: "... from Y where meta_key op value"
-        # Captures: dataset_name, key, operator, value
-        # Value can be quoted or unquoted number/simple string
+        # Value capture distinguishes between single-quoted, double-quoted, and unquoted values.
+        value_pattern = r"(?:'(?P<quoted_val>[^']*)'|\"(?P<double_quoted_val>[^\"]*)\"|(?P<unquoted_val>[\w_.-]+))"
         self.pattern_filter_meta = re.compile(
-            r"^(?:get|show|find)\s+.*\s+from\s+([\w_.-]+)\s+where\s+([\w_.-]+)\s*([<>=!]+)\s*'?([\w\s\d_.-]+?)'?$",
-             re.IGNORECASE
+            r"^(?:get|show|find)\s+.*\s+from\s+([\w_.-]+)\s+where\s+([\w_.-]+)\s*([<>=!]+)\s*" + value_pattern + r"$",
+            re.IGNORECASE
         )
         # Simpler pattern allowing 'is'/'equals'/'eq' for '='
         self.pattern_filter_meta_alt = re.compile(
-            r"^(?:get|show|find)\s+.*\s+from\s+([\w_.-]+)\s+where\s+([\w_.-]+)\s+(?:is|equals|eq)\s+'?([\w\s\d_.-]+?)'?$",
-             re.IGNORECASE
+            r"^(?:get|show|find)\s+.*\s+from\s+([\w_.-]+)\s+where\s+([\w_.-]+)\s+(?:is|equals|eq)\s+" + value_pattern + r"$",
+            re.IGNORECASE
         )
 
 
@@ -103,9 +103,12 @@ class NQLAgent:
         logger.info("NQLAgent initialized with basic regex patterns.")
 
 
-    def _parse_operator_and_value(self, op_str: str, val_str: str) -> Tuple[Callable, Any]:
-        """Attempts to parse operator string and convert value string to number if possible."""
-        val_str = val_str.strip()
+    def _parse_operator_and_value(self, op_str: str, val_str: str, is_string_literal: bool) -> Tuple[Callable, Any]:
+        """
+        Attempts to parse operator string and convert value string to number if possible,
+        unless it's explicitly a string literal from the query.
+        """
+        val_str = val_str.strip() # Should be minimal impact as regex for unquoted usually doesn't have leading/trailing spaces
         op_map = {
             '=': lambda a, b: a == b,
             '==': lambda a, b: a == b,
@@ -120,15 +123,17 @@ class NQLAgent:
         if op_func is None:
             raise ValueError(f"Unsupported operator: {op_str}")
 
-        # Try converting value to float or int
-        try:
-            value = float(val_str)
-            if value.is_integer():
-                value = int(value)
-        except ValueError:
-            # Keep as string if conversion fails
+        # Try converting value to float or int, unless it's a string literal
+        if is_string_literal:
             value = val_str
-
+        else:
+            try:
+                value = float(val_str)
+                if value.is_integer():
+                    value = int(value)
+            except ValueError:
+                # Keep as string if conversion fails for unquoted values
+                value = val_str
         return op_func, value
 
 
@@ -215,25 +220,52 @@ class NQLAgent:
              match_meta = self.pattern_filter_meta_alt.match(query)
              if match_meta:
                   # Extract groups and manually set operator to '='
-                  dataset_name = match_meta.group(1)
-                  key = match_meta.group(2)
+                  # Extract groups by name or position
+                  dataset_name = match_meta.group(1) # By position
+                  key = match_meta.group(2)          # By position
                   op_str = '=' # Implicitly '=' for 'is/equals/eq'
-                  val_str = match_meta.group(3)
-                  logger.debug(f"Matched FILTER META ALT pattern: dataset='{dataset_name}', key='{key}', op='{op_str}', value='{val_str}'")
+
+                  # Value extraction logic based on named groups
+                  quoted_val = match_meta.group('quoted_val')
+                  double_quoted_val = match_meta.group('double_quoted_val')
+                  unquoted_val = match_meta.group('unquoted_val')
+
+                  if quoted_val is not None:
+                      val_str = quoted_val
+                      value_is_string_literal = True
+                  elif double_quoted_val is not None:
+                      val_str = double_quoted_val
+                      value_is_string_literal = True
+                  else:
+                      val_str = unquoted_val
+                      value_is_string_literal = False
+                  logger.debug(f"Matched FILTER META ALT pattern: dataset='{dataset_name}', key='{key}', op='{op_str}', value='{val_str}', is_literal={value_is_string_literal}")
              else:
                    match_meta = None # Reset if alt pattern didn't match either
-        else:
-            # Standard extraction
+        else: # Standard pattern_filter_meta matched
             dataset_name = match_meta.group(1)
             key = match_meta.group(2)
             op_str = match_meta.group(3)
-            val_str = match_meta.group(4)
-            logger.debug(f"Matched FILTER META pattern: dataset='{dataset_name}', key='{key}', op='{op_str}', value='{val_str}'")
 
+            # Value extraction logic based on named groups
+            quoted_val = match_meta.group('quoted_val')
+            double_quoted_val = match_meta.group('double_quoted_val')
+            unquoted_val = match_meta.group('unquoted_val')
 
-        if match_meta:
+            if quoted_val is not None:
+                val_str = quoted_val
+                value_is_string_literal = True
+            elif double_quoted_val is not None:
+                val_str = double_quoted_val
+                value_is_string_literal = True
+            else:
+                val_str = unquoted_val
+                value_is_string_literal = False
+            logger.debug(f"Matched FILTER META pattern: dataset='{dataset_name}', key='{key}', op='{op_str}', value='{val_str}', is_literal={value_is_string_literal}")
+
+        if match_meta: # If either standard or alt meta pattern matched
              try:
-                 op_func, filter_value = self._parse_operator_and_value(op_str, val_str)
+                 op_func, filter_value = self._parse_operator_and_value(op_str, val_str, value_is_string_literal)
 
                  # Construct the query function dynamically
                  def query_fn_meta(tensor: torch.Tensor, metadata: Dict[str, Any]) -> bool:
@@ -287,7 +319,8 @@ class NQLAgent:
             logger.debug(f"Matched FILTER TENSOR pattern: dataset='{dataset_name}', index='{index_str}', op='{op_str}', value='{val_str}'")
 
             try:
-                op_func, filter_value = self._parse_operator_and_value(op_str, val_str)
+                # For tensor filtering, the value from regex is always treated as non-literal for numeric conversion attempts
+                op_func, filter_value = self._parse_operator_and_value(op_str, val_str, is_string_literal=False)
                 if not isinstance(filter_value, (int, float)):
                     raise ValueError(f"Tensor value filtering currently only supports numeric comparisons. Got value: {filter_value}")
 
