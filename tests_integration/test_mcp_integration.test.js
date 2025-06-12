@@ -3,6 +3,8 @@ const { Client, StdioClientTransport } = require('@modelcontextprotocol/sdk/clie
 const path = require('path');
 const fs = require('fs');
 
+jest.setTimeout(60000); // allow plenty of time for servers to start
+
 const PYTHON_API_PORT = 8000; // Ensure this matches api.py
 const PYTHON_API_BASE_URL = `http://127.0.0.1:${PYTHON_API_PORT}`;
 const MCP_SERVER_SCRIPT = path.join(__dirname, '../mcp_tensorus_server/server.js');
@@ -13,50 +15,65 @@ let pythonApiProcess;
 let mcpServerProcess;
 let mcpClient;
 
-// Function to activate venv and run python script
-function startPythonApiWithVenv() {
+// Utility to poll the FastAPI server until it responds
+function waitForApiReady(timeoutMs = 30000, intervalMs = 500) {
     return new Promise((resolve, reject) => {
-        console.log('Attempting to start Python API server with virtual environment...');
-        // Check if venv activate script exists
-        if (!fs.existsSync(PYTHON_VENV_ACTIVATOR)) {
-            console.warn(`Python virtual environment activator not found at ${PYTHON_VENV_ACTIVATOR}.`);
-            console.warn("Attempting to run 'python api.py' directly. Ensure Python dependencies are globally available or api.py is executable and has a shebang.");
-            pythonApiProcess = spawn('python', [PYTHON_API_SCRIPT], { stdio: ['ignore', 'pipe', 'pipe'] });
-        } else {
-            // Using bash to source venv then run python. This is OS-dependent (Linux/macOS).
-            // For Windows, the command would be different (e.g., `cmd /c ".venv\\Scripts\\activate && python api.py"`)
-            const command = `. ${PYTHON_VENV_ACTIVATOR} && python ${PYTHON_API_SCRIPT}`;
-            pythonApiProcess = spawn('bash', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'] });
-        }
-
-        pythonApiProcess.stdout.on('data', (data) => {
-            const output = data.toString();
-            console.log(`Python API STDOUT: ${output}`);
-            if (output.includes(`Uvicorn running on http://127.0.0.1:${PYTHON_API_PORT}`) || output.includes("Tensorus API Server")) {
-                console.log('Python API server started successfully.');
-                resolve();
+        const start = Date.now();
+        const check = () => {
+            fetch(`${PYTHON_API_BASE_URL}/health`).then(res => {
+                if (res.ok) {
+                    console.log('Python API server is reachable.');
+                    resolve();
+                } else {
+                    next();
+                }
+            }).catch(() => next());
+        };
+        const next = () => {
+            if (Date.now() - start > timeoutMs) {
+                reject(new Error('Timed out waiting for Python API to become available'));
+            } else {
+                setTimeout(check, intervalMs);
             }
-        });
-
-        pythonApiProcess.stderr.on('data', (data) => {
-            const errorOutput = data.toString();
-            console.error(`Python API STDERR: ${errorOutput}`);
-            // Consider rejecting if a critical startup error is detected.
-            // For now, we rely on the stdout message for successful startup.
-        });
-
-        pythonApiProcess.on('error', (err) => {
-            console.error('Failed to start Python API process:', err);
-            reject(err);
-        });
-        
-        pythonApiProcess.on('close', (code) => {
-            if (code !== 0 && code !== null) { // null if killed
-                console.warn(`Python API process closed with code ${code}`);
-                // Potentially reject here if it closes unexpectedly during startup phase
-            }
-        });
+        };
+        check();
     });
+}
+
+// Function to activate venv and run python script, then wait until server responds
+function startPythonApiWithVenv() {
+    console.log('Attempting to start Python API server with virtual environment...');
+    // Check if venv activate script exists
+    if (!fs.existsSync(PYTHON_VENV_ACTIVATOR)) {
+        console.warn(`Python virtual environment activator not found at ${PYTHON_VENV_ACTIVATOR}.`);
+        console.warn("Attempting to run 'python api.py' directly. Ensure Python dependencies are globally available or api.py is executable and has a shebang.");
+        pythonApiProcess = spawn('python', [PYTHON_API_SCRIPT], { stdio: ['ignore', 'pipe', 'pipe'] });
+    } else {
+        // Using bash to source venv then run python. This is OS-dependent (Linux/macOS).
+        // For Windows, the command would be different (e.g., `cmd /c ".venv\\Scripts\\activate && python api.py"`)
+        const command = `. ${PYTHON_VENV_ACTIVATOR} && python ${PYTHON_API_SCRIPT}`;
+        pythonApiProcess = spawn('bash', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'] });
+    }
+
+    pythonApiProcess.stdout.on('data', (data) => {
+        console.log(`Python API STDOUT: ${data.toString()}`);
+    });
+
+    pythonApiProcess.stderr.on('data', (data) => {
+        console.error(`Python API STDERR: ${data.toString()}`);
+    });
+
+    pythonApiProcess.on('error', (err) => {
+        console.error('Failed to start Python API process:', err);
+    });
+
+    pythonApiProcess.on('close', (code) => {
+        if (code !== 0 && code !== null) {
+            console.warn(`Python API process closed with code ${code}`);
+        }
+    });
+
+    return waitForApiReady();
 }
 
 
@@ -94,9 +111,9 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 beforeAll(async () => {
     try {
         await startPythonApiWithVenv();
-        // Wait a bit for the Python API to fully initialize, even after Uvicorn message
-        console.log('Waiting for Python API to settle...');
-        await delay(5000); // Increased delay
+        // Short pause after the health check to ensure the API is fully ready
+        console.log('Waiting briefly for Python API to settle...');
+        await delay(1000);
 
         await startMcpServer();
         

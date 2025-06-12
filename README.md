@@ -300,6 +300,10 @@ Tensorus includes Python unit tests and optional Node.js integration tests. To s
 
     This script installs packages from `requirements.txt` and `requirements-test.txt` and runs `npm install` in `mcp_tensorus_server`.
 
+    **Before running the integration tests ensure:**
+    * The Python dependencies are available in your active environment (activate the `.venv` created by `setup.sh` if using one).
+    * Port `8000` is free so the FastAPI server can bind to it.
+
     To install only the Node dependencies required for the integration tests, you can run the setup script inside the MCP server directory:
 
     ```bash
