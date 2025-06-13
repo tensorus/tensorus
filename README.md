@@ -179,7 +179,9 @@ graph TD
     ```
     This installs Python requirements from `requirements.txt` and
     `requirements-test.txt`, using CPU wheels for PyTorch and
-    pinning `httpx` to a compatible version. The script also runs
+    pinning `httpx` to a compatible version. The test requirements
+    also install `fastapi>=0.110` for compatibility with Pydantic v2.
+    The script also runs
     `npm install` in `mcp_tensorus_server` (needed for integration tests).
     Heavy machine-learning libraries (e.g. `xgboost`, `lightgbm`, `catboost`,
     `statsmodels`, `torch-geometric`) are not installed by default. Install
@@ -298,7 +300,7 @@ Tensorus includes Python unit tests and optional Node.js integration tests. To s
     ./setup.sh
     ```
 
-    This script installs packages from `requirements.txt` and `requirements-test.txt` and runs `npm install` in `mcp_tensorus_server`.
+    This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support) and runs `npm install` in `mcp_tensorus_server`.
 
     **Before running the integration tests ensure:**
     * The Python dependencies are available in your active environment (activate the `.venv` created by `setup.sh` if using one).
