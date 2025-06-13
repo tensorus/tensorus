@@ -9,6 +9,7 @@ semopy>=2.3
 pydantic-settings>=2.0
 # FastAPI version supporting Pydantic v2
 fastapi>=0.110
+numpy>=1.21.0
 torch
 tensorly
 transformers
