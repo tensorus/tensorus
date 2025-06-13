@@ -354,8 +354,7 @@ class TestTensorOps(unittest.TestCase):
         inv = TensorOps.matrix_inverse(A)
         expected_identity = torch.eye(2, dtype=torch.float32)
         actual_result = A @ inv
-        # print(f"Actual result (A @ inv):\n{actual_result}") # Optional: Keep for debugging if needed
-        # print(f"Expected identity:\n{expected_identity}") # Optional: Keep for debugging if needed
+        self.assertEqual(inv.dtype, A.dtype)
         self.assertTrue(torch.allclose(actual_result, expected_identity))
 
     def test_matrix_inverse_non_square_error(self):
