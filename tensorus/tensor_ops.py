@@ -508,7 +508,9 @@ class TensorOps:
             raise ValueError("Input matrix must be 2-D")
         if matrix.shape[0] != matrix.shape[1]:
             raise ValueError("Input matrix must be square")
-        return torch.linalg.inv(matrix)
+        orig_dtype = matrix.dtype
+        inv = torch.linalg.inv(matrix.double()).to(orig_dtype)
+        return inv
 
     @staticmethod
     def matrix_determinant(matrix: torch.Tensor) -> torch.Tensor:
