@@ -281,14 +281,32 @@ class NQLAgent:
                     if actual_value is None:
                         return False  # Key doesn't exist in this record's metadata
 
-                    # Handle comparison between numeric filter values and non-numeric metadata.
-                    # If the metadata value isn't numeric, avoid conversion. For equality/inequality
-                    # operators compare the string forms, otherwise treat as a non-match.
+                    # Handle comparisons where the filter value is numeric but the metadata value
+                    # might be stored as a non-numeric string (e.g. "N/A").  If the metadata string
+                    # cannot be converted to a number we only allow equality/inequality checks based
+                    # on the raw string representation.
                     if isinstance(filter_value, (int, float)) and not isinstance(actual_value, (int, float)):
-                        if op_str in {"=", "==", "!="}:
-                            return op_func(str(actual_value), str(filter_value))
+                        if isinstance(actual_value, str):
+                            try:
+                                actual_numeric = float(actual_value)
+                                if actual_numeric.is_integer():
+                                    actual_numeric = int(actual_numeric)
+                                actual_value = actual_numeric
+                            except ValueError:
+                                # Metadata value is a non-numeric string
+                                if op_str in {"=", "==", "!="}:
+                                    return op_func(str(actual_value), str(filter_value))
+                                else:
+                                    return False
                         else:
-                            return False
+                            # Non-string metadata value that isn't numeric – attempt coercion
+                            try:
+                                actual_value = type(filter_value)(actual_value)
+                            except (ValueError, TypeError):
+                                if op_str in {"=", "==", "!="}:
+                                    return op_func(str(actual_value), str(filter_value))
+                                else:
+                                    return False
 
                     # Attempt simple type coercion for remaining cases
                     try:
