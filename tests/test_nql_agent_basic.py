@@ -1,6 +1,7 @@
 import pytest
-import torch
+pytest.importorskip("torch")
 from unittest.mock import patch
+import torch
 
 from tensorus.nql_agent import NQLAgent
 from tensorus.tensor_storage import TensorStorage

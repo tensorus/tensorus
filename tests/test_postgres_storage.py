@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch, call
+pytest.importorskip("psycopg2")
 import psycopg2
 from uuid import uuid4, UUID
 from datetime import datetime
