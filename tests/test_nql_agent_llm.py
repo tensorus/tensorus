@@ -1,5 +1,7 @@
 import pytest
 from unittest.mock import patch
+pytest.importorskip("torch")
+pytest.importorskip("transformers")
 import torch
 
 from tensorus.nql_agent import NQLAgent

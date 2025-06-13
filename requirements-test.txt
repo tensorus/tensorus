@@ -7,3 +7,7 @@ httpx==0.23.0
 scipy
 semopy>=2.3
 pydantic-settings>=2.0
+torch
+tensorly
+transformers
+psycopg2-binary

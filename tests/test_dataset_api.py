@@ -1,4 +1,5 @@
 import pytest
+pytest.importorskip("torch")
 from fastapi.testclient import TestClient
 
 import importlib.util

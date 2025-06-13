@@ -2,6 +2,7 @@ import unittest
 import pytest
 
 pytest.importorskip("torch")
+pytest.importorskip("tensorly")
 import torch
 import numpy as np
 import tensorly as tl

@@ -1,6 +1,7 @@
 import os
 import importlib.util
 import pytest
+pytest.importorskip("torch")
 from fastapi.testclient import TestClient
 
 # Load the legacy api module which exposes dataset endpoints

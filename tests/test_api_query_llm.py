@@ -2,6 +2,8 @@ import os
 import importlib.util
 import pytest
 from unittest.mock import patch
+pytest.importorskip("torch")
+pytest.importorskip("transformers")
 import torch
 
 from fastapi.testclient import TestClient
