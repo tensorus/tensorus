@@ -7,7 +7,7 @@ httpx==0.23.0
 scipy
 semopy>=2.3
 pydantic-settings>=2.0
-# FastAPI version supporting Pydantic v2
+# FastAPI version supporting the Pydantic v2 API
 fastapi>=0.110
 numpy>=1.21.0
 torch

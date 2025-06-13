@@ -32,6 +32,12 @@ The easiest way to get Tensorus and its PostgreSQL backend running locally is by
     ```bash
     pip install -e .[models]
     ```
+    If you intend to run the test suite, also install the test requirements:
+    ```bash
+    pip install -r requirements-test.txt
+    ```
+    This ensures `fastapi>=0.110` is installed so the API is compatible with
+    Pydantic v2.
 5.  *(Optional)* Install the example models package. The built-in models that
     were previously part of this repository now live at
     [https://github.com/tensorus/models](https://github.com/tensorus/models):
