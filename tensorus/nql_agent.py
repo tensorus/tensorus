@@ -23,6 +23,7 @@ Future Enhancements:
 
 import re
 import logging
+import math
 import torch
 from typing import List, Dict, Any, Optional, Callable, Tuple
 
@@ -87,9 +88,10 @@ class NQLAgent:
 
         # Pattern for filtering based on tensor value at a specific index: "... from Y where tensor_value[index] op value"
         # Captures: dataset_name, index, operator, value
+        value_pattern_tensor = r"(?:'(?P<t_single>[^']*)'|\"(?P<t_double>[^\"]*)\"|(?P<t_unquoted>[\w.-]+))"
         self.pattern_filter_tensor = re.compile(
-            r"^(?:get|show|find)\s+.*\s+from\s+([\w_.-]+)\s+where\s+(?:tensor|value)\s*(?:\[(\d+)\])?\s*([<>=!]+)\s*([\d.-]+)$",
-            re.IGNORECASE
+            r"^(?:get|show|find)\s+.*\s+from\s+([\w_.-]+)\s+where\s+(?:tensor|value)\s*(?:\[(\d+)\])?\s*([<>=!]+)\s*" + value_pattern_tensor + r"$",
+            re.IGNORECASE,
         )
         # Note: tensor[index] assumes a 1D tensor or accessing the element at flat index `index`.
         # More complex tensor indexing (e.g., tensor[0, 1]) is not supported by this simple regex.
@@ -247,75 +249,89 @@ class NQLAgent:
             key = match_meta.group(2)
             op_str = match_meta.group(3)
 
-            # Value extraction logic based on named groups
-            quoted_val = match_meta.group('quoted_val')
-            double_quoted_val = match_meta.group('double_quoted_val')
-            unquoted_val = match_meta.group('unquoted_val')
-
-            if quoted_val is not None:
-                val_str = quoted_val
-                value_is_string_literal = True
-            elif double_quoted_val is not None:
-                val_str = double_quoted_val
-                value_is_string_literal = True
+            # If the key is literally 'tensor' or 'value', treat this as a tensor filter instead
+            if key.lower() in {"tensor", "value"}:
+                match_meta = None
             else:
-                val_str = unquoted_val
-                value_is_string_literal = False
-            logger.debug(f"Matched FILTER META pattern: dataset='{dataset_name}', key='{key}', op='{op_str}', value='{val_str}', is_literal={value_is_string_literal}")
+                # Value extraction logic based on named groups
+                quoted_val = match_meta.group('quoted_val')
+                double_quoted_val = match_meta.group('double_quoted_val')
+                unquoted_val = match_meta.group('unquoted_val')
+
+                if quoted_val is not None:
+                    val_str = quoted_val
+                    value_is_string_literal = True
+                elif double_quoted_val is not None:
+                    val_str = double_quoted_val
+                    value_is_string_literal = True
+                else:
+                    val_str = unquoted_val
+                    value_is_string_literal = False
+                logger.debug(
+                    f"Matched FILTER META pattern: dataset='{dataset_name}', key='{key}', op='{op_str}', value='{val_str}', is_literal={value_is_string_literal}"
+                )
 
         if match_meta: # If either standard or alt meta pattern matched
-             try:
-                 op_func, filter_value = self._parse_operator_and_value(op_str, val_str, value_is_string_literal)
+            try:
+                op_func, filter_value = self._parse_operator_and_value(op_str, val_str, value_is_string_literal)
 
-                 # Construct the query function dynamically
-                 def query_fn_meta(tensor: torch.Tensor, metadata: Dict[str, Any]) -> bool:
-                     actual_value = metadata.get(key)
-                     if actual_value is None:
-                         return False # Key doesn't exist in this record's metadata
+                # Construct the query function dynamically
+                def query_fn_meta(tensor: torch.Tensor, metadata: Dict[str, Any]) -> bool:
+                    actual_value = metadata.get(key)
+                    if actual_value is None:
+                        return False  # Key doesn't exist in this record's metadata
 
-                     # Attempt type coercion if filter value is numeric but actual is not
-                     # (Basic attempt, might need more robust type handling)
-                     try:
-                          if isinstance(filter_value, (int, float)) and not isinstance(actual_value, (int, float)):
-                              actual_value = type(filter_value)(actual_value) # Try to cast actual to filter type
-                          elif isinstance(filter_value, str) and not isinstance(actual_value, str):
-                              actual_value = str(actual_value) # Cast actual to string if filter is string
-                     except (ValueError, TypeError):
-                          return False # Cannot compare types
+                    # Handle comparison between numeric filter values and non-numeric metadata.
+                    # If the metadata value isn't numeric, avoid conversion. For equality/inequality
+                    # operators compare the string forms, otherwise treat as a non-match.
+                    if isinstance(filter_value, (int, float)) and not isinstance(actual_value, (int, float)):
+                        if op_str in {"=", "==", "!="}:
+                            return op_func(str(actual_value), str(filter_value))
+                        else:
+                            return False
 
-                     try:
-                         return op_func(actual_value, filter_value)
-                     except TypeError:
-                          # Mismatched types that couldn't be coerced
-                          return False
-                     except Exception as e_inner:
-                         logger.warning(f"Error during query_fn execution for key '{key}': {e_inner}")
-                         return False
+                    # Attempt simple type coercion for remaining cases
+                    try:
+                        if isinstance(filter_value, str) and not isinstance(actual_value, str):
+                            actual_value = str(actual_value)
+                        elif isinstance(filter_value, (int, float)) and not isinstance(actual_value, (int, float)):
+                            actual_value = type(filter_value)(actual_value)
+                    except (ValueError, TypeError):
+                        return False  # Cannot compare types
 
-                 results = self.tensor_storage.query(dataset_name, query_fn_meta)
-                 count = len(results)
-                 return {
-                     "success": True,
-                     "message": f"Query executed successfully. Found {count} matching records.",
-                     "count": count,
-                     "results": results
-                 }
+                    try:
+                        return op_func(actual_value, filter_value)
+                    except TypeError:
+                        # Mismatched types that couldn't be coerced
+                        return False
+                    except Exception as e_inner:
+                        logger.warning(f"Error during query_fn execution for key '{key}': {e_inner}")
+                        return False
 
-             except ValueError as e: # Catches parse_operator_and_value errors or dataset not found
-                 logger.error(f"Error processing FILTER META query: {e}")
-                 return {"success": False, "message": str(e), "count": None, "results": None}
-             except Exception as e:
-                 logger.error(f"Unexpected error during FILTER META query: {e}", exc_info=True)
-                 return {"success": False, "message": f"An unexpected error occurred: {e}", "count": None, "results": None}
+                results = self.tensor_storage.query(dataset_name, query_fn_meta)
+                count = len(results)
+                return {
+                    "success": True,
+                    "message": f"Query executed successfully. Found {count} matching records.",
+                    "count": count,
+                    "results": results
+                }
+
+            except ValueError as e: # Catches parse_operator_and_value errors or dataset not found
+                logger.error(f"Error processing FILTER META query: {e}")
+                return {"success": False, "message": str(e), "count": None, "results": None}
+            except Exception as e:
+                logger.error(f"Unexpected error during FILTER META query: {e}", exc_info=True)
+                return {"success": False, "message": f"An unexpected error occurred: {e}", "count": None, "results": None}
 
 
         # --- 4. Filter Tensor Pattern ---
         match = self.pattern_filter_tensor.match(query)
         if match:
             dataset_name = match.group(1)
-            index_str = match.group(2) # Might be None if accessing whole tensor value (ambiguous)
+            index_str = match.group(2)  # Might be None if accessing whole tensor value
             op_str = match.group(3)
-            val_str = match.group(4)
+            val_str = match.group('t_single') or match.group('t_double') or match.group('t_unquoted')
             logger.debug(f"Matched FILTER TENSOR pattern: dataset='{dataset_name}', index='{index_str}', op='{op_str}', value='{val_str}'")
 
             try:
@@ -346,6 +362,9 @@ class NQLAgent:
                              actual_value = tensor.view(-1)[tensor_index].item()
 
                         # Value comparison (assuming numeric)
+                        if op_str in {"=", "==", "!="} and isinstance(actual_value, float) and isinstance(filter_value, float):
+                            close = math.isclose(actual_value, filter_value, rel_tol=1e-6, abs_tol=1e-9)
+                            return close if op_str in {"=", "=="} else not close
                         return op_func(actual_value, filter_value)
 
                     except IndexError:

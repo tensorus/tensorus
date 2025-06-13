@@ -266,24 +266,23 @@ class TensorStorage:
                             f"Metadata field '{field}' expected type {type_name}, got {type(metadata[field]).__name__}."
                         )
 
-        # Generate essential, non-overridable metadata fields
-        system_record_id = str(uuid.uuid4()) # System-generated record_id is authoritative
-        current_version = len(self.datasets[name]["tensors"]) + 1 # Version is based on current number of items
+        # Generate essential metadata fields
+        system_record_id = str(uuid.uuid4())
+        current_version = len(self.datasets[name]["tensors"]) + 1
 
-        # Warn if user attempts to provide 'record_id' and remove it from their dict; system ID takes precedence.
-        if "record_id" in metadata:
-            logging.warning(
-                f"User-provided 'record_id' ('{metadata['record_id']}') in metadata for insert into dataset '{name}' will be ignored. "
-                f"Using system-generated ID: '{system_record_id}'."
-            )
-            del metadata["record_id"] # User-provided record_id is discarded
+        # Use provided record_id if given; otherwise fall back to system generated
+        user_record_id = metadata.get("record_id")
+        if user_record_id is None:
+            metadata_record_id = system_record_id
+        else:
+            metadata_record_id = user_record_id
         
         # Initialize final_metadata with the (potentially modified) user's metadata.
         # This ensures custom fields are preserved.
         final_metadata = metadata # `metadata` is already a copy or a new dict.
 
         # Set or overwrite essential fields in final_metadata.
-        final_metadata["record_id"] = system_record_id # System-generated ID is always used.
+        final_metadata["record_id"] = metadata_record_id
         
         # For other standard fields, use user's value if provided, otherwise generate default.
         final_metadata["timestamp_utc"] = metadata.get("timestamp_utc", time.time())
@@ -300,8 +299,10 @@ class TensorStorage:
         self.datasets[name]["tensors"].append(tensor.clone()) # Store a copy of the tensor to prevent external modifications
         self.datasets[name]["metadata"].append(final_metadata)
         
-        # Use the authoritative system-generated record_id for logging and return value
-        logging.debug(f"Tensor with shape {tuple(tensor.shape)} inserted into dataset '{name}'. Record ID: {final_metadata['record_id']}")
+        # Log the record_id actually stored (either user provided or generated)
+        logging.debug(
+            f"Tensor with shape {tuple(tensor.shape)} inserted into dataset '{name}'. Record ID: {final_metadata['record_id']}"
+        )
         self._save_dataset(name) # Persist dataset changes if storage_path is configured
         return final_metadata['record_id'] # Return the actual record_id used for storage
 
