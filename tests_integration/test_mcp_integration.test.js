@@ -8,7 +8,9 @@ jest.setTimeout(60000); // allow plenty of time for servers to start
 const PYTHON_API_PORT = 8000; // Ensure this matches api.py
 const PYTHON_API_BASE_URL = `http://127.0.0.1:${PYTHON_API_PORT}`;
 const MCP_SERVER_SCRIPT = path.join(__dirname, '../mcp_tensorus_server/server.js');
-const PYTHON_API_SCRIPT = path.join(__dirname, '../api.py');
+// Path to the FastAPI server script. The file lives under the tensorus package
+// directory.
+const PYTHON_API_SCRIPT = path.join(__dirname, '../tensorus/api.py');
 const PYTHON_VENV_ACTIVATOR = path.join(__dirname, '../.venv/bin/activate'); // Path to venv activator
 
 let pythonApiProcess;
@@ -46,12 +48,12 @@ function startPythonApiWithVenv() {
     // Check if venv activate script exists
     if (!fs.existsSync(PYTHON_VENV_ACTIVATOR)) {
         console.warn(`Python virtual environment activator not found at ${PYTHON_VENV_ACTIVATOR}.`);
-        console.warn("Attempting to run 'python api.py' directly. Ensure Python dependencies are globally available or api.py is executable and has a shebang.");
-        pythonApiProcess = spawn('python', [PYTHON_API_SCRIPT], { stdio: ['ignore', 'pipe', 'pipe'] });
+        console.warn("Attempting to run the API using uvicorn.");
+        pythonApiProcess = spawn('uvicorn', ['tensorus.api:app', '--host', '127.0.0.1', '--port', PYTHON_API_PORT], { stdio: ['ignore', 'pipe', 'pipe'] });
     } else {
         // Using bash to source venv then run python. This is OS-dependent (Linux/macOS).
         // For Windows, the command would be different (e.g., `cmd /c ".venv\\Scripts\\activate && python api.py"`)
-        const command = `. ${PYTHON_VENV_ACTIVATOR} && python ${PYTHON_API_SCRIPT}`;
+        const command = `. ${PYTHON_VENV_ACTIVATOR} && uvicorn tensorus.api:app --host 127.0.0.1 --port ${PYTHON_API_PORT}`;
         pythonApiProcess = spawn('bash', ['-c', command], { stdio: ['ignore', 'pipe', 'pipe'] });
     }
 
@@ -80,7 +82,10 @@ function startPythonApiWithVenv() {
 function startMcpServer() {
     return new Promise((resolve, reject) => {
         console.log('Starting Node.js MCP server...');
-        mcpServerProcess = spawn('node', [MCP_SERVER_SCRIPT], { stdio: ['pipe', 'pipe', 'pipe'] });
+        mcpServerProcess = spawn('node', [MCP_SERVER_SCRIPT], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: { ...process.env, PYTHON_API_BASE_URL }
+        });
 
         mcpServerProcess.stdout.on('data', (data) => {
             const output = data.toString();

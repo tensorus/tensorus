@@ -238,7 +238,10 @@ The Tensorus MCP Server is a Node.js application that acts as a bridge to the Py
 **Starting the MCP Server:**
 
 1.  Ensure the Python FastAPI backend is running.
-2.  From the `mcp_tensorus_server` directory, run:
+2.  Optionally set the `PYTHON_API_BASE_URL` environment variable if your
+    backend is running on a different host or port (default is
+    `http://127.0.0.1:8000`).
+3.  From the `mcp_tensorus_server` directory, run:
     ```bash
     node server.js
     ```
@@ -246,7 +249,7 @@ The Tensorus MCP Server is a Node.js application that acts as a bridge to the Py
     ```bash
     npm start
     ```
-3.  The MCP server will connect via stdio by default. MCP clients will communicate with this server process through its standard input and output.
+4.  The MCP server will connect via stdio by default. MCP clients will communicate with this server process through its standard input and output.
 ### Running the Python MCP Server
 
 Tensorus also provides a lightweight Python implementation of the Model Context Protocol server using `fastmcp`. It exposes the same FastAPI endpoints as tools so you can run an MCP server without Node.js.

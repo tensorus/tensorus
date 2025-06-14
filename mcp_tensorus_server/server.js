@@ -3,7 +3,9 @@ const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio
 const { ListToolsRequestSchema, CallToolRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
 const axios = require('axios');
 
-const PYTHON_API_BASE_URL = 'http://127.0.0.1:8000'; // Ensure this matches your Python API server
+// Allow the Python API base URL to be overridden via an environment variable
+// while falling back to the default localhost value used throughout the docs.
+const PYTHON_API_BASE_URL = process.env.PYTHON_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const UNARY_OPS = ["log", "reshape", "transpose", "permute", "sum", "mean", "min", "max"];
 const BINARY_OPS = ["add", "subtract", "multiply", "divide", "power", "matmul", "dot"];
