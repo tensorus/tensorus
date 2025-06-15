@@ -1387,10 +1387,9 @@ async def get_dashboard_metrics(storage: TensorStorage = Depends(get_tensor_stor
         logger.exception(f"Failed to get dataset count for metrics: {e}")
         metrics_data["dataset_count"] = -1 # Indicate error fetching
 
-    # --- Simulated/Placeholder Metrics ---
-    # TODO: Replace simulations with actual metric collection from agents/storage/system.
+    # --- Actual Metrics ---
 
-    # Agent Status Summary (from placeholder registry)
+    # Agent Status Summary (from registry)
     status_counts = {"running": 0, "stopped": 0, "error": 0, "starting": 0, "stopping": 0, "unknown": 0}
     for agent_id, details in agent_registry.items():
         status = details.get("status", "unknown")
@@ -1400,44 +1399,91 @@ async def get_dashboard_metrics(storage: TensorStorage = Depends(get_tensor_stor
         status_counts[status] += 1
     metrics_data["agent_status_summary"] = status_counts
 
-    # Simulate Total Records (Only estimate if dataset_count is valid)
-    ds_count = metrics_data.get("dataset_count", -1)
-    metrics_data["total_records_est"] = ds_count * random.randint(500, 5000) if ds_count >= 0 else 0
+    # Total records across all datasets
+    total_records = 0
+    for ds in storage.list_datasets() if hasattr(storage, "list_datasets") else []:
+        try:
+            total_records += storage.count(ds)
+        except Exception as e:
+            logger.warning(f"Failed counting records for dataset '{ds}': {e}")
+    metrics_data["total_records_est"] = total_records
 
-    # Simulate performance metrics (slightly dynamic based on time/status)
-    # Use .get() for safe access in case agents are removed from registry later
-    ingestion_running = agent_registry.get("ingestion", {}).get("status") == "running"
-    rl_running = agent_registry.get("rl_trainer", {}).get("status") == "running"
-    automl_running = agent_registry.get("automl_search", {}).get("status") == "running"
+    # Performance metrics from agents/storage
+    ingestion_dataset = agent_registry.get("ingestion", {}).get("config", {}).get("dataset_name")
+    ingestion_rate = 0.0
+    if ingestion_dataset and getattr(storage, "dataset_exists", lambda d: False)(ingestion_dataset):
+        try:
+            records = storage.get_dataset_with_metadata(ingestion_dataset)
+            recent = [r for r in records if r.get("metadata", {}).get("timestamp_utc", 0) >= current_time - 60]
+            ingestion_rate = len(recent) / 60.0
+        except Exception as e:
+            logger.warning(f"Failed calculating ingestion rate: {e}")
+    metrics_data["data_ingestion_rate"] = ingestion_rate
 
-    metrics_data["data_ingestion_rate"] = random.uniform(5.0, 50.0) * (1.0 if ingestion_running else 0.1)
-    metrics_data["avg_query_latency_ms"] = random.uniform(50.0, 300.0) * (1 + 0.5 * math.sin(current_time / 60)) # Smoother oscillation
+    metrics_data["avg_query_latency_ms"] = 0.0  # No instrumentation yet
 
-    # --- Simulation state reading ---
-    # State mutation for these counters is handled in a background task started on app startup.
-    rl_agent_state = agent_registry.get("rl_trainer", {})
-    rl_total_steps = int(rl_agent_state.get("sim_steps", 0))
+    rl_cfg = agent_registry.get("rl_trainer", {}).get("config", {})
+    rl_ds = rl_cfg.get("experience_dataset")
+    rl_total_steps = 0
+    rl_latest_reward = None
+    if rl_ds and getattr(storage, "dataset_exists", lambda d: False)(rl_ds):
+        try:
+            rl_total_steps = storage.count(rl_ds)
+            if rl_total_steps > 0:
+                last_meta = storage.get_dataset_with_metadata(rl_ds)[-1]["metadata"]
+                rl_latest_reward = last_meta.get("reward")
+        except Exception as e:
+            logger.warning(f"Failed retrieving RL metrics: {e}")
     metrics_data["rl_total_steps"] = rl_total_steps
-    metrics_data["rl_latest_reward"] = random.gauss(10, 5.0) if rl_running else None
+    metrics_data["rl_latest_reward"] = rl_latest_reward
 
-    automl_agent_state = agent_registry.get("automl_search", {})
-    automl_trials_completed = int(automl_agent_state.get("sim_trials", 0))
-    metrics_data["automl_trials_completed"] = automl_trials_completed
-    metrics_data["automl_best_score"] = automl_agent_state.get("sim_best_score")
-    # --- End simulation state reading ---
+    auto_cfg = agent_registry.get("automl_search", {}).get("config", {})
+    auto_ds = auto_cfg.get("results_dataset")
+    auto_trials = 0
+    auto_best = None
+    if auto_ds and getattr(storage, "dataset_exists", lambda d: False)(auto_ds):
+        try:
+            auto_trials = storage.count(auto_ds)
+            metas = [m["metadata"].get("score") for m in storage.get_dataset_with_metadata(auto_ds) if m["metadata"].get("score") is not None]
+            if metas:
+                if auto_cfg.get("task_type") == "classification":
+                    auto_best = max(metas)
+                else:
+                    auto_best = min(metas)
+        except Exception as e:
+            logger.warning(f"Failed retrieving AutoML metrics: {e}")
+    metrics_data["automl_trials_completed"] = auto_trials
+    metrics_data["automl_best_score"] = auto_best
 
-    # Simulate System Health (with bounds checks)
-    cpu_load = random.uniform(5.0, 25.0) \
-               + (15 if ingestion_running else 0) \
-               + (25 if rl_running else 0) \
-               + (10 if automl_running else 0)
-    # Ensure value is between 0 and 100
-    metrics_data["system_cpu_usage_percent"] = min(100.0, max(0.0, cpu_load + random.uniform(-2.0, 2.0)))
+    # System health metrics
+    try:
+        load1, _, _ = os.getloadavg()
+        cpu_usage = min(100.0, (load1 / float(os.cpu_count() or 1)) * 100.0)
+    except Exception as e:
+        logger.warning(f"Failed to read CPU load: {e}")
+        cpu_usage = 0.0
 
-    mem_load = random.uniform(15.0, 40.0) \
-               + (metrics_data.get("dataset_count", 0) * 0.75) # Memory scales slightly with datasets
-    # Ensure value is between 0 and 100
-    metrics_data["system_memory_usage_percent"] = min(100.0, max(0.0, mem_load + random.uniform(-3.0, 3.0)))
+    try:
+        mem_total = mem_available = None
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    mem_total = float(line.split()[1])
+                elif line.startswith("MemAvailable:"):
+                    mem_available = float(line.split()[1])
+                if mem_total is not None and mem_available is not None:
+                    break
+        if mem_total and mem_available is not None:
+            mem_used = mem_total - mem_available
+            mem_percent = (mem_used / mem_total) * 100.0
+        else:
+            mem_percent = 0.0
+    except Exception as e:
+        logger.warning(f"Failed to read memory usage: {e}")
+        mem_percent = 0.0
+
+    metrics_data["system_cpu_usage_percent"] = cpu_usage
+    metrics_data["system_memory_usage_percent"] = mem_percent
 
     # --- Construct Response using Pydantic Model ---
     try:
