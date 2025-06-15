@@ -1,3 +1,14 @@
+---
+license: mit
+title: Core
+sdk: docker
+emoji: 🐠
+colorFrom: blue
+colorTo: yellow
+short_description: Tensorus Core
+---
+
+
 # Tensorus: Agentic Tensor Database/Data Lake
 
 Tensorus is a specialized data platform focused on the management and agent-driven manipulation of tensor data. It offers a streamlined environment for storing, retrieving, and operating on tensors, laying the groundwork for advanced AI and machine learning workflows.
