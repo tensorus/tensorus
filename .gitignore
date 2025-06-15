@@ -173,6 +173,3 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Node.js
-mcp_tensorus_server/node_modules/
-mcp_tensorus_server/package-lock.json

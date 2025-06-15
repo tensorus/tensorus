@@ -49,8 +49,6 @@ docker-compose.yml
 # Other project specific files/folders to exclude
 # E.g., notebooks/, docs/, etc.
 # data/ # If you have a local data folder not needed in the image
-# mcp_tensorus_server/ # Exclude if not part of the Python API image
-# package.json # Exclude if not part of the Python API image
 # setup.sh # Exclude if not part of the Python API image
 # DEMO.md # Exclude if not part of the Python API image
 # LICENSE # Usually good to include, but can be excluded if desired

@@ -80,15 +80,8 @@ Refer to the `docker-compose.yml` for example environment variable settings when
 
 ## Running Tests
 
-Tensorus includes Python unit tests and optional Node.js integration tests. The Node-based tests depend on the MCP server's Node packages. Install them from the project root with:
-
-```bash
-./mcp_tensorus_server/setup.sh  # runs npm install inside mcp_tensorus_server
-```
-
-After installing dependencies, run the tests:
+Tensorus includes Python unit tests. After installing the dependencies you can run them with:
 
 ```bash
 pytest
-cd mcp_tensorus_server && npm test
 ```

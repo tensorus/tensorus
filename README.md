@@ -41,9 +41,7 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
     *   *(Other Python files within `tensorus/` are part of the core library.)*
 *   `requirements.txt`: Lists the project's Python dependencies for development and local execution.
 *   `pyproject.toml`: Project metadata, dependencies for distribution, and build system configuration (e.g., for PyPI).
-*   `mcp_tensorus_server/`: Directory for the Node.js Model Context Protocol (MCP) server.
-    *   `mcp_tensorus_server/server.js`: The main MCP server implementation.
-    *   `mcp_tensorus_server/package.json`: Node.js project file for the MCP server.
+*   `tensorus/mcp_server.py`: Python implementation of the Model Context Protocol (MCP) server using `fastmcp`.
 *   `README.md`: This file.
 *   `LICENSE`: Project license file.
 *   `.gitignore`: Specifies intentionally untracked files that Git should ignore.
@@ -67,7 +65,7 @@ graph TD
     %% API Gateway Layer
     subgraph API_Layer ["Backend Services"]
         API[FastAPI Backend]
-        MCP["MCP Server (Node.js)"]
+        MCP["MCP Server (FastMCP Python)"]
     end
 
     %% Core Storage with Method Interface
@@ -181,8 +179,7 @@ graph TD
     `requirements-test.txt`, using CPU wheels for PyTorch and
     pinning `httpx` to a compatible version. The test requirements
     also install `fastapi>=0.110` for compatibility with Pydantic v2.
-    The script also runs
-    `npm install` in `mcp_tensorus_server` (needed for integration tests).
+    The script also installs test requirements for running the Python test suite.
     Heavy machine-learning libraries (e.g. `xgboost`, `lightgbm`, `catboost`,
     `statsmodels`, `torch-geometric`) are not installed by default. Install
     them separately using `pip install tensorus[models]` or by installing the
@@ -217,44 +214,9 @@ graph TD
 
 ### Running the MCP Server
 
-The Tensorus MCP Server is a Node.js application that acts as a bridge to the Python backend, exposing Tensorus capabilities as "tools" via the Model Context Protocol.
-
-**Prerequisites (MCP Server):**
-
-*   Node.js (v16 or later recommended) and npm.
-*   The Python FastAPI backend (`api.py`) must be running (see [Running the API Server](#running-the-api-server)).
-
-**Setup & Installation (MCP Server):**
-
-1.  Navigate to the MCP server directory:
-    ```bash
-    cd mcp_tensorus_server
-    ```
-2.  Install Node.js dependencies:
-    ```bash
-    npm install
-    ```
+Tensorus provides a lightweight Python implementation of the Model Context Protocol server using `fastmcp`. It exposes the FastAPI endpoints as tools so you can run an MCP server without Node.js.
 
 **Starting the MCP Server:**
-
-1.  Ensure the Python FastAPI backend is running.
-2.  Optionally set the `PYTHON_API_BASE_URL` environment variable if your
-    backend is running on a different host or port (default is
-    `http://127.0.0.1:8000`).
-3.  From the `mcp_tensorus_server` directory, run:
-    ```bash
-    node server.js
-    ```
-    Or, if a start script is added to `mcp_tensorus_server/package.json` (e.g., `"start": "node server.js"`):
-    ```bash
-    npm start
-    ```
-4.  The MCP server will connect via stdio by default. MCP clients will communicate with this server process through its standard input and output.
-### Running the Python MCP Server
-
-Tensorus also provides a lightweight Python implementation of the Model Context Protocol server using `fastmcp`. It exposes the same FastAPI endpoints as tools so you can run an MCP server without Node.js.
-
-**Starting the Python MCP Server:**
 
 1. Install dependencies (includes `fastmcp`):
    ```bash
@@ -312,7 +274,7 @@ If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github
 
 ### Running Tests
 
-Tensorus includes Python unit tests and optional Node.js integration tests. The tests require all Python and Node.js dependencies to be installed first. To set up the environment and run them:
+Tensorus includes Python unit tests. To set up the environment and run them:
 
 1. Install all dependencies using:
 
@@ -320,18 +282,7 @@ Tensorus includes Python unit tests and optional Node.js integration tests. The 
     ./setup.sh
     ```
 
-    This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support) and runs `npm install` in `mcp_tensorus_server`.
-    **You must run this script (or `./mcp_tensorus_server/setup.sh` for Node dependencies) before executing `pytest`, otherwise the pre-test check will exit with an error about missing packages.**
-
-    **Before running the integration tests ensure:**
-    * The Python dependencies are available in your active environment (activate the `.venv` created by `setup.sh` if using one).
-    * Port `8000` is free so the FastAPI server can bind to it.
-
-    To install only the Node dependencies required for the integration tests, you can run the setup script inside the MCP server directory:
-
-    ```bash
-    ./mcp_tensorus_server/setup.sh
-    ```
+    This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support).
 
 2. Run the Python test suite:
 
@@ -339,12 +290,6 @@ Tensorus includes Python unit tests and optional Node.js integration tests. The 
     pytest
     ```
 
-3. (Optional) Run the Node-based integration tests from `mcp_tensorus_server`:
-
-    ```bash
-    cd mcp_tensorus_server
-    npm test
-    ```
 
 ## Using Tensorus
 
@@ -573,13 +518,13 @@ The Tensorus Model Context Protocol (MCP) Server allows external AI agents, LLM-
 ### Overview
 
 *   **Protocol:** Implements the [Model Context Protocol](https://modelcontextprotocol.io/introduction).
-*   **Language:** Node.js, using the `@modelcontextprotocol/sdk`.
+*   **Language:** Python, using the `fastmcp` library.
 *   **Communication:** Typically uses stdio for communication with a single client.
 *   **Interface:** Exposes Tensorus capabilities as a set of "tools" that an MCP client can list and call.
 
 ### Available Tools
 
-The MCP server provides tools for various Tensorus functionalities. Below is an overview. For detailed input schemas and descriptions, an MCP client can call the standard `tools/list` method on the server, or you can inspect the `toolDefinitions` array within `mcp_tensorus_server/server.js`.
+The MCP server provides tools for various Tensorus functionalities. Below is an overview. For detailed input schemas and descriptions, an MCP client can call the standard `tools/list` method on the server, or you can inspect the tool definitions in `tensorus/mcp_server.py`.
 
 *   **Dataset Management:**
     *   `tensorus_list_datasets`: Lists all available datasets.
@@ -645,7 +590,7 @@ async function example() {
 *   **API-Driven:** A comprehensive FastAPI backend offers RESTful endpoints for dataset management, NQL querying, tensor operations, and agent control (live for Ingestion Agent, simulated for RL/AutoML).
 *   **Streamlit UI:** A multi-page user interface for dashboard overview, agent control, NQL interaction, data exploration, and API interaction.
 *   **Tensor Operations:** A library of robust tensor operations (arithmetic, matrix ops, reductions, reshaping, etc.) accessible via the API.
-*   **Model Context Protocol (MCP) Server:** A Node.js server exposes Tensorus capabilities (storage and operations) as tools via the Model Context Protocol, bridging to the Python API.
+*   **Model Context Protocol (MCP) Server:** A Python server built with `fastmcp` exposes Tensorus capabilities (storage and operations) via the Model Context Protocol.
 *   **Extensible Design:** The project is structured with modular components, facilitating future extensions.
 
 ## Future Implementation
