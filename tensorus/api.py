@@ -948,6 +948,32 @@ async def update_tensor_metadata_api(
         logger.exception(f"Error updating metadata for tensor '{record_id}' in dataset '{dataset_name}': {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating tensor metadata.")
 
+@app.get(
+    "/explorer/dataset/{dataset}/tensor/{tensor_id}/metadata",
+    tags=["Explorer"],
+)
+async def explorer_get_tensor_metadata(
+    dataset: str = Path(..., description="The name of the dataset."),
+    tensor_id: str = Path(..., description="The ID of the tensor record."),
+    storage: TensorStorage = Depends(get_tensor_storage),
+):
+    """Return metadata for a specific tensor in a dataset."""
+    try:
+        record = storage.get_tensor_by_id(dataset, tensor_id)
+        return {"dataset": dataset, "tensor_id": tensor_id, "metadata": record["metadata"]}
+    except DatasetNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except TensorNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.exception(
+            f"Error fetching metadata for tensor '{tensor_id}' in dataset '{dataset}': {e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error retrieving tensor metadata.",
+        )
+
 # --- Querying Endpoint ---
 @app.post("/query", response_model=NQLResponse, tags=["Querying"])
 async def execute_nql_query(
