@@ -65,7 +65,7 @@ async def read_root():
 # Old shutdown event handler removed. New handling is in lifespan context manager.
 
 # To run this application (for development):
-# uvicorn tensorus.api.main:app --reload --port 8000
+# uvicorn tensorus.api.main:app --reload --port 7860
 #
 # You would typically have a `__main__.py` or a run script for this.
 # For now, this structure allows importing `app` elsewhere if needed.

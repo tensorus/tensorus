@@ -13,7 +13,7 @@ try:
 except ImportError:
     st.error("Critical Error: Could not import `pages_shared_utils`. Page cannot function.")
     def load_shared_css(): pass
-    API_BASE_URL = "http://127.0.0.1:8000" # Fallback
+    API_BASE_URL = "http://127.0.0.1:7860" # Fallback
     def get_api_status(): 
         st.error("`get_api_status` unavailable.")
         return False, {"error": "Setup issue"} # Simulate API down

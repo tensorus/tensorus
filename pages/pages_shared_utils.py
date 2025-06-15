@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any # Added for new functions
 
 logger = logging.getLogger(__name__)
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000") # Changed API_BASE_URL
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860") # Changed API_BASE_URL
 
 def load_css():
     """Loads the main CSS styles. Assumes app.py's CSS content."""
