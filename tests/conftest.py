@@ -18,10 +18,6 @@ if missing:
         returncode=1,
     )
 
-if not Path("mcp_tensorus_server/node_modules").exists():
-    print(
-        "Warning: Node.js dependencies not installed. Integration tests may fail. Run ./setup.sh or ./mcp_tensorus_server/setup.sh."
-    )
 
 # Import the FastAPI app instance
 from tensorus.api.main import app

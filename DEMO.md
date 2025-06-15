@@ -8,7 +8,7 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
 
 *   Tensorus backend API running (`uvicorn api:app --reload --host 127.0.0.1 --port 8000`)
 *   Tensorus Streamlit UI running (`streamlit run app.py`)
-*   Tensorus MCP Server running (`cd mcp_tensorus_server && node server.js`)
+*   Tensorus MCP Server running (`python -m tensorus.mcp_server`)
 *   A terminal for API calls (e.g., using `curl`) or a tool like Postman.
 *   A web browser.
 
@@ -104,10 +104,10 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
 **Goal:** Explain how an external AI agent could leverage Tensorus via MCP.
 
 1.  **Show MCP Server Running:**
-    *   Point to the terminal where the `mcp_tensorus_server/server.js` is running and show its log output (e.g., "Tensorus MCP Server connected via stdio and ready.").
+    *   Point to the terminal where `python -m tensorus.mcp_server` is running and show its log output (e.g., "Tensorus MCP Server connected via stdio and ready.").
 
 2.  **Explain Available Tools (Conceptual):**
-    *   Briefly show the `toolDefinitions` array in `mcp_tensorus_server/server.js` or refer to the README's "Available Tools" under "MCP Server Details".
+    *   Briefly show the tool definitions in `tensorus/mcp_server.py` or refer to the README's "Available Tools" under "MCP Server Details".
     *   Highlight a few tools like `tensorus_list_datasets`, `tensorus_ingest_tensor`, and `tensorus_apply_binary_operation`.
 
 3.  **Conceptual Client Interaction (Show code snippet from README):**
