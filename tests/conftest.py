@@ -1,5 +1,27 @@
+import importlib.util
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
+
+# ----- Pre-test dependency check -----
+missing = []
+for pkg in ("torch", "fastapi", "httpx"):
+    if importlib.util.find_spec(pkg) is None:
+        missing.append(pkg)
+
+if missing:
+    pytest.exit(
+        "Missing required packages: {}. Run ./setup.sh before running tests.".format(
+            ", ".join(missing)
+        ),
+        returncode=1,
+    )
+
+if not Path("mcp_tensorus_server/node_modules").exists():
+    print(
+        "Warning: Node.js dependencies not installed. Integration tests may fail. Run ./setup.sh or ./mcp_tensorus_server/setup.sh."
+    )
 
 # Import the FastAPI app instance
 from tensorus.api.main import app
