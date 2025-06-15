@@ -20,7 +20,7 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
     separate package. See [Tensorus Models](https://github.com/tensorus/models).
 *   **Metadata System:** Rich Pydantic schemas and storage backends for semantic, lineage, computational, quality, relational, and usage metadata.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
-*   **Model Context Protocol (MCP) Server:** Provides a standardized interface for AI agents and LLMs to interact with Tensorus capabilities (tensor storage and operations) using the Model Context Protocol. (See [MCP Server Details](#mcp-server-details) below).
+*   **Model Context Protocol (MCP) Server:** Provides a standardized interface for AI agents and LLMs to interact with Tensorus capabilities—including dataset management, tensor storage, and operations—using the Model Context Protocol. (See [MCP Server Details](#mcp-server-details) below).
 
 ## Project Structure
 
