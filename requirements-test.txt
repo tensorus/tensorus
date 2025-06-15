@@ -14,3 +14,4 @@ torch
 tensorly
 transformers
 psycopg2-binary
+python-jose[cryptography]

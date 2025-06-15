@@ -30,6 +30,8 @@ psycopg2-binary>=2.9.0
 streamlit>=1.25.0
 # For calling the FastAPI backend from the Streamlit UI
 requests>=2.28.0
+# For JWT validation
+python-jose[cryptography]
 # For plotting in the Streamlit UI (Dashboard, Data Explorer)
 plotly>=5.10.0
 
