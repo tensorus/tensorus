@@ -5,6 +5,8 @@ from typing import Optional, Dict, Any # Added Dict, Any for JWT payload
 
 from tensorus.config import settings
 from tensorus.audit import log_audit_event
+from jose import jwt, JWTError
+import requests
 
 
 class MutableAPIKeyHeader(APIKeyHeader):
@@ -78,23 +80,43 @@ async def verify_jwt_token(token: Optional[HTTPAuthorizationCredentials] = Secur
         )
 
     if settings.AUTH_DEV_MODE_ALLOW_DUMMY_JWT:
-        # In dev dummy mode, if a token string is present (any string), allow it.
+        # In dev dummy mode, allow any token value.
         return {"sub": "dummy_jwt_user", "username": "dummy_jwt_user", "token_type": "dummy_bearer", "token_value": token.credentials}
 
-    # Placeholder for actual JWT validation logic
-    # In a real implementation, you would:
-    # 1. Fetch JWKS from settings.AUTH_JWT_JWKS_URI
-    # 2. Decode and validate the token (signature, issuer, audience, expiry) using python-jose or similar.
-    # 3. Extract claims and return them.
-    print(f"Attempted JWT validation for token: {token.credentials[:20]}...") # Log first 20 chars for privacy
-    print(f"Config: Issuer={settings.AUTH_JWT_ISSUER}, Audience={settings.AUTH_JWT_AUDIENCE}, Algo={settings.AUTH_JWT_ALGORITHM}, JWKS={settings.AUTH_JWT_JWKS_URI}")
-    log_audit_event(action="JWT_VALIDATION_ATTEMPT", user="unknown_jwt_user", details={"message": "Actual JWT validation not implemented. Placeholder."})
+    if not settings.AUTH_JWT_JWKS_URI:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="JWKS URI not configured")
 
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Actual JWT validation not implemented. Set TENSORUS_AUTH_DEV_MODE_ALLOW_DUMMY_JWT=True for development pass-through."
-    )
+    try:
+        jwks_data = requests.get(settings.AUTH_JWT_JWKS_URI).json()
+    except Exception as e:  # pragma: no cover - network issues
+        log_audit_event("JWT_VALIDATION_FAILED", details={"error": f"Failed fetching JWKS: {e}"})
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Unable to fetch JWKS")
 
+    unverified_header = jwt.get_unverified_header(token.credentials)
+    rsa_key = None
+    for key in jwks_data.get("keys", []):
+        if key.get("kid") == unverified_header.get("kid"):
+            rsa_key = key
+            break
+
+    if rsa_key is None:
+        log_audit_event("JWT_VALIDATION_FAILED", details={"error": "kid not found"})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token header")
+
+    try:
+        claims = jwt.decode(
+            token.credentials,
+            rsa_key,
+            algorithms=[settings.AUTH_JWT_ALGORITHM],
+            issuer=settings.AUTH_JWT_ISSUER,
+            audience=settings.AUTH_JWT_AUDIENCE,
+        )
+    except JWTError as e:
+        log_audit_event("JWT_VALIDATION_FAILED", details={"error": str(e)})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid JWT token")
+
+    log_audit_event("JWT_VALIDATION_SUCCESS", user=claims.get("sub"), details={"issuer": claims.get("iss"), "aud": claims.get("aud")})
+    return claims
 
 # Example of how to use it in an endpoint:
 # from fastapi import Depends
