@@ -290,6 +290,13 @@ Tensorus includes Python unit tests. To set up the environment and run them:
     pytest
     ```
 
+    To specifically verify the Model Context Protocol components, run the MCP
+    server and client tests:
+
+    ```bash
+    pytest tests/test_mcp_server.py tests/test_mcp_client.py
+    ```
+
 
 ## Using Tensorus
 
