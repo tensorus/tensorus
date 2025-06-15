@@ -27,31 +27,43 @@ server = FastMCP(name="Tensorus FastMCP")
 
 
 async def _post(path: str, payload: dict) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.post(f"{API_BASE_URL}{path}", json=payload)
-        response.raise_for_status()
-        return response.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_BASE_URL}{path}", json=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as exc:  # pragma: no cover - network failures
+        return {"error": str(exc)}
 
 
 async def _get(path: str) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"{API_BASE_URL}{path}")
-        response.raise_for_status()
-        return response.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{API_BASE_URL}{path}")
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as exc:  # pragma: no cover - network failures
+        return {"error": str(exc)}
 
 
 async def _put(path: str, payload: dict) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.put(f"{API_BASE_URL}{path}", json=payload)
-        response.raise_for_status()
-        return response.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.put(f"{API_BASE_URL}{path}", json=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as exc:  # pragma: no cover - network failures
+        return {"error": str(exc)}
 
 
 async def _delete(path: str) -> dict:
-    async with httpx.AsyncClient() as client:
-        response = await client.delete(f"{API_BASE_URL}{path}")
-        response.raise_for_status()
-        return response.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(f"{API_BASE_URL}{path}")
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as exc:  # pragma: no cover - network failures
+        return {"error": str(exc)}
 
 
 @server.tool()
