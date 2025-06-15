@@ -6,7 +6,7 @@ authors = [
 ]
 description = "An agentic tensor database and agent framework for managing, querying, and automating tensor data workflows."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 keywords = [
     "tensor", "database", "agent", "ai", "pytorch", "fastapi", "streamlit", "automl", "reinforcement-learning", "data-ingestion"
@@ -17,7 +17,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Topic :: Database",

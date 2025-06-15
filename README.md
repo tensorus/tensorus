@@ -143,7 +143,7 @@ graph TD
 
 ### Prerequisites
 
-*   Python 3.9+
+*   Python 3.10+
 *   PyTorch
 *   FastAPI
 *   Uvicorn

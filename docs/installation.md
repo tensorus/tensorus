@@ -16,7 +16,7 @@ The easiest way to get Tensorus and its PostgreSQL backend running locally is by
 
 ### Manual Installation (From Source)
 
-1.  Ensure you have Python 3.9+ installed.
+1.  Ensure you have Python 3.10+ installed.
 2.  Clone the repository.
 3.  Create and activate a virtual environment:
     ```bash
