@@ -312,7 +312,7 @@ If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github
 
 ### Running Tests
 
-Tensorus includes Python unit tests and optional Node.js integration tests. To set up the environment and run them:
+Tensorus includes Python unit tests and optional Node.js integration tests. The tests require all Python and Node.js dependencies to be installed first. To set up the environment and run them:
 
 1. Install all dependencies using:
 
@@ -321,6 +321,7 @@ Tensorus includes Python unit tests and optional Node.js integration tests. To s
     ```
 
     This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support) and runs `npm install` in `mcp_tensorus_server`.
+    **You must run this script (or `./mcp_tensorus_server/setup.sh` for Node dependencies) before executing `pytest`, otherwise the pre-test check will exit with an error about missing packages.**
 
     **Before running the integration tests ensure:**
     * The Python dependencies are available in your active environment (activate the `.venv` created by `setup.sh` if using one).
