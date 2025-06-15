@@ -356,7 +356,6 @@ Tensorus includes a detailed metadata subsystem for describing tensors beyond th
 
 ### Streamlit UI
 
-### Streamlit UI
 
 The Streamlit UI provides a user-friendly interface for:
 
