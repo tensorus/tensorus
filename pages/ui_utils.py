@@ -212,3 +212,56 @@ def get_dashboard_metrics() -> Optional[Dict[str, Any]]:
         st.error(f"Unexpected error fetching dashboard metrics: {e}")
         logger.exception("Unexpected error in get_dashboard_metrics")
         return None
+
+def get_agent_config(agent_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch an agent's configuration from the API."""
+    try:
+        response = requests.get(f"{TENSORUS_API_URL}/agents/{agent_id}/config")
+        if response.status_code == 404:
+            st.error(f"Agent '{agent_id}' not found via API for configuration.")
+            return None
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error fetching config for agent '{agent_id}': {e}")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error fetching config for agent '{agent_id}': {e}")
+        logger.exception(f"Unexpected error in get_agent_config for {agent_id}")
+        return None
+
+def update_agent_config(agent_id: str, config: Dict[str, Any]) -> bool:
+    """Send updated configuration for an agent to the API."""
+    try:
+        response = requests.post(
+            f"{TENSORUS_API_URL}/agents/{agent_id}/configure",
+            json={"config": config},
+        )
+        if response.status_code == 404:
+            st.error(f"Agent '{agent_id}' not found via API for configuration.")
+            return False
+        if 200 <= response.status_code < 300:
+            api_response = response.json()
+            if api_response.get("success"):
+                st.success(api_response.get("message", "Configuration updated."))
+                return True
+            else:
+                st.error(api_response.get("message", "Failed to update configuration."))
+                return False
+        else:
+            error_detail = "Unknown error"
+            try:
+                error_detail = response.json().get("detail", error_detail)
+            except Exception:
+                pass
+            st.error(
+                f"API Error updating config for '{agent_id}': {error_detail} (Status: {response.status_code})"
+            )
+            return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection Error updating config for agent '{agent_id}': {e}")
+        return False
+    except Exception as e:
+        st.error(f"Unexpected error updating config for agent '{agent_id}': {e}")
+        logger.exception(f"Unexpected error in update_agent_config for {agent_id}")
+        return False
