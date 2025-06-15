@@ -58,7 +58,8 @@ class SettingsV1(BaseSettings):
     POSTGRES_DSN: Optional[str] = None
 
     # API Security
-    VALID_API_KEYS: list[str] = [] # Comma-separated string in env, e.g., "key1,key2,key3"
+    # Accepts a comma-separated string or JSON list via env var
+    VALID_API_KEYS: list[str] | str = []
     API_KEY_HEADER_NAME: str = "X-API-KEY"
     AUDIT_LOG_PATH: str = "tensorus_audit.log"
 
@@ -69,7 +70,15 @@ class SettingsV1(BaseSettings):
 
     @field_validator("VALID_API_KEYS", mode="before")
     def split_valid_api_keys(cls, v):
+        """Allow comma-separated or JSON list values from the environment."""
         if isinstance(v, str):
+            try:
+                import json
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(item) for item in parsed]
+            except Exception:
+                pass
             return [key.strip() for key in v.split(',') if key.strip()]
         return v
 
@@ -84,12 +93,3 @@ class SettingsV1(BaseSettings):
 
 # Use SettingsV1 for Pydantic v1.x compatibility
 settings = SettingsV1()
-
-# Manual parsing for VALID_API_KEYS if it's a comma-separated string from env
-# This is a common workaround for Pydantic v1 BaseSettings if the env var is not a JSON list.
-import os
-raw_keys = os.getenv("TENSORUS_VALID_API_KEYS")
-if raw_keys:
-    settings.VALID_API_KEYS = [key.strip() for key in raw_keys.split(',')]
-elif not settings.VALID_API_KEYS: # Ensure it's an empty list if env var is not set and default_factory wasn't used
-    settings.VALID_API_KEYS = []

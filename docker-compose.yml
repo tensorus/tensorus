@@ -21,7 +21,7 @@ services:
       TENSORUS_POSTGRES_DB: tensorus_db_compose
       # TENSORUS_POSTGRES_DSN: "" # Can be set if preferred over individual params
       TENSORUS_API_KEY_HEADER_NAME: "X-API-KEY"
-      TENSORUS_VALID_API_KEYS: "compose_key1,another_secure_key" # Example keys
+      TENSORUS_VALID_API_KEYS: "compose_key1,another_secure_key" # Comma-separated or JSON list of keys
       TENSORUS_AUTH_JWT_ENABLED: "False"
       # TENSORUS_AUTH_JWT_ISSUER: "your_issuer_here"
       # TENSORUS_AUTH_JWT_AUDIENCE: "tensorus_api_audience"
