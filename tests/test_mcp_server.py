@@ -50,7 +50,7 @@ async def test_save_tensor(monkeypatch):
     response = {"ok": True}
     url = f"{mcp_server.API_BASE_URL}/datasets/ds1/ingest"
     make_mock_client(monkeypatch, "post", url, payload, response)
-    result = await mcp_server.save_tensor("ds1", (2, 2), "float32", [[1, 2], [3, 4]], {"a": 1})
+    result = await mcp_server.save_tensor.fn("ds1", (2, 2), "float32", [[1, 2], [3, 4]], {"a": 1})
     assert json.loads(result.text) == response
 
 
@@ -59,7 +59,7 @@ async def test_get_tensor(monkeypatch):
     response = {"record_id": "abc"}
     url = f"{mcp_server.API_BASE_URL}/datasets/ds1/tensors/abc"
     make_mock_client(monkeypatch, "get", url, None, response)
-    result = await mcp_server.get_tensor("ds1", "abc")
+    result = await mcp_server.get_tensor.fn("ds1", "abc")
     assert json.loads(result.text) == response
 
 
@@ -68,7 +68,7 @@ async def test_execute_nql_query(monkeypatch):
     response = {"results": []}
     url = f"{mcp_server.API_BASE_URL}/query"
     make_mock_client(monkeypatch, "post", url, {"query": "count"}, response)
-    result = await mcp_server.execute_nql_query("count")
+    result = await mcp_server.execute_nql_query.fn("count")
     assert json.loads(result.text) == response
 
 
@@ -85,7 +85,7 @@ async def test_dataset_tools(monkeypatch):
         {"name": "ds1"},
         create_resp,
     )
-    res_create = await mcp_server.tensorus_create_dataset("ds1")
+    res_create = await mcp_server.tensorus_create_dataset.fn("ds1")
     assert json.loads(res_create.text) == create_resp
 
     make_mock_client(
@@ -95,7 +95,7 @@ async def test_dataset_tools(monkeypatch):
         None,
         list_resp,
     )
-    res_list = await mcp_server.tensorus_list_datasets()
+    res_list = await mcp_server.tensorus_list_datasets.fn()
     assert json.loads(res_list.text) == list_resp
 
     make_mock_client(
@@ -105,7 +105,7 @@ async def test_dataset_tools(monkeypatch):
         None,
         delete_resp,
     )
-    res_delete = await mcp_server.tensorus_delete_dataset("ds1")
+    res_delete = await mcp_server.tensorus_delete_dataset.fn("ds1")
     assert json.loads(res_delete.text) == delete_resp
 
 
@@ -125,7 +125,7 @@ async def test_tensor_tools(monkeypatch):
         ingest_payload,
         ingest_resp,
     )
-    res_ingest = await mcp_server.tensorus_ingest_tensor("ds1", [1], "int32", [1])
+    res_ingest = await mcp_server.tensorus_ingest_tensor.fn("ds1", [1], "int32", [1])
     assert json.loads(res_ingest.text) == ingest_resp
 
     details_resp = {"record_id": "r1", "data": [1]}
@@ -136,7 +136,7 @@ async def test_tensor_tools(monkeypatch):
         None,
         details_resp,
     )
-    res_details = await mcp_server.tensorus_get_tensor_details("ds1", "r1")
+    res_details = await mcp_server.tensorus_get_tensor_details.fn("ds1", "r1")
     assert json.loads(res_details.text) == details_resp
 
     delete_resp = {"deleted": True}
@@ -147,7 +147,7 @@ async def test_tensor_tools(monkeypatch):
         None,
         delete_resp,
     )
-    res_delete = await mcp_server.tensorus_delete_tensor("ds1", "r1")
+    res_delete = await mcp_server.tensorus_delete_tensor.fn("ds1", "r1")
     assert json.loads(res_delete.text) == delete_resp
 
     update_payload = {"new_metadata": {"x": 1}}
@@ -159,7 +159,7 @@ async def test_tensor_tools(monkeypatch):
         update_payload,
         update_resp,
     )
-    res_update = await mcp_server.tensorus_update_tensor_metadata("ds1", "r1", {"x": 1})
+    res_update = await mcp_server.tensorus_update_tensor_metadata.fn("ds1", "r1", {"x": 1})
     assert json.loads(res_update.text) == update_resp
 
 
@@ -181,7 +181,7 @@ async def test_tensor_ops(monkeypatch, func, operation, payload):
         payload,
         resp,
     )
-    res = await func(operation, payload)
+    res = await func.fn(operation, payload)
     assert json.loads(res.text) == resp
 
 
@@ -196,5 +196,5 @@ async def test_tensor_ops_einsum(monkeypatch):
         payload,
         resp,
     )
-    res = await mcp_server.tensorus_apply_einsum(payload)
+    res = await mcp_server.tensorus_apply_einsum.fn(payload)
     assert json.loads(res.text) == resp
