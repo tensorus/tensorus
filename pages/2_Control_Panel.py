@@ -2,8 +2,16 @@
 
 import streamlit as st
 import time
+import json
 # Use the updated API-backed functions
-from .ui_utils import list_all_agents, get_agent_status, get_agent_logs, start_agent, stop_agent # MODIFIED
+from .ui_utils import (
+    list_all_agents,
+    get_agent_status,
+    get_agent_logs,
+    start_agent,
+    stop_agent,
+    update_agent_config,
+)
 
 st.set_page_config(page_title="Agent Control Panel", layout="wide")
 
@@ -89,10 +97,28 @@ if selected_agent_name:
 
     with tab1:
         if status_info and 'config' in status_info:
+            current_config = status_info['config']
             st.write("Current configuration:")
-            st.json(status_info['config'])
-            # TODO: Implement configuration editing via API
-            st.button("✏️ Edit Configuration (Placeholder)", disabled=True)
+            st.json(current_config)
+
+            with st.expander("Edit configuration"):
+                form = st.form(key=f"cfg_form_{selected_agent_id}")
+                config_text = form.text_area(
+                    "Configuration JSON",
+                    value=json.dumps(current_config, indent=2),
+                    height=200,
+                )
+                submitted = form.form_submit_button("Update")
+                if submitted:
+                    try:
+                        new_cfg = json.loads(config_text)
+                        if update_agent_config(selected_agent_id, new_cfg):
+                            if agent_state_key in st.session_state:
+                                del st.session_state[agent_state_key]
+                            time.sleep(0.5)
+                            st.rerun()
+                    except json.JSONDecodeError as e:
+                        form.error(f"Invalid JSON: {e}")
         else:
             st.warning("Configuration not available.")
 

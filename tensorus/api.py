@@ -1311,6 +1311,43 @@ async def get_agent_logs_api(
             logger.exception(f"Error generating simulated logs for agent '{agent_id}': {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error generating logs for agent '{agent_id}'.")
 
+# --- Agent Configuration Endpoints ---
+
+class AgentConfigPayload(BaseModel):
+    config: Dict[str, Any]
+
+
+@app.get("/agents/{agent_id}/config", response_model=Dict[str, Any], tags=["Agents"])
+async def get_agent_config_api(agent_id: str = Path(..., description="The unique identifier of the agent.")):
+    """Retrieve the stored configuration for a given agent."""
+    if agent_id not in agent_registry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found.")
+    return agent_registry[agent_id].get("config", {})
+
+
+@app.post("/agents/{agent_id}/configure", response_model=ApiResponse, tags=["Agents"])
+async def configure_agent_api(
+    agent_id: str = Path(..., description="The unique identifier of the agent."),
+    payload: AgentConfigPayload = Body(...),
+):
+    """Update an agent's configuration."""
+    if agent_id not in agent_registry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found.")
+
+    new_config = payload.config
+    agent_registry[agent_id]["config"] = new_config
+
+    if agent_id == "ingestion" and "ingestion" in live_agents:
+        agent_instance = live_agents["ingestion"]
+        if "source_directory" in new_config:
+            agent_instance.source_directory = new_config["source_directory"]
+        if "dataset_name" in new_config:
+            agent_instance.dataset_name = new_config["dataset_name"]
+        if "polling_interval_sec" in new_config:
+            agent_instance.polling_interval = new_config["polling_interval_sec"]
+
+    return ApiResponse(success=True, message=f"Configuration updated for agent '{agent_id}'.")
+
 # --- Metrics & Monitoring Endpoint ---
 @app.get("/metrics/dashboard", response_model=DashboardMetrics, tags=["Metrics & Monitoring"])
 async def get_dashboard_metrics(storage: TensorStorage = Depends(get_tensor_storage)):
