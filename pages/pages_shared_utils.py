@@ -376,55 +376,31 @@ def get_dataset_preview(dataset_name: str, limit: int = 10) -> Optional[dict]:
         logger.exception(f"Unexpected error in get_dataset_preview (shared_utils) for {dataset_name}: {e}")
         return None
 
+
+
+
 def get_tensor_metadata(dataset_name: str, tensor_id: str) -> Optional[dict]:
-    """
-    Fetches metadata for a specific tensor in a dataset.
-
-    NOTE: This is a placeholder implementation. The backend API currently does not
-    have a dedicated endpoint for fetching metadata for a single tensor by ID.
-    This function attempts to retrieve it by fetching a preview of the dataset
-    up to the presumed index of the tensor_id. This is inefficient and may
-    not be reliable if tensor_id is not a simple index or if the dataset is very large.
-    A dedicated backend endpoint (e.g., `/explorer/dataset/{dataset_name}/tensor/{tensor_id}/metadata`)
-    would be a more robust solution.
-
-    Uses `get_dataset_preview` from this module.
-
-    Args:
-        dataset_name (str): The name of the dataset.
-        tensor_id (str): The ID of the tensor. For this placeholder, it's assumed
-                         that this ID can be converted to an integer index.
-
-    Returns:
-        Optional[dict]: The metadata dictionary for the specified tensor if found.
-                        Returns a dictionary with an 'error' key if the tensor is not found
-                        or if the `tensor_id` is not a valid format for this placeholder.
-                        Returns None if a critical error occurs during the API call (e.g., connection).
-    """
-    # This implementation is a placeholder and relies on get_dataset_preview.
-    # A more robust solution would be a dedicated API endpoint.
-    logger.warning("`get_tensor_metadata` is using a placeholder implementation that might be inefficient or incomplete.")
+    """Fetch metadata for a specific tensor via the Explorer API."""
     try:
-        # Attempt to convert tensor_id to int for index-based lookup in preview
-        # This assumes tensor_id is effectively an index.
-        tensor_idx = int(tensor_id)
-        preview_data = get_dataset_preview(dataset_name, limit=tensor_idx + 1)
-
-        if preview_data and 'preview' in preview_data and len(preview_data['preview']) > tensor_idx:
-            item = preview_data['preview'][tensor_idx]
-            # Return the 'metadata' field if it exists, otherwise the whole item as metadata.
-            return item.get('metadata', item) # Fallback to returning the whole item
-        else:
-            logger.warning(f"Tensor ID {tensor_id} not found in preview for dataset {dataset_name}.")
-            return {"error": f"Tensor ID {tensor_id} not found in dataset {dataset_name} preview."}
-
-    except ValueError:
-        logger.error(f"Invalid tensor_id format: '{tensor_id}'. Expected an integer index for placeholder implementation.")
-        return {"error": "Invalid tensor_id format for placeholder implementation."}
+        response = requests.get(
+            f"{API_BASE_URL}/explorer/dataset/{dataset_name}/tensor/{tensor_id}/metadata",
+            timeout=5,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("metadata", data)
+    except requests.exceptions.RequestException as e:
+        logger.error(
+            f"API error fetching tensor metadata for {dataset_name}/{tensor_id} (shared_utils): {e}"
+        )
+        return None
     except Exception as e:
-        logger.exception(f"Unexpected error in get_tensor_metadata (shared_utils) for {dataset_name}/{tensor_id}: {e}")
-        return None # Indicate a more critical error
+        logger.exception(
+            f"Unexpected error in get_tensor_metadata (shared_utils) for {dataset_name}/{tensor_id}: {e}"
 
+        )
+
+        return None
 
 def list_all_agents() -> list[dict[str, str]]:
     """
