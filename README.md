@@ -194,12 +194,12 @@ graph TD
 3.  Start the FastAPI backend server using:
 
     ```bash
-    python -m uvicorn tensorus.api:app --reload --host 127.0.0.1 --port 8000
+    python -m uvicorn tensorus.api:app --reload --host 127.0.0.1 --port 7860
     ```
 
     *   The `python -m uvicorn` command ensures that Python runs Uvicorn as a module, and `tensorus.api:app` correctly points to the `app` instance within your `tensorus/api.py` file.
     *   `--reload` enables auto-reload for development.
-    *   Access the API documentation at `http://127.0.0.1:8000/docs` or `http://127.0.0.1:8000/redoc`.
+    *   Access the API documentation at `http://127.0.0.1:7860/docs` or `http://127.0.0.1:7860/redoc`.
 
 ### Running the Streamlit UI
 
@@ -262,13 +262,13 @@ Tensorus can also be run inside a Docker container. Build the image from the pro
 docker build -t tensorus .
 ```
 
-Run the container and expose the API server on port `8000`:
+Run the container and expose the API server on port `7860`:
 
 ```bash
-docker run -p 8000:8000 tensorus
+docker run -p 7860:7860 tensorus
 ```
 
-The FastAPI documentation will then be available at `http://localhost:8000/docs`.
+The FastAPI documentation will then be available at `http://localhost:7860/docs`.
 
 If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker) installed, you can pass `--gpus all` to `docker run` and modify `setup.sh` to install CUDA-enabled PyTorch wheels for GPU acceleration.
 
@@ -592,7 +592,7 @@ You can also interact with the server using the included Python helper:
 from tensorus.mcp_client import TensorusMCPClient
 
 async def example_py():
-    async with TensorusMCPClient("http://localhost:8000/sse") as client:
+    async with TensorusMCPClient("http://localhost:7860/sse") as client:
         tools = await client.list_datasets()
         print(tools)
 ```
