@@ -579,6 +579,17 @@ async function example() {
 }
 ```
 
+You can also interact with the server using the included Python helper:
+
+```python
+from tensorus.mcp_client import TensorusMCPClient
+
+async def example_py():
+    async with TensorusMCPClient("http://localhost:8000/sse") as client:
+        tools = await client.list_datasets()
+        print(tools)
+```
+
 ## Completed Features
 
 *   **Tensor Storage:** Efficiently stores and retrieves PyTorch tensors with associated metadata, including in-memory and optional file-based persistence. Supports dataset creation, tensor ingestion, querying, sampling, and metadata updates.
