@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-TENSORUS_API_URL = "http://127.0.0.1:8000" # Ensure FastAPI runs here
+TENSORUS_API_URL = "http://127.0.0.1:7860" # Ensure FastAPI runs here
 
 # --- API Interaction Functions ---
 

@@ -6,7 +6,7 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
 
 ## Prerequisites
 
-*   Tensorus backend API running (`uvicorn api:app --reload --host 127.0.0.1 --port 8000`)
+*   Tensorus backend API running (`uvicorn api:app --reload --host 127.0.0.1 --port 7860`)
 *   Tensorus Streamlit UI running (`streamlit run app.py`)
 *   Tensorus MCP Server running (`python -m tensorus.mcp_server`)
 *   A terminal for API calls (e.g., using `curl`) or a tool like Postman.
@@ -43,9 +43,9 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
     *   Use `curl` or Postman to fetch the tensor details. First, list datasets to find `ingested_data_api`, then fetch its records, identify the `record_id` for `cat.jpg` from its metadata.
         ```bash
         # Example: List records in the dataset to find the ID (paged)
-        curl "http://127.0.0.1:8000/datasets/ingested_data_api/records?offset=0&limit=100"
+        curl "http://127.0.0.1:7860/datasets/ingested_data_api/records?offset=0&limit=100"
         # Then use the ID:
-        # curl http://127.0.0.1:8000/datasets/ingested_data_api/tensors/{record_id_of_cat_jpg}
+        # curl http://127.0.0.1:7860/datasets/ingested_data_api/tensors/{record_id_of_cat_jpg}
         ```
     *   Confirm the API returns the tensor data and metadata.
 
@@ -90,7 +90,7 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
           },
           "output_dataset_name": "ops_results",
           "output_metadata": {"original_id": "xyz123", "operation": "transpose_height_width_demo"}
-        }' http://127.0.0.1:8000/ops/transpose
+        }' http://127.0.0.1:7860/ops/transpose
         ```
     *   **Attractive Element:** Showing the API call and the structured JSON response indicating success and the new transposed tensor's ID and details.
 

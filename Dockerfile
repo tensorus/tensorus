@@ -45,8 +45,8 @@ ENV TENSORUS_AUTH_JWT_JWKS_URI=""
 ENV TENSORUS_AUTH_DEV_MODE_ALLOW_DUMMY_JWT="False"
 
 # Expose the port the app runs on
-EXPOSE 8000
+EXPOSE 7860
 
 # Define the command to run the application
 # This assumes your FastAPI app instance is named 'app' in 'tensorus.api.main'
-CMD ["uvicorn", "tensorus.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "tensorus.api.main:app", "--host", "0.0.0.0", "--port", "7860"]

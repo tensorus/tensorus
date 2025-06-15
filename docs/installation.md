@@ -12,7 +12,7 @@ The easiest way to get Tensorus and its PostgreSQL backend running locally is by
     ```bash
     docker-compose up --build
     ```
-4.  The API will typically be available at `http://localhost:8000`.
+4.  The API will typically be available at `http://localhost:7860`.
 
 ### Manual Installation (From Source)
 
@@ -47,7 +47,7 @@ The easiest way to get Tensorus and its PostgreSQL backend running locally is by
 6.  Set up the necessary environment variables (see Configuration below).
 7.  Run the application using Uvicorn:
     ```bash
-    uvicorn tensorus.api.main:app --host 0.0.0.0 --port 8000 --reload # for development
+    uvicorn tensorus.api.main:app --host 0.0.0.0 --port 7860 --reload # for development
     ```
 
 ## Configuration
