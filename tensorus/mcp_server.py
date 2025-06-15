@@ -5,15 +5,21 @@ backend.  Tools mirror the ones documented in the README under "Available
 Tools" and return results as :class:`TextContent` objects.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 from typing import Any, Optional, Sequence
 
 import httpx
 from fastmcp import FastMCP
-from fastmcp.tools import TextContent
+try:
+    from fastmcp.tools import TextContent
+except ImportError:  # pragma: no cover - support older fastmcp versions
+    from dataclasses import dataclass
+
+    @dataclass
+    class TextContent:  # minimal fallback for tests
+        type: str
+        text: str
 
 API_BASE_URL = "http://127.0.0.1:8000"
 
@@ -188,6 +194,8 @@ async def datasets_resource() -> str:
 
 
 def main() -> None:
+    global API_BASE_URL
+
     parser = argparse.ArgumentParser(
         description="Run the Tensorus FastMCP server exposing dataset and tensor tools"
     )
@@ -199,7 +207,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    global API_BASE_URL
     API_BASE_URL = args.api_url.rstrip("/")
 
     server.run(args.transport)
