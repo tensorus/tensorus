@@ -37,7 +37,7 @@ plotly>=5.10.0
 
 # --- Testing Dependencies ---
 pytest>=7.0.0
-httpx>=0.23.0 # For FastAPI TestClient
+httpx>=0.28.1 # For FastAPI TestClient
 
 # --- Data Analysis & Modeling ---
 # Optional: For plotting example in rl_agent.py
