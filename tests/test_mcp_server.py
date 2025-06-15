@@ -1,5 +1,6 @@
 import json
 import pytest
+import httpx
 
 from tensorus import mcp_server
 
@@ -37,6 +38,33 @@ def make_mock_client(monkeypatch, method, url, payload, response):
             assert u == url
             return DummyResponse(response)
     monkeypatch.setattr(mcp_server.httpx, "AsyncClient", MockAsyncClient)
+
+
+def make_error_client(monkeypatch, method):
+    class ErrorAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def post(self, u, json=None):
+            assert method == "post"
+            raise httpx.HTTPError("failed")
+
+        async def get(self, u):
+            assert method == "get"
+            raise httpx.HTTPError("failed")
+
+        async def put(self, u, json=None):
+            assert method == "put"
+            raise httpx.HTTPError("failed")
+
+        async def delete(self, u):
+            assert method == "delete"
+            raise httpx.HTTPError("failed")
+
+    monkeypatch.setattr(mcp_server.httpx, "AsyncClient", ErrorAsyncClient)
 
 
 @pytest.mark.asyncio
@@ -198,3 +226,10 @@ async def test_tensor_ops_einsum(monkeypatch):
     )
     res = await mcp_server.tensorus_apply_einsum.fn(payload)
     assert json.loads(res.text) == resp
+
+
+@pytest.mark.asyncio
+async def test_http_error_returns_textcontent(monkeypatch):
+    make_error_client(monkeypatch, "post")
+    res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])
+    assert json.loads(res.text) == {"error": "failed"}
