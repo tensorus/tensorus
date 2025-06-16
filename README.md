@@ -205,12 +205,12 @@ graph TD
 3.  Start the FastAPI backend server using:
 
     ```bash
-    python -m uvicorn tensorus.api:app --reload --host 127.0.0.1 --port 7860
+    uvicorn tensorus.api:app --host 0.0.0.0 --port 7860
     ```
 
-    *   The `python -m uvicorn` command ensures that Python runs Uvicorn as a module, and `tensorus.api:app` correctly points to the `app` instance within your `tensorus/api.py` file.
-    *   `--reload` enables auto-reload for development.
-    *   Access the API documentation at `http://127.0.0.1:7860/docs` or `http://127.0.0.1:7860/redoc`.
+    *   This command launches Uvicorn with the `app` instance defined in `tensorus/api.py`.
+    *   Access the API documentation at `http://localhost:7860/docs` or `http://localhost:7860/redoc`.
+    *   All dataset and agent endpoints are available once the server is running.
 
 ### Running the Streamlit UI
 
