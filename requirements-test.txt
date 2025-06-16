@@ -15,3 +15,4 @@ tensorly
 transformers
 psycopg2-binary
 python-jose[cryptography]
+fastmcp>=0.2.0
