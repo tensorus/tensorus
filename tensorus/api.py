@@ -358,13 +358,10 @@ def list_to_tensor(shape: List[int], dtype_str: str, data: Union[List[Any], int,
         if torch_dtype is None:
             raise ValueError(f"Unsupported dtype string: '{dtype_str}'. Supported: {list(dtype_map.keys())}")
 
-        # Optional: Perform strict validation before torch.tensor()
-        # This can catch structure errors early but might be redundant with torch.tensor checks.
-        # try:
-        #     _validate_tensor_data(data, shape)
-        # except ValueError as val_err:
-        #     logger.error(f"Input data validation failed for shape {shape}: {val_err}")
-        #     raise ValueError(f"Input data validation failed: {val_err}") from val_err
+        # Validate incoming list structure before constructing the tensor. This
+        # ensures mismatched shapes are caught early rather than relying on
+        # PyTorch's reshape logic.
+        _validate_tensor_data(data, shape)
 
         # Let torch handle initial conversion and type checking
         tensor = torch.tensor(data, dtype=torch_dtype)

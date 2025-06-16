@@ -50,3 +50,20 @@ def test_records_pagination():
 
     r3 = client.get("/datasets/nonexistent/records")
     assert r3.status_code == 404
+
+
+def test_ingest_shape_mismatch():
+    ds = "mismatch_ds"
+    if not tensor_storage_instance.dataset_exists(ds):
+        client.post("/datasets/create", json={"name": ds})
+        TEST_DATASETS.add(ds)
+
+    # Provide flat data for a 2D shape to trigger validation error
+    payload = {
+        "shape": [2, 2],
+        "dtype": "float32",
+        "data": [1.0, 2.0, 3.0, 4.0],
+        "metadata": {"v": 1},
+    }
+    resp = client.post(f"/datasets/{ds}/ingest", json=payload)
+    assert resp.status_code == 400
