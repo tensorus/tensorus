@@ -7,8 +7,7 @@ Tools" and return results as :class:`TextContent` objects.
 
 import argparse
 import json
-from typing import Any, Optional, Sequence, List, Dict
-from uuid import UUID
+from typing import Any, Optional, Sequence, Dict
 
 import httpx
 from fastmcp import FastMCP
