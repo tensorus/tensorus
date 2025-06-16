@@ -777,7 +777,10 @@ async def test_list_tensor_descriptors_with_params(monkeypatch):
         "relational.collection": "coll1",
         "relational.has_related_tensor_id": "uuid_str_123",
         "usage.last_accessed_before": "2023-01-01T00:00:00Z",
-        "usage.used_by_app": "app_x"
+        "usage.used_by_app": "app_x",
+        "name": "tensor_x",
+        "description": "some desc",
+        "min_dimensions": 3
     }
     make_mock_client(monkeypatch, "get", url, None, response, expected_params=params_to_send)
     result = await mcp_server.list_tensor_descriptors.fn(
@@ -793,8 +796,21 @@ async def test_list_tensor_descriptors_with_params(monkeypatch):
         rel_collection="coll1",
         rel_has_related_tensor_id="uuid_str_123",
         usage_last_accessed_before="2023-01-01T00:00:00Z",
-        usage_used_by_app="app_x"
+        usage_used_by_app="app_x",
+        name="tensor_x",
+        description="some desc",
+        min_dimensions=3
     )
+    assert isinstance(result, mcp_server.TextContent)
+    assert json.loads(result.text) == response
+
+@pytest.mark.asyncio
+async def test_list_tensor_descriptors_new_params(monkeypatch):
+    response = [{"id": "tensor999"}]
+    url = f"{mcp_server.API_BASE_URL}/tensor_descriptors/"
+    params = {"name": "t1", "description": "d1", "min_dimensions": 2}
+    make_mock_client(monkeypatch, "get", url, None, response, expected_params=params)
+    result = await mcp_server.list_tensor_descriptors.fn(name="t1", description="d1", min_dimensions=2)
     assert isinstance(result, mcp_server.TextContent)
     assert json.loads(result.text) == response
 
