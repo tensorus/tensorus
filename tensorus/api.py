@@ -92,9 +92,24 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+
+    frame_opt = os.environ.get("TENSORUS_X_FRAME_OPTIONS", "SAMEORIGIN")
+    csp = os.environ.get("TENSORUS_CONTENT_SECURITY_POLICY", "default-src 'self'")
+
+    if frame_opt and frame_opt.upper() != "NONE":
+        response.headers["X-Frame-Options"] = frame_opt
+    else:
+        if "X-Frame-Options" in response.headers:
+            del response.headers["X-Frame-Options"]
+
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Content-Security-Policy"] = "default-src 'self'"
+
+    if csp and csp.upper() != "NONE":
+        response.headers["Content-Security-Policy"] = csp
+    else:
+        if "Content-Security-Policy" in response.headers:
+            del response.headers["Content-Security-Policy"]
+
     return response
 
 # --- FastAPI App Instance ---
