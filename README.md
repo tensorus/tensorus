@@ -279,7 +279,7 @@ Run the container and expose the API server on port `7860`:
 docker run -p 7860:7860 tensorus
 ```
 
-The FastAPI documentation will then be available at `http://localhost:7860/docs`.
+The FastAPI documentation will then be available at `https://tensorus-core.hf.space/docs`.
 
 If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker) installed, you can pass `--gpus all` to `docker run` and modify `setup.sh` to install CUDA-enabled PyTorch wheels for GPU acceleration.
 
@@ -543,6 +543,10 @@ The Tensorus Model Context Protocol (MCP) Server allows external AI agents, LLM-
 
 The MCP server provides tools for various Tensorus functionalities. Below is an overview. For detailed input schemas and descriptions, an MCP client can call the standard `tools/list` method on the server, or you can inspect the tool definitions in `tensorus/mcp_server.py`.
 
+*   **General Utilities:**
+    *   `save_tensor`: Save a tensor to a dataset.
+    *   `get_tensor`: Retrieve a tensor by record ID.
+    *   `execute_nql_query`: Execute a Natural Query Language query.
 *   **Dataset Management:**
     *   `tensorus_list_datasets`: Lists all available datasets.
     *   `tensorus_create_dataset`: Creates a new dataset.
@@ -602,7 +606,7 @@ You can also interact with the server using the included Python helper:
 from tensorus.mcp_client import TensorusMCPClient
 
 async def example_py():
-    async with TensorusMCPClient("http://localhost:7860/sse") as client:
+    async with TensorusMCPClient("https://tensorus-core.hf.space/sse") as client:
         tools = await client.list_datasets()
         print(tools)
 ```

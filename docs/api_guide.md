@@ -4,9 +4,9 @@ The Tensorus Metadata System provides a comprehensive RESTful API for managing a
 
 ## Interactive API Documentation (Swagger UI)
 
-The API is self-documenting using OpenAPI. Once the application is running (e.g., locally at `http://localhost:7860`), you can access the interactive Swagger UI at:
+The API is self-documenting using OpenAPI. Once the application is running (e.g., at `https://tensorus-core.hf.space`), you can access the interactive Swagger UI at:
 
-*   **`/docs`**: [http://localhost:7860/docs](http://localhost:7860/docs)
+*   **`/docs`**: [https://tensorus-core.hf.space/docs](https://tensorus-core.hf.space/docs)
 
 This interface allows you to explore all available endpoints, view their request and response schemas, and even try out API calls directly from your browser.
 
@@ -14,7 +14,7 @@ This interface allows you to explore all available endpoints, view their request
 
 An alternative ReDoc interface is also available at:
 
-*   **`/redoc`**: [http://localhost:7860/redoc](http://localhost:7860/redoc)
+*   **`/redoc`**: [https://tensorus-core.hf.space/redoc](https://tensorus-core.hf.space/redoc)
 
 ## Main API Categories
 

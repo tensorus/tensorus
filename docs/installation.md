@@ -12,7 +12,7 @@ The easiest way to get Tensorus and its PostgreSQL backend running locally is by
     ```bash
     docker-compose up --build
     ```
-4.  The API will typically be available at `http://localhost:7860`.
+4.  The API will typically be available at `https://tensorus-core.hf.space`.
 
 ### Manual Installation (From Source)
 
