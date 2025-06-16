@@ -18,6 +18,18 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, root_validator
+
+# Routers containing the metadata-related endpoints
+from tensorus.api.endpoints import (
+    router_tensor_descriptor,
+    router_semantic_metadata,
+    router_search_aggregate,
+    router_version_lineage,
+    router_extended_metadata,
+    router_io,
+    router_management,
+    router_analytics,
+)
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 # Configure structured logging
@@ -1933,7 +1945,17 @@ async def tensor_einsum(request: OpsEinsumRequest, storage: TensorStorage = Depe
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return await _store_and_respond_ops(result_tensor, "einsum", request, storage, request.input_tensors)
 
-# Include the router in the main app
+# Include routers from tensorus.api.endpoints
+app.include_router(router_tensor_descriptor)
+app.include_router(router_semantic_metadata)
+app.include_router(router_search_aggregate)
+app.include_router(router_version_lineage)
+app.include_router(router_extended_metadata)
+app.include_router(router_io)
+app.include_router(router_management)
+app.include_router(router_analytics)
+
+# Include the tensor operations router defined above
 app.include_router(ops_router)
 
 # --- Root Endpoint ---

@@ -6,7 +6,7 @@ import json
 from unittest.mock import patch, call, MagicMock  # For spying on audit log
 from typing import Dict
 
-from tensorus.api.main import app
+from tensorus.api import app
 from tensorus.metadata.storage import InMemoryStorage
 from tensorus.metadata.storage_abc import MetadataStorage
 from tensorus.metadata.schemas import (

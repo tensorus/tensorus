@@ -20,7 +20,7 @@ if missing:
 
 
 # Import the FastAPI app instance
-from tensorus.api.main import app
+from tensorus.api import app
 # Import the metadata storage instance that the API uses
 from tensorus.metadata import storage_instance as metadata_storage_instance
 # Import the mock tensor connector instance that the API uses
