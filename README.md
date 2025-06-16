@@ -283,6 +283,16 @@ The FastAPI documentation will then be available at `http://localhost:7860/docs`
 
 If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker) installed, you can pass `--gpus all` to `docker run` and modify `setup.sh` to install CUDA-enabled PyTorch wheels for GPU acceleration.
 
+### Test Suite Dependencies
+
+The Python tests rely on packages from both `requirements.txt` and
+`requirements-test.txt`. Make sure these dependencies are installed
+before running `pytest` by executing the provided setup script:
+
+```bash
+./setup.sh
+```
+
 ### Running Tests
 
 Tensorus includes Python unit tests. To set up the environment and run them:
