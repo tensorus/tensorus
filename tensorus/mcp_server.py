@@ -21,7 +21,7 @@ except ImportError:  # pragma: no cover - support older fastmcp versions
         type: str
         text: str
 
-API_BASE_URL = "http://127.0.0.1:7860"
+API_BASE_URL = "https://tensorus-core.hf.space"
 
 server = FastMCP(name="Tensorus FastMCP")
 
