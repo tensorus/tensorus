@@ -239,6 +239,7 @@ Tensorus provides a lightweight Python implementation of the Model Context Proto
    python -m tensorus.mcp_server
    ```
    Add `--transport sse` to use SSE transport.
+   If you plan to run the MCP server tests in `tests/test_mcp_server.py` and `tests/test_mcp_client.py`, run `./setup.sh` beforehand to install all required packages.
 
 
 ### Running the Agents (Examples)
@@ -323,7 +324,7 @@ Tensorus includes Python unit tests. To set up the environment and run them:
     ./setup.sh
     ```
 
-    This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support).
+    This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support). It also pulls in `fastmcp` and other dependencies required by `tests/test_mcp_server.py` and `tests/test_mcp_client.py`.
 
 2. Run the Python test suite:
 
