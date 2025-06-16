@@ -291,6 +291,7 @@ Tensorus adds several security headers by default. You can customize them with e
 * `TENSORUS_CONTENT_SECURITY_POLICY` – value for the `Content-Security-Policy` header (default `default-src 'self'`).
 
 If either variable is empty or set to `NONE`, the corresponding header is omitted.
+The default policy prevents ReDoc from loading its CDN assets. See [ReDoc and Content Security Policy](docs/api_guide.md#re-doc-and-content-security-policy) for an example policy that allows them.
 
 Example configuration:
 
