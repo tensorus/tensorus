@@ -63,7 +63,7 @@ Tensorus is configured via environment variables. Key variables include:
 *   `TENSORUS_POSTGRES_PASSWORD`: Password for PostgreSQL.
 *   `TENSORUS_POSTGRES_DB`: Database name for PostgreSQL.
 *   `TENSORUS_POSTGRES_DSN`: Alternative DSN connection string for PostgreSQL.
-*   `TENSORUS_VALID_API_KEYS`: List of valid API keys. Values can be a comma-separated string (e.g., `key1,key2,anotherkey`) or a JSON array. If empty or not set, write operations requiring API keys will be inaccessible.
+*   `TENSORUS_VALID_API_KEYS`: List of valid API keys. Values can be a comma-separated string (e.g., `key1,key2,anotherkey`) or a JSON array. If no keys are required, set this to `[]`.
 *   `TENSORUS_API_KEY_HEADER_NAME`: HTTP header name for the API key (default: `X-API-KEY`).
 *   `TENSORUS_MINIMAL_IMPORT`: Set to any value to skip importing the optional
     `tensorus-models` package for a lightweight installation.
