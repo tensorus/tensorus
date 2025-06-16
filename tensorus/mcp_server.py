@@ -232,9 +232,10 @@ async def list_tensor_descriptors(
     rel_collection: Optional[str] = None,
     rel_has_related_tensor_id: Optional[str] = None,
     usage_last_accessed_before: Optional[str] = None,
-    usage_used_by_app: Optional[str] = None
-    # TODO: Add other simple query parameters like name, description, min_dimensions, etc.
-    # from tensorus/api/endpoints.py (ListTensorDescriptorsParams) if deemed necessary.
+    usage_used_by_app: Optional[str] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    min_dimensions: Optional[int] = None
 ) -> TextContent:
     """List tensor descriptors with extensive optional filters."""
     params: Dict[str, Any] = {}
@@ -264,6 +265,12 @@ async def list_tensor_descriptors(
         params["usage.last_accessed_before"] = usage_last_accessed_before
     if usage_used_by_app is not None:
         params["usage.used_by_app"] = usage_used_by_app
+    if name is not None:
+        params["name"] = name
+    if description is not None:
+        params["description"] = description
+    if min_dimensions is not None:
+        params["min_dimensions"] = min_dimensions
 
     result = await _get("/tensor_descriptors/", params=params)
     return TextContent(type="text", text=json.dumps(result))
