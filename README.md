@@ -283,6 +283,25 @@ The FastAPI documentation will then be available at `http://localhost:7860/docs`
 
 If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker) installed, you can pass `--gpus all` to `docker run` and modify `setup.sh` to install CUDA-enabled PyTorch wheels for GPU acceleration.
 
+### Deployment
+
+Tensorus adds several security headers by default. You can customize them with environment variables:
+
+* `TENSORUS_X_FRAME_OPTIONS` – value for the `X-Frame-Options` header (default `SAMEORIGIN`).
+* `TENSORUS_CONTENT_SECURITY_POLICY` – value for the `Content-Security-Policy` header (default `default-src 'self'`).
+
+If either variable is empty or set to `NONE`, the corresponding header is omitted.
+
+Example configuration:
+
+```bash
+# Allow embedding from a trusted site
+TENSORUS_X_FRAME_OPTIONS="ALLOW-FROM https://example.com"
+
+# Permit scripts from an external CDN
+TENSORUS_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://cdn.example.com"
+```
+
 ### Test Suite Dependencies
 
 The Python tests rely on packages from both `requirements.txt` and
