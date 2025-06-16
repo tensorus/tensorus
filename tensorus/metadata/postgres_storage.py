@@ -242,7 +242,7 @@ class PostgresMetadataStorage(MetadataStorage):
         if data_type:
             conditions.append("td.data_type = %(data_type)s")
             params["data_type"] = data_type.value
-        if tags_contain:
+        if tags_contain is not None and len(tags_contain) > 0:
             conditions.append("td.tags @> %(tags_contain)s") # Array contains operator
             params["tags_contain"] = tags_contain
 
