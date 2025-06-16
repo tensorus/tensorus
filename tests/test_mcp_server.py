@@ -13,29 +13,39 @@ class DummyResponse:
         pass
 
 
-def make_mock_client(monkeypatch, method, url, payload, response):
+def make_mock_client(monkeypatch, method, url, payload, response, *, expected_params=None):
     class MockAsyncClient:
         async def __aenter__(self):
             return self
         async def __aexit__(self, exc_type, exc, tb):
             pass
-        async def post(self, u, json=None):
+        async def post(self, u, json=None, params=None):
             assert method == 'post'
             assert u == url
             assert json == payload
+            assert params == expected_params
             return DummyResponse(response)
-        async def get(self, u):
+        async def get(self, u, params=None):
             assert method == 'get'
             assert u == url
+            assert params == expected_params
             return DummyResponse(response)
-        async def put(self, u, json=None):
+        async def put(self, u, json=None, params=None):
             assert method == 'put'
             assert u == url
             assert json == payload
+            assert params == expected_params
             return DummyResponse(response)
-        async def delete(self, u):
+        async def patch(self, u, json=None, params=None):
+            assert method == 'patch'
+            assert u == url
+            assert json == payload
+            assert params == expected_params
+            return DummyResponse(response)
+        async def delete(self, u, params=None):
             assert method == 'delete'
             assert u == url
+            assert params == expected_params
             return DummyResponse(response)
     monkeypatch.setattr(mcp_server.httpx, "AsyncClient", MockAsyncClient)
 
@@ -48,19 +58,23 @@ def make_error_client(monkeypatch, method):
         async def __aexit__(self, exc_type, exc, tb):
             pass
 
-        async def post(self, u, json=None):
+        async def post(self, u, json=None, params=None):
             assert method == "post"
             raise httpx.HTTPError("failed")
 
-        async def get(self, u):
+        async def get(self, u, params=None):
             assert method == "get"
             raise httpx.HTTPError("failed")
 
-        async def put(self, u, json=None):
+        async def put(self, u, json=None, params=None):
             assert method == "put"
             raise httpx.HTTPError("failed")
 
-        async def delete(self, u):
+        async def patch(self, u, json=None, params=None):
+            assert method == "patch"
+            raise httpx.HTTPError("failed")
+
+        async def delete(self, u, params=None):
             assert method == "delete"
             raise httpx.HTTPError("failed")
 
