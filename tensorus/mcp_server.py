@@ -7,7 +7,8 @@ Tools" and return results as :class:`TextContent` objects.
 
 import argparse
 import json
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, List, Dict
+from uuid import UUID
 
 import httpx
 from fastmcp import FastMCP
@@ -26,20 +27,20 @@ API_BASE_URL = "https://tensorus-core.hf.space"
 server = FastMCP(name="Tensorus FastMCP")
 
 
-async def _post(path: str, payload: dict) -> dict:
+async def _post(path: str, payload: dict, params: Optional[Dict[str, Any]] = None) -> dict:
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE_URL}{path}", json=payload)
+            response = await client.post(f"{API_BASE_URL}{path}", json=payload, params=params)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
         return {"error": str(exc)}
 
 
-async def _get(path: str) -> dict:
+async def _get(path: str, params: Optional[Dict[str, Any]] = None) -> dict:
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE_URL}{path}")
+            response = await client.get(f"{API_BASE_URL}{path}", params=params)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
@@ -60,6 +61,16 @@ async def _delete(path: str) -> dict:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(f"{API_BASE_URL}{path}")
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as exc:  # pragma: no cover - network failures
+        return {"error": str(exc)}
+
+
+async def _patch(path: str, payload: dict) -> dict:
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.patch(f"{API_BASE_URL}{path}", json=payload)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
@@ -199,10 +210,396 @@ async def tensorus_apply_einsum(request_payload: dict) -> TextContent:
     return TextContent(type="text", text=json.dumps(result))
 
 
+# --- Tensor Descriptor Tools ---
+
+@server.tool()
+async def create_tensor_descriptor(descriptor_data: Dict) -> TextContent:
+    """Create a new tensor descriptor."""
+    result = await _post("/tensor_descriptors/", descriptor_data)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def list_tensor_descriptors(
+    owner: Optional[str] = None,
+    data_type: Optional[str] = None,
+    tags_contain: Optional[str] = None,  # Comma-separated string
+    lineage_version: Optional[str] = None,
+    # Add other query parameters from endpoints.py as needed
+    # For example:
+    # name: Optional[str] = None,
+    # description: Optional[str] = None,
+    # min_dimensions: Optional[int] = None,
+    # max_dimensions: Optional[int] = None,
+    # min_size_bytes: Optional[int] = None,
+    # max_size_bytes: Optional[int] = None,
+    # custom_query: Optional[str] = None, # For more complex queries if supported
+) -> TextContent:
+    """List tensor descriptors with optional filters."""
+    params = {}
+    if owner is not None:
+        params["owner"] = owner
+    if data_type is not None:
+        params["data_type"] = data_type
+    if tags_contain is not None:
+        params["tags_contain"] = tags_contain
+    if lineage_version is not None:
+        params["lineage_version"] = lineage_version
+    # Add other parameters to `params` dict similarly
+
+    # The _get helper needs to be modified to accept params or we build the query string manually
+    # For now, assuming _get can take params, or we'll need to adjust.
+    # Let's assume the API expects query parameters like /tensor_descriptors/?owner=X&data_type=Y
+    # httpx.AsyncClient.get supports a `params` argument.
+    # Add other parameters to `params` dict similarly
+
+    result = await _get("/tensor_descriptors/", params=params)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def get_tensor_descriptor(tensor_id: str) -> TextContent:
+    """Get a tensor descriptor by its ID."""
+    result = await _get(f"/tensor_descriptors/{tensor_id}")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def update_tensor_descriptor(tensor_id: str, updates: Dict) -> TextContent:
+    """Update a tensor descriptor by its ID."""
+    result = await _put(f"/tensor_descriptors/{tensor_id}", updates)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def delete_tensor_descriptor(tensor_id: str) -> TextContent:
+    """Delete a tensor descriptor by its ID."""
+    result = await _delete(f"/tensor_descriptors/{tensor_id}")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+# --- Semantic Metadata Tools ---
+
+@server.tool()
+async def create_semantic_metadata_for_tensor(tensor_id: str, metadata_in: Dict) -> TextContent:
+    """Create semantic metadata for a given tensor descriptor."""
+    result = await _post(f"/tensor_descriptors/{tensor_id}/semantic/", metadata_in)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def get_all_semantic_metadata_for_tensor(tensor_id: str) -> TextContent:
+    """Get all semantic metadata for a given tensor descriptor."""
+    result = await _get(f"/tensor_descriptors/{tensor_id}/semantic/")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def update_named_semantic_metadata_for_tensor(tensor_id: str, current_name: str, updates: Dict) -> TextContent:
+    """Update a named piece of semantic metadata for a given tensor descriptor."""
+    result = await _put(f"/tensor_descriptors/{tensor_id}/semantic/{current_name}", updates)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def delete_named_semantic_metadata_for_tensor(tensor_id: str, name: str) -> TextContent:
+    """Delete a named piece of semantic metadata for a given tensor descriptor."""
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/semantic/{name}")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+# --- Extended Metadata Tools ---
+
+# --- Lineage Metadata Tools ---
+@server.tool()
+async def upsert_lineage_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+    """Upsert lineage metadata for a given tensor descriptor."""
+    result = await _post(f"/tensor_descriptors/{tensor_id}/lineage/", metadata_in)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def get_lineage_metadata(tensor_id: str) -> TextContent:
+    """Get lineage metadata for a given tensor descriptor."""
+    result = await _get(f"/tensor_descriptors/{tensor_id}/lineage/")
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def patch_lineage_metadata(tensor_id: str, updates: Dict) -> TextContent:
+    """Patch lineage metadata for a given tensor descriptor."""
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/lineage/", updates)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def delete_lineage_metadata(tensor_id: str) -> TextContent:
+    """Delete lineage metadata for a given tensor descriptor."""
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/lineage/")
+    return TextContent(type="text", text=json.dumps(result))
+
+# --- Computational Metadata Tools ---
+@server.tool()
+async def upsert_computational_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+    """Upsert computational metadata for a given tensor descriptor."""
+    result = await _post(f"/tensor_descriptors/{tensor_id}/computational/", metadata_in)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def get_computational_metadata(tensor_id: str) -> TextContent:
+    """Get computational metadata for a given tensor descriptor."""
+    result = await _get(f"/tensor_descriptors/{tensor_id}/computational/")
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def patch_computational_metadata(tensor_id: str, updates: Dict) -> TextContent:
+    """Patch computational metadata for a given tensor descriptor."""
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/computational/", updates)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def delete_computational_metadata(tensor_id: str) -> TextContent:
+    """Delete computational metadata for a given tensor descriptor."""
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/computational/")
+    return TextContent(type="text", text=json.dumps(result))
+
+# --- Quality Metadata Tools ---
+@server.tool()
+async def upsert_quality_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+    """Upsert quality metadata for a given tensor descriptor."""
+    result = await _post(f"/tensor_descriptors/{tensor_id}/quality/", metadata_in)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def get_quality_metadata(tensor_id: str) -> TextContent:
+    """Get quality metadata for a given tensor descriptor."""
+    result = await _get(f"/tensor_descriptors/{tensor_id}/quality/")
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def patch_quality_metadata(tensor_id: str, updates: Dict) -> TextContent:
+    """Patch quality metadata for a given tensor descriptor."""
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/quality/", updates)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def delete_quality_metadata(tensor_id: str) -> TextContent:
+    """Delete quality metadata for a given tensor descriptor."""
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/quality/")
+    return TextContent(type="text", text=json.dumps(result))
+
+# --- Relational Metadata Tools ---
+@server.tool()
+async def upsert_relational_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+    """Upsert relational metadata for a given tensor descriptor."""
+    result = await _post(f"/tensor_descriptors/{tensor_id}/relational/", metadata_in)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def get_relational_metadata(tensor_id: str) -> TextContent:
+    """Get relational metadata for a given tensor descriptor."""
+    result = await _get(f"/tensor_descriptors/{tensor_id}/relational/")
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def patch_relational_metadata(tensor_id: str, updates: Dict) -> TextContent:
+    """Patch relational metadata for a given tensor descriptor."""
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/relational/", updates)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def delete_relational_metadata(tensor_id: str) -> TextContent:
+    """Delete relational metadata for a given tensor descriptor."""
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/relational/")
+    return TextContent(type="text", text=json.dumps(result))
+
+# --- Usage Metadata Tools ---
+@server.tool()
+async def upsert_usage_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+    """Upsert usage metadata for a given tensor descriptor."""
+    result = await _post(f"/tensor_descriptors/{tensor_id}/usage/", metadata_in)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def get_usage_metadata(tensor_id: str) -> TextContent:
+    """Get usage metadata for a given tensor descriptor."""
+    result = await _get(f"/tensor_descriptors/{tensor_id}/usage/")
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def patch_usage_metadata(tensor_id: str, updates: Dict) -> TextContent:
+    """Patch usage metadata for a given tensor descriptor."""
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/usage/", updates)
+    return TextContent(type="text", text=json.dumps(result))
+
+@server.tool()
+async def delete_usage_metadata(tensor_id: str) -> TextContent:
+    """Delete usage metadata for a given tensor descriptor."""
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/usage/")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+# --- Search and Aggregation Tools ---
+
+@server.tool()
+async def search_tensors(
+    text_query: str,
+    fields_to_search: Optional[str] = None  # Comma-separated string
+) -> TextContent:
+    """Search for tensors based on a text query, optionally specifying fields to search."""
+    params = {"text_query": text_query}
+    if fields_to_search:
+        params["fields_to_search"] = fields_to_search
+    result = await _get("/search/tensors/", params=params)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def aggregate_tensors(
+    group_by_field: str,
+    agg_function: str,
+    agg_field: Optional[str] = None
+) -> TextContent:
+    """Aggregate tensor metadata based on a grouping field and aggregation function."""
+    params = {
+        "group_by_field": group_by_field,
+        "agg_function": agg_function,
+    }
+    if agg_field:
+        params["agg_field"] = agg_field
+    result = await _get("/aggregate/tensors/", params=params)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+# --- Versioning and Lineage Tools ---
+
+@server.tool()
+async def create_tensor_version(tensor_id: str, version_request: Dict) -> TextContent:
+    """Create a new version for a given tensor."""
+    result = await _post(f"/tensors/{tensor_id}/versions", version_request)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def list_tensor_versions(tensor_id: str) -> TextContent:
+    """List all versions for a given tensor."""
+    result = await _get(f"/tensors/{tensor_id}/versions")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def create_lineage_relationship(relationship_request: Dict) -> TextContent:
+    """Create a lineage relationship between tensors."""
+    # relationship_request should contain source_tensor_id, target_tensor_id, relationship_type, etc.
+    result = await _post("/lineage/relationships/", relationship_request)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def get_parent_tensors(tensor_id: str) -> TextContent:
+    """Get the parent tensors for a given tensor in the lineage."""
+    result = await _get(f"/tensors/{tensor_id}/lineage/parents")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def get_child_tensors(tensor_id: str) -> TextContent:
+    """Get the child tensors for a given tensor in the lineage."""
+    result = await _get(f"/tensors/{tensor_id}/lineage/children")
+    return TextContent(type="text", text=json.dumps(result))
+
+
 @server.resource("resource://datasets", name="datasets", description="List of datasets")
 async def datasets_resource() -> str:
+    # Assuming datasets_resource doesn't need params, or adjust if it does.
     data = await _get("/datasets")
     return json.dumps(data.get("data", []))
+
+
+# --- Import/Export Tools ---
+
+@server.tool()
+async def export_tensor_metadata(tensor_ids_str: Optional[str] = None) -> TextContent:
+    """Export tensor metadata for specified tensor IDs or all tensors if IDs are not provided."""
+    params = {}
+    if tensor_ids_str:
+        params["tensor_ids"] = tensor_ids_str
+    result = await _get("/tensors/export", params=params if params else None)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def import_tensor_metadata(
+    import_data_payload: Dict,
+    conflict_strategy: Optional[str] = "skip"
+) -> TextContent:
+    """Import tensor metadata with a specified conflict strategy (skip or overwrite)."""
+    params = {"conflict_strategy": conflict_strategy}
+    result = await _post("/tensors/import", payload=import_data_payload, params=params)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+# --- Management Tools ---
+
+@server.tool()
+async def management_health_check() -> TextContent:
+    """Perform a health check on the Tensorus service."""
+    result = await _get("/health")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def management_get_metrics() -> TextContent:
+    """Retrieve operational metrics from the Tensorus service."""
+    result = await _get("/metrics")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+# --- Analytics Tools ---
+
+@server.tool()
+async def analytics_get_co_occurring_tags(
+    min_co_occurrence: Optional[int] = 2,
+    limit: Optional[int] = 10
+) -> TextContent:
+    """Get co-occurring tags based on minimum co-occurrence and limit."""
+    params = {}
+    if min_co_occurrence is not None:
+        params["min_co_occurrence"] = min_co_occurrence
+    if limit is not None:
+        params["limit"] = limit
+    result = await _get("/analytics/co_occurring_tags", params=params if params else None)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def analytics_get_stale_tensors(
+    threshold_days: Optional[int] = 90,
+    limit: Optional[int] = 100
+) -> TextContent:
+    """Get stale tensors based on a threshold of days and limit."""
+    params = {}
+    if threshold_days is not None:
+        params["threshold_days"] = threshold_days
+    if limit is not None:
+        params["limit"] = limit
+    result = await _get("/analytics/stale_tensors", params=params if params else None)
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
+async def analytics_get_complex_tensors(
+    min_parent_count: Optional[int] = None,
+    min_transformation_steps: Optional[int] = None,
+    limit: Optional[int] = 100
+) -> TextContent:
+    """Get complex tensors based on minimum parent count, transformation steps, and limit."""
+    params = {}
+    if min_parent_count is not None:
+        params["min_parent_count"] = min_parent_count
+    if min_transformation_steps is not None:
+        params["min_transformation_steps"] = min_transformation_steps
+    if limit is not None:
+        params["limit"] = limit
+    result = await _get("/analytics/complex_tensors", params=params if params else None)
+    return TextContent(type="text", text=json.dumps(result))
 
 
 def main() -> None:
