@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 
-from tensorus.api.main import app # Main FastAPI app
+from tensorus.api import app
 from tensorus.config import settings as global_settings
 from tensorus.metadata import InMemoryStorage, PostgresMetadataStorage, storage_instance as global_storage_instance
 from tensorus.metadata.storage_abc import MetadataStorage

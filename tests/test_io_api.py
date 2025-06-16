@@ -4,7 +4,7 @@ from uuid import uuid4, UUID
 from datetime import datetime
 import json
 
-from tensorus.api.main import app # Main FastAPI app
+from tensorus.api import app
 from tensorus.metadata.storage import InMemoryStorage # To directly interact for setup/verification
 from tensorus.metadata.storage_abc import MetadataStorage
 from tensorus.metadata.schemas import TensorDescriptor, SemanticMetadata, LineageMetadata, DataType

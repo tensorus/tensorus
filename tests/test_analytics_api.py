@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 from uuid import uuid4, UUID
 from datetime import datetime, timedelta
 
-from tensorus.api.main import app # Main FastAPI app
+# FastAPI application under test
+from tensorus.api import app
 from tensorus.metadata.storage import InMemoryStorage
 from tensorus.metadata.storage_abc import MetadataStorage
 from tensorus.metadata.schemas import (
