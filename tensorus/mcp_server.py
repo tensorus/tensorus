@@ -47,10 +47,10 @@ async def _get(path: str, params: Optional[Dict[str, Any]] = None) -> dict:
         return {"error": str(exc)}
 
 
-async def _put(path: str, payload: dict) -> dict:
+async def _put(path: str, payload: dict, params: Optional[Dict[str, Any]] = None) -> dict:
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.put(f"{API_BASE_URL}{path}", json=payload)
+            response = await client.put(f"{API_BASE_URL}{path}", json=payload, params=params)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
@@ -67,10 +67,10 @@ async def _delete(path: str) -> dict:
         return {"error": str(exc)}
 
 
-async def _patch(path: str, payload: dict) -> dict:
+async def _patch(path: str, payload: dict, params: Optional[Dict[str, Any]] = None) -> dict:
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.patch(f"{API_BASE_URL}{path}", json=payload)
+            response = await client.patch(f"{API_BASE_URL}{path}", json=payload, params=params)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
@@ -223,35 +223,48 @@ async def create_tensor_descriptor(descriptor_data: Dict) -> TextContent:
 async def list_tensor_descriptors(
     owner: Optional[str] = None,
     data_type: Optional[str] = None,
-    tags_contain: Optional[str] = None,  # Comma-separated string
+    tags_contain: Optional[str] = None,
     lineage_version: Optional[str] = None,
-    # Add other query parameters from endpoints.py as needed
-    # For example:
-    # name: Optional[str] = None,
-    # description: Optional[str] = None,
-    # min_dimensions: Optional[int] = None,
-    # max_dimensions: Optional[int] = None,
-    # min_size_bytes: Optional[int] = None,
-    # max_size_bytes: Optional[int] = None,
-    # custom_query: Optional[str] = None, # For more complex queries if supported
+    lineage_source_type: Optional[str] = None,
+    comp_algorithm: Optional[str] = None,
+    comp_gpu_model: Optional[str] = None,
+    quality_confidence_gt: Optional[float] = None,
+    quality_noise_lt: Optional[float] = None,
+    rel_collection: Optional[str] = None,
+    rel_has_related_tensor_id: Optional[str] = None,
+    usage_last_accessed_before: Optional[str] = None,
+    usage_used_by_app: Optional[str] = None
+    # TODO: Add other simple query parameters like name, description, min_dimensions, etc.
+    # from tensorus/api/endpoints.py (ListTensorDescriptorsParams) if deemed necessary.
 ) -> TextContent:
-    """List tensor descriptors with optional filters."""
-    params = {}
+    """List tensor descriptors with extensive optional filters."""
+    params: Dict[str, Any] = {}
     if owner is not None:
         params["owner"] = owner
     if data_type is not None:
-        params["data_type"] = data_type
+        params["data_type"] = data_type # API uses data_type
     if tags_contain is not None:
-        params["tags_contain"] = tags_contain
+        params["tags_contain"] = tags_contain # API uses tags_contain (FastAPI handles comma-separated string to List)
     if lineage_version is not None:
-        params["lineage_version"] = lineage_version
-    # Add other parameters to `params` dict similarly
-
-    # The _get helper needs to be modified to accept params or we build the query string manually
-    # For now, assuming _get can take params, or we'll need to adjust.
-    # Let's assume the API expects query parameters like /tensor_descriptors/?owner=X&data_type=Y
-    # httpx.AsyncClient.get supports a `params` argument.
-    # Add other parameters to `params` dict similarly
+        params["lineage.version"] = lineage_version
+    if lineage_source_type is not None:
+        params["lineage.source.type"] = lineage_source_type
+    if comp_algorithm is not None:
+        params["computational.algorithm"] = comp_algorithm
+    if comp_gpu_model is not None:
+        params["computational.hardware_info.gpu_model"] = comp_gpu_model
+    if quality_confidence_gt is not None:
+        params["quality.confidence_score_gt"] = quality_confidence_gt
+    if quality_noise_lt is not None:
+        params["quality.noise_level_lt"] = quality_noise_lt
+    if rel_collection is not None:
+        params["relational.collection"] = rel_collection
+    if rel_has_related_tensor_id is not None:
+        params["relational.has_related_tensor_id"] = rel_has_related_tensor_id
+    if usage_last_accessed_before is not None:
+        params["usage.last_accessed_before"] = usage_last_accessed_before
+    if usage_used_by_app is not None:
+        params["usage.used_by_app"] = usage_used_by_app
 
     result = await _get("/tensor_descriptors/", params=params)
     return TextContent(type="text", text=json.dumps(result))
@@ -521,7 +534,7 @@ async def export_tensor_metadata(tensor_ids_str: Optional[str] = None) -> TextCo
     params = {}
     if tensor_ids_str:
         params["tensor_ids"] = tensor_ids_str
-    result = await _get("/tensors/export", params=params if params else None)
+    result = await _get("/tensors/export", params=params)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -565,7 +578,7 @@ async def analytics_get_co_occurring_tags(
         params["min_co_occurrence"] = min_co_occurrence
     if limit is not None:
         params["limit"] = limit
-    result = await _get("/analytics/co_occurring_tags", params=params if params else None)
+    result = await _get("/analytics/co_occurring_tags", params=params)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -580,7 +593,7 @@ async def analytics_get_stale_tensors(
         params["threshold_days"] = threshold_days
     if limit is not None:
         params["limit"] = limit
-    result = await _get("/analytics/stale_tensors", params=params if params else None)
+    result = await _get("/analytics/stale_tensors", params=params)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -598,7 +611,7 @@ async def analytics_get_complex_tensors(
         params["min_transformation_steps"] = min_transformation_steps
     if limit is not None:
         params["limit"] = limit
-    result = await _get("/analytics/complex_tensors", params=params if params else None)
+    result = await _get("/analytics/complex_tensors", params=params)
     return TextContent(type="text", text=json.dumps(result))
 
 
