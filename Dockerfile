@@ -48,5 +48,7 @@ ENV TENSORUS_AUTH_DEV_MODE_ALLOW_DUMMY_JWT="False"
 EXPOSE 7860
 
 # Define the command to run the application
-# This assumes your FastAPI app instance is named 'app' in 'tensorus.api.main'
-CMD ["uvicorn", "tensorus.api.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Use the package export from ``tensorus.api`` which exposes ``app`` in
+# ``tensorus/api/__init__.py``. This lets Uvicorn import the app directly
+# from the package without referencing the module path.
+CMD ["uvicorn", "tensorus.api:app", "--host", "0.0.0.0", "--port", "7860"]
