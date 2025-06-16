@@ -16,6 +16,18 @@ An alternative ReDoc interface is also available at:
 
 *   **`/redoc`**: [http://localhost:7860/redoc](http://localhost:7860/redoc)
 
+### ReDoc and Content Security Policy
+
+Tensorus sets the header `Content-Security-Policy: default-src 'self'` by default. This strict policy blocks the external fonts, stylesheets, and scripts that ReDoc loads from CDNs, so the ReDoc page will appear blank unless the policy is relaxed.
+
+To permit these assets you can override the policy via the `TENSORUS_CONTENT_SECURITY_POLICY` environment variable:
+
+```bash
+TENSORUS_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://fastapi.tiangolo.com"
+```
+
+Set the variable to an empty string or `NONE` to remove the header entirely.
+
 ## Main API Categories
 
 The API is organized into several categories based on functionality:
