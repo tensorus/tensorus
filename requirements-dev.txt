@@ -1,0 +1,4 @@
+# requirements-dev.txt
+# Combined dependencies for development and testing
+-r requirements.txt
+-r requirements-test.txt

@@ -314,7 +314,15 @@ before running `pytest` by executing the provided setup script:
 ./setup.sh
 ```
 
+Alternatively, install them directly using:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 ### Running Tests
+
+**Important**: Run `./setup.sh` (or `pip install -r requirements-dev.txt`) before executing the tests. The suite exits early if required packages are missing.
 
 Tensorus includes Python unit tests. To set up the environment and run them:
 

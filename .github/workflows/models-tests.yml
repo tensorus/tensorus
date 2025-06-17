@@ -24,8 +24,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          python -m pip install -r core/requirements.txt
-          python -m pip install -r core/requirements-test.txt
+          python -m pip install -r core/requirements-dev.txt
       - name: Prepare models package
         run: |
           mkdir -p models/tensorus
