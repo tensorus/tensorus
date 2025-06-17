@@ -238,7 +238,7 @@ Tensorus provides a lightweight Python implementation of the Model Context Proto
    ```bash
    python -m tensorus.mcp_server
    ```
-   Add `--transport sse` to use SSE transport.
+   Add `--transport streamable-http` for a web endpoint. SSE transport is deprecated.
    If you plan to run the MCP server tests in `tests/test_mcp_server.py` and `tests/test_mcp_client.py`, run `./setup.sh` beforehand to install all required packages.
 
 
@@ -633,7 +633,7 @@ You can also interact with the server using the included Python helper:
 from tensorus.mcp_client import TensorusMCPClient
 
 async def example_py():
-    async with TensorusMCPClient("http://localhost:7860/sse") as client:
+    async with TensorusMCPClient("http://localhost:7860/mcp") as client:
         tools = await client.list_datasets()
         print(tools)
 ```

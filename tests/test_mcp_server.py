@@ -909,3 +909,16 @@ async def test_delete_named_semantic_metadata_for_tensor(monkeypatch):
     result = await mcp_server.delete_named_semantic_metadata_for_tensor.fn(tensor_id=tensor_id, name=name)
     assert isinstance(result, mcp_server.TextContent)
     assert json.loads(result.text) == response
+
+
+@pytest.mark.asyncio
+async def test_prompt_functions(monkeypatch):
+    assert await mcp_server.ask_about_topic.fn("AI") == "Can you explain the concept of 'AI'?"
+    assert await mcp_server.summarize_text.fn(text="abc", max_length=5) == "Summarize the following in 5 words:\n\nabc"
+    assert await mcp_server.data_analysis_prompt.fn(data_uri="uri") == "Analyze the data at uri and report key insights."
+
+    dynamic_resp = {"info": 1}
+    url = f"{mcp_server.API_BASE_URL}/tensors/xyz/metadata"
+    make_mock_client(monkeypatch, "get", url, None, dynamic_resp)
+    result = await mcp_server.dynamic_prompt.fn(record_id="xyz")
+    assert "info" in result
