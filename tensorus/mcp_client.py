@@ -9,7 +9,7 @@ from typing import Any, AsyncIterator, List, Optional, Sequence, Type, TypeVar, 
 from pydantic import BaseModel, ValidationError
 from fastmcp.client import Client as FastMCPClient
 from fastmcp.exceptions import FastMCPError
-from fastmcp.client.transports import StreamableHttpTransport # Changed import path and class name
+from fastmcp.client.transports import StreamableHttpTransport
 
 # Import the TextContent type that the server is actually using
 from mcp.types import TextContent
