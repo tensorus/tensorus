@@ -9,18 +9,10 @@ from typing import Any, AsyncIterator, List, Optional, Sequence, Type, TypeVar, 
 from pydantic import BaseModel, ValidationError
 from fastmcp.client import Client as FastMCPClient
 from fastmcp.exceptions import FastMCPError
-from fastmcp.transports.streamable_http import StreamableHTTPTransport
+from fastmcp.client.transports import StreamableHttpTransport # Changed import path and class name
 
-# Minimal fallback for TextContent if import fails
-either
-try:
-    from fastmcp.tools import TextContent
-nbecause
-except ImportError:
-    @dataclass
-    class TextContent:
-        type: str
-        text: str
+# Import the TextContent type that the server is actually using
+from mcp.types import TextContent
 
 # Type variable for Pydantic models
 T = TypeVar('T', bound=BaseModel)
@@ -41,7 +33,7 @@ class TensorusMCPClient:
     @staticmethod
     def from_http(url: str) -> TensorusMCPClient:
         """Factory using Streamable HTTP transport"""
-        transport = StreamableHTTPTransport(url=url)
+        transport = StreamableHttpTransport(url=url) # Updated class name usage
         return TensorusMCPClient(transport)
 
     async def __aenter__(self) -> TensorusMCPClient:
@@ -80,9 +72,29 @@ class TensorusMCPClient:
         data = json.loads(content.text)
         if response_model:
             try:
+                # Handle cases where the actual data for the model is nested
+                if isinstance(data, dict) and 'data' in data and response_model == DatasetListResponse :
+                    # Specific handling for DatasetListResponse if data is nested under 'data'
+                    # and the model itself expects a flat structure like {"datasets": []}
+                    # This might indicate an API inconsistency or a client model mismatch.
+                    # For now, let's assume the API returns {..., "data": actual_list_for_datasets_field}
+                    # and DatasetListResponse expects {"datasets": actual_list_for_datasets_field}
+                    # So, we need to re-wrap it:
+                    return response_model.parse_obj({"datasets": data['data']})
+                elif response_model == IngestTensorResponse and isinstance(data, dict) and data.get('success') is True and isinstance(data.get('data'), dict) and 'record_id' in data['data']:
+                    # Specific handling for IngestTensorResponse if data is nested and needs id mapping
+                    return IngestTensorResponse(id=data['data']['record_id'], status="ingested") # Assuming "ingested" is the status on success
+                elif response_model == TensorDetailsResponse and isinstance(data, dict) and 'record_id' in data:
+                    # Map API's 'record_id' to model's 'id' field
+                    data_for_model = data.copy()
+                    data_for_model['id'] = data_for_model.pop('record_id')
+                    return TensorDetailsResponse.parse_obj(data_for_model)
+
+                # For other models (like CreateDatasetResponse, DeleteDatasetResponse, etc.),
+                # parse the data directly. This assumes 'data' dictionary as a whole matches the response_model.
                 return response_model.parse_obj(data)
             except ValidationError as ve:
-                logger.error(f"Response validation failed for {name}: {ve}")
+                logger.error(f"Response validation failed for {name}: {ve}. Data: {data}")
                 raise
         return data
 
