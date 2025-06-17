@@ -85,13 +85,13 @@ async def fetch_metadata(record_id: str) -> dict:
 
 
 @server.prompt()
-def ask_about_topic(topic: str) -> str:
+async def ask_about_topic(topic: str) -> str:
     """Generate a user message asking for an explanation of a topic."""
     return f"Can you explain the concept of '{topic}'?"
 
 
 @server.prompt()
-def summarize_text(text: str = Field(description="Text to summarize"), max_length: int = 100) -> str:
+async def summarize_text(text: str = Field(description="Text to summarize"), max_length: int = 100) -> str:
     return f"Summarize the following in {max_length} words:\n\n{text}"
 
 
@@ -100,7 +100,7 @@ def summarize_text(text: str = Field(description="Text to summarize"), max_lengt
     description="Builds a prompt to analyze a dataset",
     tags={"analysis", "data"},
 )
-def data_analysis_prompt(data_uri: str) -> str:
+async def data_analysis_prompt(data_uri: str) -> str:
     return f"Analyze the data at {data_uri} and report key insights."
 
 
