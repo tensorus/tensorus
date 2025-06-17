@@ -9,10 +9,12 @@ import argparse
 import json
 from typing import Any, Optional, Sequence, Dict
 
+from pydantic import Field
+
 import httpx
 from fastmcp import FastMCP
 try:
-    from fastmcp.tools import TextContent
+    from fastmcp.prompts.prompt import PromptMessage, Message, TextContent
 except ImportError:  # pragma: no cover - support older fastmcp versions
     from dataclasses import dataclass
 
@@ -20,6 +22,7 @@ except ImportError:  # pragma: no cover - support older fastmcp versions
     class TextContent:  # minimal fallback for tests
         type: str
         text: str
+    PromptMessage = Message = Any  # type: ignore
 
 API_BASE_URL = "https://tensorus-core.hf.space"
 
@@ -74,6 +77,37 @@ async def _patch(path: str, payload: dict, params: Optional[Dict[str, Any]] = No
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
         return {"error": str(exc)}
+
+
+async def fetch_metadata(record_id: str) -> dict:
+    """Helper to fetch metadata for dynamic prompts."""
+    return await _get(f"/tensors/{record_id}/metadata")
+
+
+@server.prompt()
+def ask_about_topic(topic: str) -> str:
+    """Generate a user message asking for an explanation of a topic."""
+    return f"Can you explain the concept of '{topic}'?"
+
+
+@server.prompt()
+def summarize_text(text: str = Field(description="Text to summarize"), max_length: int = 100) -> str:
+    return f"Summarize the following in {max_length} words:\n\n{text}"
+
+
+@server.prompt(
+    name="data_analysis_request",
+    description="Builds a prompt to analyze a dataset",
+    tags={"analysis", "data"},
+)
+def data_analysis_prompt(data_uri: str) -> str:
+    return f"Analyze the data at {data_uri} and report key insights."
+
+
+@server.prompt()
+async def dynamic_prompt(record_id: str) -> str:
+    data = await fetch_metadata(record_id)
+    return f"Here\u2019s the metadata: {data}"
 
 
 @server.tool()
@@ -628,8 +662,16 @@ def main() -> None:
         description="Run the Tensorus FastMCP server exposing dataset and tensor tools"
     )
     parser.add_argument(
-        "--transport", choices=["stdio", "sse"], default="stdio", help="Transport protocol"
+        "--transport",
+        choices=["stdio", "streamable-http"],
+        default="streamable-http",
+        help=(
+            "Transport protocol. SSE is deprecated; use streamable-http for web deployments"
+        ),
     )
+    parser.add_argument("--host", default="0.0.0.0", help="Server host")
+    parser.add_argument("--port", type=int, default=7860, help="Server port")
+    parser.add_argument("--path", default="/mcp", help="Base path for Streamable HTTP")
     parser.add_argument(
         "--api-url", default=API_BASE_URL, help="Base URL of the running FastAPI backend"
     )
@@ -637,7 +679,16 @@ def main() -> None:
 
     API_BASE_URL = args.api_url.rstrip("/")
 
-    server.run(args.transport)
+    if args.transport == "streamable-http":
+        server.run(
+            transport="streamable-http",
+            host=args.host,
+            port=args.port,
+            path=args.path,
+            log_level="info",
+        )
+    else:
+        server.run(args.transport)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution
