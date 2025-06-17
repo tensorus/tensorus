@@ -12,11 +12,9 @@ from fastmcp.exceptions import FastMCPError
 from fastmcp.transports.streamable_http import StreamableHTTPTransport
 
 # Minimal fallback for TextContent if import fails
-either
 try:
     from fastmcp.tools import TextContent
-nbecause
-except ImportError:
+except ImportError:  # pragma: no cover - support older fastmcp versions
     @dataclass
     class TextContent:
         type: str
