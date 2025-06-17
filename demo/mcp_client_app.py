@@ -3,12 +3,12 @@ import json
 
 import pandas as pd
 import streamlit as st
-from tensorus.mcp_client import TensorusMCPClient
+from tensorus.mcp_client import TensorusMCPClient, DEFAULT_MCP_URL
 
 st.title("Tensorus MCP Client Demo")
 st.markdown("Interact with a Tensorus MCP server without writing any code.")
 
-mcp_url = st.text_input("MCP server URL", TensorusMCPClient.DEFAULT_MCP_URL)
+mcp_url = st.text_input("MCP server URL", DEFAULT_MCP_URL)
 
 
 def run_async(coro):

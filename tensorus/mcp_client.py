@@ -30,6 +30,9 @@ class MCPResponseError(Exception):
 class TensorusMCPClient:
     """High-level client for the Tensorus MCP server with typed, prompt, sync, and streaming support."""
 
+    # Retain class attribute for backward compatibility
+    DEFAULT_MCP_URL = DEFAULT_MCP_URL
+
     def __init__(self, transport: Any) -> None:
         self._client = FastMCPClient(transport)
 
