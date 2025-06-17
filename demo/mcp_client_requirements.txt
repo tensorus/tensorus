@@ -1,0 +1,4 @@
+# Minimal requirements for demo/mcp_client_app.py
+fastmcp>=0.2.0
+streamlit>=1.25.0
+pandas>=1.5.0

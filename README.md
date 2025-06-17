@@ -72,6 +72,16 @@ A quick interactive example is provided in
 It shows how to connect with `TensorusMCPClient`, create a dataset,
 ingest a tensor, and run a basic query.
 
+Another demo is the small Streamlit app
+[`demo/mcp_client_app.py`](demo/mcp_client_app.py). Launch it with:
+
+```bash
+streamlit run demo/mcp_client_app.py
+```
+
+When deploying on HuggingFace Spaces you can use
+`demo/mcp_client_requirements.txt` as the `requirements.txt` file.
+
 ## Tensorus Execution Cycle
 
 
