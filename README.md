@@ -62,9 +62,18 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 You can try Tensorus online via Huggingface Spaces:
 
 *   **API Documentation:** [Swagger UI](https://tensorus-api.hf.space/docs) | [ReDoc](https://tensorus-api.hf.space/redoc)
+
 *   **Dashboard UI:** [Streamlit Dashboard](https://tensorus-dashboard.hf.space)
 
+## Demos
+
+A quick interactive example is provided in
+[`demo/mcp_client_demo.ipynb`](demo/mcp_client_demo.ipynb).
+It shows how to connect with `TensorusMCPClient`, create a dataset,
+ingest a tensor, and run a basic query.
+
 ## Tensorus Execution Cycle
+
 
 ```mermaid
 graph TD
