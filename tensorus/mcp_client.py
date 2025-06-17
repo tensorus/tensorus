@@ -20,6 +20,9 @@ T = TypeVar('T', bound=BaseModel)
 logger = logging.getLogger("tensorus.mcp.client")
 logger.setLevel(logging.INFO)
 
+# Default public MCP server hosted on HuggingFace Spaces
+DEFAULT_MCP_URL = "https://tensorus-mcp.hf.space/mcp/"
+
 class MCPResponseError(Exception):
     """Generic exception for MCP response errors"""
     pass
@@ -31,9 +34,14 @@ class TensorusMCPClient:
         self._client = FastMCPClient(transport)
 
     @staticmethod
-    def from_http(url: str) -> TensorusMCPClient:
-        """Factory using Streamable HTTP transport"""
-        transport = StreamableHttpTransport(url=url) # Updated class name usage
+    def from_http(url: str = DEFAULT_MCP_URL) -> TensorusMCPClient:
+        """Factory using Streamable HTTP transport.
+
+        Args:
+            url: Base URL of the MCP server. Defaults to the public
+                HuggingFace deployment.
+        """
+        transport = StreamableHttpTransport(url=url.rstrip("/"))
         return TensorusMCPClient(transport)
 
     async def __aenter__(self) -> TensorusMCPClient:

@@ -633,7 +633,7 @@ You can also interact with the server using the included Python helper:
 from tensorus.mcp_client import TensorusMCPClient
 
 async def example_py():
-    async with TensorusMCPClient("http://localhost:7860/mcp") as client:
+    async with TensorusMCPClient.from_http() as client:
         tools = await client.list_datasets()
         print(tools)
 ```
