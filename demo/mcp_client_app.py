@@ -15,7 +15,6 @@ except ImportError:  # pragma: no cover - fallback for old versions
         TensorusMCPClient, "DEFAULT_MCP_URL", "https://tensorus-mcp.hf.space/mcp/"
     )
 
-
 def client_from_http(url: str) -> "TensorusMCPClient":
     """Create MCP client compatible with older tensorus versions."""
     if hasattr(TensorusMCPClient, "from_http"):
@@ -23,6 +22,7 @@ def client_from_http(url: str) -> "TensorusMCPClient":
     from fastmcp.client.transports import StreamableHttpTransport
 
     return TensorusMCPClient(StreamableHttpTransport(url=url.rstrip("/")))
+
 
 st.title("Tensorus MCP Client Demo")
 st.markdown("Interact with a Tensorus MCP server without writing any code.")
