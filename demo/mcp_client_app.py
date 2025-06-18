@@ -91,3 +91,20 @@ if st.button("Execute") and query:
         st.write(pd.DataFrame(result.results))
     else:
         st.json(result.results)
+
+if __name__ == "__main__":
+    print("Attempting to list datasets automatically...")
+    async def _list_for_testing():
+        async with TensorusMCPClient.from_http(url=DEFAULT_MCP_URL) as client: # Use DEFAULT_MCP_URL
+            print("Client created, listing datasets...")
+            datasets = await client.list_datasets()
+            print(f"Successfully listed datasets: {datasets}")
+            return datasets
+
+    try:
+        asyncio.run(_list_for_testing())
+        print("Test: Successfully listed datasets without HTTPStatusError.")
+    except Exception as e:
+        print(f"Test: Encountered an error: {e}")
+        # Re-raise the exception to ensure the test fails if an error occurs
+        raise

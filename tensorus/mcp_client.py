@@ -44,7 +44,8 @@ class TensorusMCPClient:
             url: Base URL of the MCP server. Defaults to the public
                 HuggingFace deployment.
         """
-        transport = StreamableHttpTransport(url=url.rstrip("/"))
+        final_url = url.rstrip("/") + "/"
+        transport = StreamableHttpTransport(url=final_url)
         return TensorusMCPClient(transport)
 
     async def __aenter__(self) -> TensorusMCPClient:
