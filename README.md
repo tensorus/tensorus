@@ -326,7 +326,8 @@ TENSORUS_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://
 ### Test Suite Dependencies
 
 The Python tests rely on packages from both `requirements.txt` and
-`requirements-test.txt`. Make sure these dependencies are installed
+`requirements-test.txt`. The latter includes `httpx` and other packages
+used by the MCP client tests. Make sure these dependencies are installed
 before running `pytest` by executing the provided setup script:
 
 ```bash
@@ -656,6 +657,8 @@ async def example_py():
         tools = await client.list_datasets()
         print(tools)
 ```
+For a complete list of client methods and example calls see
+[`docs/mcp_client.md`](docs/mcp_client.md).
 
 ## Completed Features
 
