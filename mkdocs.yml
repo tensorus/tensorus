@@ -4,6 +4,7 @@ nav:
     - Home: index.md
     - Installation: installation.md
     - API Guide: api_guide.md
+    - MCP Client: mcp_client.md
     - Metadata Schemas: metadata_schemas.md
 theme: readthedocs
 # Optional: Add repo_url, edit_uri for "Edit on GitHub" links if relevant
