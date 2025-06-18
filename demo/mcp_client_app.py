@@ -3,7 +3,17 @@ import json
 
 import pandas as pd
 import streamlit as st
-from tensorus.mcp_client import TensorusMCPClient, DEFAULT_MCP_URL
+
+# Tensorus releases prior to 0.2.0 did not export DEFAULT_MCP_URL at the
+# module level. We attempt to import it, but gracefully fall back to the class
+# attribute or a hard-coded default so the demo works with older versions.
+try:
+    from tensorus.mcp_client import TensorusMCPClient, DEFAULT_MCP_URL
+except ImportError:  # pragma: no cover - fallback for old versions
+    from tensorus.mcp_client import TensorusMCPClient
+    DEFAULT_MCP_URL = getattr(
+        TensorusMCPClient, "DEFAULT_MCP_URL", "https://tensorus-mcp.hf.space/mcp/"
+    )
 
 st.title("Tensorus MCP Client Demo")
 st.markdown("Interact with a Tensorus MCP server without writing any code.")
