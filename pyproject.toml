@@ -1,6 +1,6 @@
 [project]
 name = "tensorus"
-version = "0.0.4"
+version = "0.0.5"
 authors = [
     { name = "Tensorus Team", email = "ai@tensorus.com" }
 ]
