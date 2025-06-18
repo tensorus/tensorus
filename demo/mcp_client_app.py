@@ -3,7 +3,26 @@ import json
 
 import pandas as pd
 import streamlit as st
-from tensorus.mcp_client import TensorusMCPClient, DEFAULT_MCP_URL
+
+# Tensorus releases prior to 0.2.0 did not export DEFAULT_MCP_URL at the
+# module level. We attempt to import it, but gracefully fall back to the class
+# attribute or a hard-coded default so the demo works with older versions.
+try:
+    from tensorus.mcp_client import TensorusMCPClient, DEFAULT_MCP_URL
+except ImportError:  # pragma: no cover - fallback for old versions
+    from tensorus.mcp_client import TensorusMCPClient
+    DEFAULT_MCP_URL = getattr(
+        TensorusMCPClient, "DEFAULT_MCP_URL", "https://tensorus-mcp.hf.space/mcp/"
+    )
+
+
+def client_from_http(url: str) -> "TensorusMCPClient":
+    """Create MCP client compatible with older tensorus versions."""
+    if hasattr(TensorusMCPClient, "from_http"):
+        return TensorusMCPClient.from_http(url=url)
+    from fastmcp.client.transports import StreamableHttpTransport
+
+    return TensorusMCPClient(StreamableHttpTransport(url=url.rstrip("/")))
 
 st.title("Tensorus MCP Client Demo")
 st.markdown("Interact with a Tensorus MCP server without writing any code.")
@@ -19,7 +38,7 @@ st.header("Datasets")
 if st.button("List datasets"):
 
     async def _list():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with client_from_http(url=mcp_url) as client:
             return await client.list_datasets()
 
     result = run_async(_list())
@@ -30,7 +49,7 @@ create_name = st.text_input("New dataset name")
 if st.button("Create dataset") and create_name:
 
     async def _create():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with client_from_http(url=mcp_url) as client:
             return await client.create_dataset(create_name)
 
     res = run_async(_create())
@@ -53,7 +72,7 @@ if submitted:
         meta = json.loads(metadata) if metadata.strip() else None
 
         async def _ingest():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with client_from_http(url=mcp_url) as client:
                 return await client.ingest_tensor(
                     dataset_name=ingest_ds,
                     tensor_shape=shape,
@@ -73,7 +92,7 @@ query = st.text_input("Query", key="nql_query")
 if st.button("Execute") and query:
 
     async def _query():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with client_from_http(url=mcp_url) as client:
             return await client.execute_nql_query(query)
 
     result = run_async(_query())
