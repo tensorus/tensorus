@@ -248,6 +248,388 @@ class TensorusMCPClient:
             response_model=OperationResponse
         )
 
+    # --- Tensor descriptor CRUD ---
+    async def create_tensor_descriptor(
+        self, descriptor_data: dict
+    ) -> TensorDescriptorResponse:
+        return await self._call_json(
+            "create_tensor_descriptor",
+            {"descriptor_data": descriptor_data},
+            response_model=TensorDescriptorResponse,
+        )
+
+    async def list_tensor_descriptors(
+        self,
+        owner: Optional[str] = None,
+        data_type: Optional[str] = None,
+        tags_contain: Optional[str] = None,
+        lineage_version: Optional[str] = None,
+        lineage_source_type: Optional[str] = None,
+        comp_algorithm: Optional[str] = None,
+        comp_gpu_model: Optional[str] = None,
+        quality_confidence_gt: Optional[float] = None,
+        quality_noise_lt: Optional[float] = None,
+        rel_collection: Optional[str] = None,
+        rel_has_related_tensor_id: Optional[str] = None,
+        usage_last_accessed_before: Optional[str] = None,
+        usage_used_by_app: Optional[str] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        min_dimensions: Optional[int] = None,
+    ) -> list[dict]:
+        params = {}
+        if owner is not None:
+            params["owner"] = owner
+        if data_type is not None:
+            params["data_type"] = data_type
+        if tags_contain is not None:
+            params["tags_contain"] = tags_contain
+        if lineage_version is not None:
+            params["lineage.version"] = lineage_version
+        if lineage_source_type is not None:
+            params["lineage.source.type"] = lineage_source_type
+        if comp_algorithm is not None:
+            params["computational.algorithm"] = comp_algorithm
+        if comp_gpu_model is not None:
+            params["computational.hardware_info.gpu_model"] = comp_gpu_model
+        if quality_confidence_gt is not None:
+            params["quality.confidence_score_gt"] = quality_confidence_gt
+        if quality_noise_lt is not None:
+            params["quality.noise_level_lt"] = quality_noise_lt
+        if rel_collection is not None:
+            params["relational.collection"] = rel_collection
+        if rel_has_related_tensor_id is not None:
+            params["relational.has_related_tensor_id"] = rel_has_related_tensor_id
+        if usage_last_accessed_before is not None:
+            params["usage.last_accessed_before"] = usage_last_accessed_before
+        if usage_used_by_app is not None:
+            params["usage.used_by_app"] = usage_used_by_app
+        if name is not None:
+            params["name"] = name
+        if description is not None:
+            params["description"] = description
+        if min_dimensions is not None:
+            params["min_dimensions"] = min_dimensions
+
+        return await self._call_json(
+            "list_tensor_descriptors", params
+        )
+
+    async def get_tensor_descriptor(self, tensor_id: str) -> TensorDescriptorResponse:
+        return await self._call_json(
+            "get_tensor_descriptor",
+            {"tensor_id": tensor_id},
+            response_model=TensorDescriptorResponse,
+        )
+
+    async def update_tensor_descriptor(
+        self, tensor_id: str, updates: dict
+    ) -> TensorDescriptorResponse:
+        return await self._call_json(
+            "update_tensor_descriptor",
+            {"tensor_id": tensor_id, "updates": updates},
+            response_model=TensorDescriptorResponse,
+        )
+
+    async def delete_tensor_descriptor(self, tensor_id: str) -> MessageResponse:
+        return await self._call_json(
+            "delete_tensor_descriptor",
+            {"tensor_id": tensor_id},
+            response_model=MessageResponse,
+        )
+
+    # --- Semantic Metadata ---
+    async def create_semantic_metadata_for_tensor(
+        self, tensor_id: str, metadata_in: dict
+    ) -> SemanticMetadataResponse:
+        return await self._call_json(
+            "create_semantic_metadata_for_tensor",
+            {"tensor_id": tensor_id, "metadata_in": metadata_in},
+            response_model=SemanticMetadataResponse,
+        )
+
+    async def get_all_semantic_metadata_for_tensor(
+        self, tensor_id: str
+    ) -> list[SemanticMetadataResponse]:
+        return await self._call_json(
+            "get_all_semantic_metadata_for_tensor",
+            {"tensor_id": tensor_id},
+        )
+
+    async def update_named_semantic_metadata_for_tensor(
+        self, tensor_id: str, current_name: str, updates: dict
+    ) -> SemanticMetadataResponse:
+        return await self._call_json(
+            "update_named_semantic_metadata_for_tensor",
+            {
+                "tensor_id": tensor_id,
+                "current_name": current_name,
+                "updates": updates,
+            },
+            response_model=SemanticMetadataResponse,
+        )
+
+    async def delete_named_semantic_metadata_for_tensor(
+        self, tensor_id: str, name: str
+    ) -> MessageResponse:
+        return await self._call_json(
+            "delete_named_semantic_metadata_for_tensor",
+            {"tensor_id": tensor_id, "name": name},
+            response_model=MessageResponse,
+        )
+
+    # --- Extended Metadata ---
+    async def upsert_lineage_metadata(self, tensor_id: str, metadata_in: dict) -> MetadataResponse:
+        return await self._call_json(
+            "upsert_lineage_metadata",
+            {"tensor_id": tensor_id, "metadata_in": metadata_in},
+            response_model=MetadataResponse,
+        )
+
+    async def get_lineage_metadata(self, tensor_id: str) -> MetadataResponse:
+        return await self._call_json(
+            "get_lineage_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MetadataResponse,
+        )
+
+    async def patch_lineage_metadata(self, tensor_id: str, updates: dict) -> MetadataResponse:
+        return await self._call_json(
+            "patch_lineage_metadata",
+            {"tensor_id": tensor_id, "updates": updates},
+            response_model=MetadataResponse,
+        )
+
+    async def delete_lineage_metadata(self, tensor_id: str) -> MessageResponse:
+        return await self._call_json(
+            "delete_lineage_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MessageResponse,
+        )
+
+    async def upsert_computational_metadata(self, tensor_id: str, metadata_in: dict) -> MetadataResponse:
+        return await self._call_json(
+            "upsert_computational_metadata",
+            {"tensor_id": tensor_id, "metadata_in": metadata_in},
+            response_model=MetadataResponse,
+        )
+
+    async def get_computational_metadata(self, tensor_id: str) -> MetadataResponse:
+        return await self._call_json(
+            "get_computational_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MetadataResponse,
+        )
+
+    async def patch_computational_metadata(self, tensor_id: str, updates: dict) -> MetadataResponse:
+        return await self._call_json(
+            "patch_computational_metadata",
+            {"tensor_id": tensor_id, "updates": updates},
+            response_model=MetadataResponse,
+        )
+
+    async def delete_computational_metadata(self, tensor_id: str) -> MessageResponse:
+        return await self._call_json(
+            "delete_computational_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MessageResponse,
+        )
+
+    async def upsert_quality_metadata(self, tensor_id: str, metadata_in: dict) -> MetadataResponse:
+        return await self._call_json(
+            "upsert_quality_metadata",
+            {"tensor_id": tensor_id, "metadata_in": metadata_in},
+            response_model=MetadataResponse,
+        )
+
+    async def get_quality_metadata(self, tensor_id: str) -> MetadataResponse:
+        return await self._call_json(
+            "get_quality_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MetadataResponse,
+        )
+
+    async def patch_quality_metadata(self, tensor_id: str, updates: dict) -> MetadataResponse:
+        return await self._call_json(
+            "patch_quality_metadata",
+            {"tensor_id": tensor_id, "updates": updates},
+            response_model=MetadataResponse,
+        )
+
+    async def delete_quality_metadata(self, tensor_id: str) -> MessageResponse:
+        return await self._call_json(
+            "delete_quality_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MessageResponse,
+        )
+
+    async def upsert_relational_metadata(self, tensor_id: str, metadata_in: dict) -> MetadataResponse:
+        return await self._call_json(
+            "upsert_relational_metadata",
+            {"tensor_id": tensor_id, "metadata_in": metadata_in},
+            response_model=MetadataResponse,
+        )
+
+    async def get_relational_metadata(self, tensor_id: str) -> MetadataResponse:
+        return await self._call_json(
+            "get_relational_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MetadataResponse,
+        )
+
+    async def patch_relational_metadata(self, tensor_id: str, updates: dict) -> MetadataResponse:
+        return await self._call_json(
+            "patch_relational_metadata",
+            {"tensor_id": tensor_id, "updates": updates},
+            response_model=MetadataResponse,
+        )
+
+    async def delete_relational_metadata(self, tensor_id: str) -> MessageResponse:
+        return await self._call_json(
+            "delete_relational_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MessageResponse,
+        )
+
+    async def upsert_usage_metadata(self, tensor_id: str, metadata_in: dict) -> MetadataResponse:
+        return await self._call_json(
+            "upsert_usage_metadata",
+            {"tensor_id": tensor_id, "metadata_in": metadata_in},
+            response_model=MetadataResponse,
+        )
+
+    async def get_usage_metadata(self, tensor_id: str) -> MetadataResponse:
+        return await self._call_json(
+            "get_usage_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MetadataResponse,
+        )
+
+    async def patch_usage_metadata(self, tensor_id: str, updates: dict) -> MetadataResponse:
+        return await self._call_json(
+            "patch_usage_metadata",
+            {"tensor_id": tensor_id, "updates": updates},
+            response_model=MetadataResponse,
+        )
+
+    async def delete_usage_metadata(self, tensor_id: str) -> MessageResponse:
+        return await self._call_json(
+            "delete_usage_metadata",
+            {"tensor_id": tensor_id},
+            response_model=MessageResponse,
+        )
+
+    # --- Search and Aggregation ---
+    async def search_tensors(
+        self, text_query: str, fields_to_search: Optional[str] = None
+    ) -> list[dict]:
+        params = {"text_query": text_query}
+        if fields_to_search is not None:
+            params["fields_to_search"] = fields_to_search
+        return await self._call_json("search_tensors", params)
+
+    async def aggregate_tensors(
+        self, group_by_field: str, agg_function: str, agg_field: Optional[str] = None
+    ) -> list[dict]:
+        params = {
+            "group_by_field": group_by_field,
+            "agg_function": agg_function,
+        }
+        if agg_field is not None:
+            params["agg_field"] = agg_field
+        return await self._call_json("aggregate_tensors", params)
+
+    # --- Versioning and Lineage ---
+    async def create_tensor_version(self, tensor_id: str, version_request: dict) -> dict:
+        return await self._call_json(
+            "create_tensor_version",
+            {"tensor_id": tensor_id, "version_request": version_request},
+        )
+
+    async def list_tensor_versions(self, tensor_id: str) -> list[dict]:
+        return await self._call_json(
+            "list_tensor_versions",
+            {"tensor_id": tensor_id},
+        )
+
+    async def create_lineage_relationship(self, relationship_request: dict) -> dict:
+        return await self._call_json(
+            "create_lineage_relationship",
+            {"relationship_request": relationship_request},
+        )
+
+    async def get_parent_tensors(self, tensor_id: str) -> list[dict]:
+        return await self._call_json(
+            "get_parent_tensors",
+            {"tensor_id": tensor_id},
+        )
+
+    async def get_child_tensors(self, tensor_id: str) -> list[dict]:
+        return await self._call_json(
+            "get_child_tensors",
+            {"tensor_id": tensor_id},
+        )
+
+    # --- Import/Export and Management ---
+    async def export_tensor_metadata(self, tensor_ids_str: Optional[str] = None) -> list[dict]:
+        params = {}
+        if tensor_ids_str is not None:
+            params["tensor_ids"] = tensor_ids_str
+        return await self._call_json("export_tensor_metadata", params)
+
+    async def import_tensor_metadata(
+        self, import_data_payload: dict, conflict_strategy: Optional[str] = "skip"
+    ) -> dict:
+        return await self._call_json(
+            "import_tensor_metadata",
+            {
+                "import_data_payload": import_data_payload,
+                "conflict_strategy": conflict_strategy,
+            },
+        )
+
+    async def management_health_check(self) -> dict:
+        return await self._call_json("management_health_check")
+
+    async def management_get_metrics(self) -> dict:
+        return await self._call_json("management_get_metrics")
+
+    # --- Analytics ---
+    async def analytics_get_co_occurring_tags(
+        self, min_co_occurrence: Optional[int] = 2, limit: Optional[int] = 10
+    ) -> list[dict]:
+        params = {}
+        if min_co_occurrence is not None:
+            params["min_co_occurrence"] = min_co_occurrence
+        if limit is not None:
+            params["limit"] = limit
+        return await self._call_json("analytics_get_co_occurring_tags", params)
+
+    async def analytics_get_stale_tensors(
+        self, threshold_days: Optional[int] = 90, limit: Optional[int] = 100
+    ) -> list[dict]:
+        params = {}
+        if threshold_days is not None:
+            params["threshold_days"] = threshold_days
+        if limit is not None:
+            params["limit"] = limit
+        return await self._call_json("analytics_get_stale_tensors", params)
+
+    async def analytics_get_complex_tensors(
+        self,
+        min_parent_count: Optional[int] = None,
+        min_transformation_steps: Optional[int] = None,
+        limit: Optional[int] = 100,
+    ) -> list[dict]:
+        params = {}
+        if min_parent_count is not None:
+            params["min_parent_count"] = min_parent_count
+        if min_transformation_steps is not None:
+            params["min_transformation_steps"] = min_transformation_steps
+        if limit is not None:
+            params["limit"] = limit
+        return await self._call_json("analytics_get_complex_tensors", params)
+
     # --- Miscellaneous ---
     async def execute_nql_query(self, query: str) -> NQLQueryResponse:
         return await self._call_json(
@@ -289,5 +671,28 @@ class OperationResponse(BaseModel):
 
 class NQLQueryResponse(BaseModel):
     results: Any
+
+
+class TensorDescriptorResponse(BaseModel):
+    id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class SemanticMetadataResponse(BaseModel):
+    id: str
+    tensor_descriptor_id: str
+    name: Optional[str] = None
+    value: Any = None
+    type: Optional[str] = None
+
+
+class MetadataResponse(BaseModel):
+    tensor_descriptor_id: str
+    data: Any
+
+
+class MessageResponse(BaseModel):
+    message: str
 
 # End of TensorusMCPClient
