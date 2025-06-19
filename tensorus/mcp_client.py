@@ -6,7 +6,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, List, Optional, Sequence, Type, TypeVar, Union
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
+from pydantic_core import ValidationError
 from fastmcp.client import Client as FastMCPClient
 from fastmcp.exceptions import FastMCPError
 from fastmcp.client.transports import StreamableHttpTransport
@@ -125,7 +126,7 @@ class TensorusMCPClient:
 
             # 1. Attempt generic parsing first. This is the preferred path.
             try:
-                parsed_model = response_model.parse_obj(data)
+                parsed_model = response_model.model_validate(data)
                 return parsed_model
             except ValidationError as ve_generic:
                 primary_validation_error = ve_generic # Save the error from the primary attempt.
@@ -151,7 +152,7 @@ class TensorusMCPClient:
 
                     # If a specific handler prepared data_for_specific_parse, attempt to parse it.
                     if data_for_specific_parse is not None:
-                        parsed_model = response_model.parse_obj(data_for_specific_parse)
+                        parsed_model = response_model.model_validate(data_for_specific_parse)
                         logger.info(f"Successfully parsed response for tool '{name}' using a specific fallback handler after generic parse failed.")
                         return parsed_model
                     else:
@@ -446,7 +447,7 @@ class TensorusMCPClient:
             for item in raw_data_list:
                 try:
                     if isinstance(item, dict):
-                       parsed_list.append(SemanticMetadataResponse.parse_obj(item))
+                       parsed_list.append(SemanticMetadataResponse.model_validate(item))
                     else:
                        logger.warning(f"Item in list for get_all_semantic_metadata_for_tensor is not a dict: {type(item)}")
                        # Optionally skip, or add placeholder, or error out
