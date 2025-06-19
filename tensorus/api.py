@@ -112,9 +112,33 @@ async def add_security_headers(request: Request, call_next):
 
     return response
 
+from contextlib import asynccontextmanager
+
+# --- Lifespan Context Manager ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup logic
+    logger.info("Application startup: Starting metrics simulation loop.")
+    app.state.metrics_task = asyncio.create_task(_metrics_simulation_loop())
+
+    yield
+
+    # Shutdown logic
+    logger.info("Application shutdown: Stopping metrics simulation loop.")
+    task = getattr(app.state, "metrics_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            logger.info("Metrics simulation loop cancelled successfully.")
+        except Exception as e: # pragma: no cover
+            logger.error(f"Error during metrics simulation loop shutdown: {e}", exc_info=True)
+
 # --- FastAPI App Instance ---
 app = FastAPI(
     title="Tensorus API",
+    lifespan=lifespan, # Added lifespan manager
     description=(
         "API for interacting with the Tensorus Agentic Tensor Database/Data Lake. "
         "Includes dataset management, NQL querying, and agent control."
@@ -315,24 +339,7 @@ async def _metrics_simulation_loop() -> None:
 
         await asyncio.sleep(5)
 
-
-@app.on_event("startup")
-async def _start_simulation_task() -> None:
-    """Launch background metric simulation when the app starts."""
-    app.state.metrics_task = asyncio.create_task(_metrics_simulation_loop())
-
-
-@app.on_event("shutdown")
-async def _stop_simulation_task() -> None:
-    """Cancel background metric simulation on shutdown."""
-    task = getattr(app.state, "metrics_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:  # pragma: no cover
-            pass
-
+# Old event handlers are removed by not including them in the "replace" block.
 
 # --- Helper Functions (Tensor Conversion) ---
 def _validate_tensor_data(data: List[Any], shape: List[int]):
@@ -529,7 +536,7 @@ class OpsTensorListRequestParams(BaseModel):
     dim: int = Field(0, description="Dimension along which to concatenate or stack.")
 
 class OpsTensorListRequest(OpsBaseRequest): # For concatenate, stack
-    input_tensors: List[TensorRef] = Field(..., min_items=1, description="List of input tensors to concatenate or stack.")
+    input_tensors: List[TensorRef] = Field(..., min_length=1, description="List of input tensors to concatenate or stack.")
     params: OpsTensorListRequestParams
 
 # Einsum Operation Request Model
@@ -537,7 +544,7 @@ class OpsEinsumRequestParams(BaseModel):
     equation: str = Field(..., description="Einstein summation equation string (e.g., 'ij,jk->ik').")
 
 class OpsEinsumRequest(OpsBaseRequest):
-    input_tensors: List[TensorRef] = Field(..., min_items=1, description="List of input tensors for Einsum.")
+    input_tensors: List[TensorRef] = Field(..., min_length=1, description="List of input tensors for Einsum.")
     params: OpsEinsumRequestParams
 
 # Generic Operation Result Response Model
