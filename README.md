@@ -338,8 +338,8 @@ TENSORUS_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://
 
 The Python tests rely on packages from both `requirements.txt` and
 `requirements-test.txt`. The latter includes `httpx` and other packages
-used by the MCP client tests. Make sure these dependencies are installed
-before running `pytest` by executing the provided setup script:
+used by the MCP client tests. **Always run `./setup.sh` before executing
+`pytest` to install these requirements**:
 
 ```bash
 ./setup.sh
@@ -349,7 +349,7 @@ before running `pytest` by executing the provided setup script:
 
 Tensorus includes Python unit tests. To set up the environment and run them:
 
-1. Install all dependencies using:
+1. Install all dependencies using the setup script **before running any tests**:
 
     ```bash
     ./setup.sh
