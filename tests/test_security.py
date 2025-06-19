@@ -108,6 +108,35 @@ def test_unprotected_route_accessible(test_app_client: TestClient):
     assert response.status_code == 200
     assert response.json() == {"message": "Access granted freely"}
 
+
+def test_api_key_dev_mode_bypass_without_header(test_app_client: TestClient, monkeypatch):
+    valid_keys = ["devkey"]
+    header_name = "X-TEST-API-KEY"
+
+    monkeypatch.setattr(global_settings, 'VALID_API_KEYS', valid_keys)
+    monkeypatch.setattr(global_settings, 'API_KEY_HEADER_NAME', header_name)
+    monkeypatch.setattr(global_settings, 'API_DEV_MODE_ALLOW_NO_KEY', True)
+    monkeypatch.setattr(api_key_header_auth, 'name', header_name)
+
+    response = test_app_client.get("/protected")
+    assert response.status_code == 200
+    assert response.json() == {"message": "Access granted", "api_key_used": "dev_mode_no_key"}
+
+
+def test_api_key_dev_mode_with_invalid_header(test_app_client: TestClient, monkeypatch):
+    valid_keys = ["realkey"]
+    header_name = "X-TEST-API-KEY"
+
+    monkeypatch.setattr(global_settings, 'VALID_API_KEYS', valid_keys)
+    monkeypatch.setattr(global_settings, 'API_KEY_HEADER_NAME', header_name)
+    monkeypatch.setattr(global_settings, 'API_DEV_MODE_ALLOW_NO_KEY', True)
+    monkeypatch.setattr(api_key_header_auth, 'name', header_name)
+
+    headers = {header_name: "wrong"}
+    response = test_app_client.get("/protected", headers=headers)
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid API Key"}
+
 # To address the issue of `api_key_header_auth` being initialized with old settings values,
 # a more robust way is to have the dependency itself fetch `settings.API_KEY_HEADER_NAME` dynamically
 # or re-initialize `api_key_header_auth` within the test after monkeypatching settings.
