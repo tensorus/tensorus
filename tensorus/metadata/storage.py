@@ -1,6 +1,6 @@
 from typing import Dict, Optional, List, Any
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import logging
 
 from .schemas import (
@@ -686,7 +686,10 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
 
     def get_stale_tensors(self, threshold_days: int, limit: int = 100) -> List[TensorDescriptor]:
         stale_tensors: List[TensorDescriptor] = []
-        threshold_datetime = datetime.utcnow() - timedelta(days=threshold_days)
+        threshold_datetime = datetime.now(UTC) - timedelta(days=threshold_days)
+
+        # Define an offset-aware minimum datetime
+        aware_datetime_min = datetime.min.replace(tzinfo=UTC)
 
         for td_id, td in _tensor_descriptors.items():
             last_relevant_timestamp = td.last_modified_timestamp # Default to last_modified
@@ -700,7 +703,7 @@ class InMemoryStorage(MetadataStorage): # Inherit from MetadataStorage
 
         # Sort by the last_relevant_timestamp (oldest first) and apply limit
         stale_tensors.sort(key=lambda t: (
-            max(t.last_modified_timestamp, self.get_usage_metadata(t.tensor_id).last_accessed_at if self.get_usage_metadata(t.tensor_id) and self.get_usage_metadata(t.tensor_id).last_accessed_at else datetime.min)
+            max(t.last_modified_timestamp, self.get_usage_metadata(t.tensor_id).last_accessed_at if self.get_usage_metadata(t.tensor_id) and self.get_usage_metadata(t.tensor_id).last_accessed_at else aware_datetime_min)
         ))
         return stale_tensors[:limit]
 

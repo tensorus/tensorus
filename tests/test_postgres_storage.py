@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch, call
 pytest.importorskip("psycopg2")
 import psycopg2
 from uuid import uuid4, UUID
-from datetime import datetime
+from datetime import datetime, UTC
 import json
 
 from tensorus.metadata.postgres_storage import PostgresMetadataStorage
@@ -43,7 +43,7 @@ def pg_storage(mock_pool):
 def test_pg_add_tensor_descriptor(pg_storage: PostgresMetadataStorage, mock_pool):
     _, mock_cursor = mock_pool
     td_id = uuid4()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     ac = AccessControl(read=["user1"], write=["owner"])
     ci = CompressionInfo(algorithm="zstd", level=3)
 
@@ -75,7 +75,7 @@ def test_pg_add_tensor_descriptor(pg_storage: PostgresMetadataStorage, mock_pool
 def test_pg_get_tensor_descriptor(pg_storage: PostgresMetadataStorage, mock_pool):
     _, mock_cursor = mock_pool
     td_id = uuid4()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
 
     # Simulate a row returned from the database
     mock_db_row = {
@@ -116,7 +116,7 @@ def test_pg_add_semantic_metadata(pg_storage: PostgresMetadataStorage, mock_pool
     _, mock_cursor = mock_pool
     td_id = uuid4()
     # Simulate parent TD exists (get_tensor_descriptor is called by add_semantic_metadata)
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     mock_cursor.fetchone.return_value = {
         'tensor_id': td_id,
         'dimensionality': 1,
@@ -150,7 +150,7 @@ def test_pg_add_jsonb_lineage_metadata(pg_storage: PostgresMetadataStorage, mock
     _, mock_cursor = mock_pool
     td_id = uuid4()
     # Simulate parent TD exists for the _add_jsonb_metadata check
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     mock_cursor.fetchone.return_value = {
         'tensor_id': td_id,
         'dimensionality': 1,

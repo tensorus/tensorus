@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from uuid import uuid4, UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 # FastAPI application under test
 from tensorus.api import app
@@ -48,7 +48,7 @@ def analytics_setup_data(client_with_clean_storage_analytics: TestClient):
         (200, "user3", ["tagX", "tagY"]),
         (1, "user4", ["tagA", "tagB", "tagD"]),  # Recent; includes tagD for co-occurrence tests
     ]:
-        ts = datetime.utcnow() - timedelta(days=days_ago)
+        ts = datetime.now(UTC) - timedelta(days=days_ago)
         tds_data.append(
             {
                 "tensor_id": uuid4(),
@@ -70,11 +70,11 @@ def analytics_setup_data(client_with_clean_storage_analytics: TestClient):
 
     # Add UsageMetadata for some
     # td1 (index 0) -> accessed recently
-    storage.add_usage_metadata(UsageMetadata(tensor_id=created_tds[0].tensor_id, last_accessed_at=datetime.utcnow() - timedelta(days=1)))
+    storage.add_usage_metadata(UsageMetadata(tensor_id=created_tds[0].tensor_id, last_accessed_at=datetime.now(UTC) - timedelta(days=1)))
     # td2 (index 1) -> last_accessed_at is older than last_modified, but still stale by last_modified
-    storage.add_usage_metadata(UsageMetadata(tensor_id=created_tds[1].tensor_id, last_accessed_at=datetime.utcnow() - timedelta(days=150)))
+    storage.add_usage_metadata(UsageMetadata(tensor_id=created_tds[1].tensor_id, last_accessed_at=datetime.now(UTC) - timedelta(days=150)))
     # td3 (index 2) -> accessed very long ago, but modified recently
-    storage.add_usage_metadata(UsageMetadata(tensor_id=created_tds[2].tensor_id, last_accessed_at=datetime.utcnow() - timedelta(days=300)))
+    storage.add_usage_metadata(UsageMetadata(tensor_id=created_tds[2].tensor_id, last_accessed_at=datetime.now(UTC) - timedelta(days=300)))
 
 
     # Add LineageMetadata for some

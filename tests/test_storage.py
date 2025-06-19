@@ -1,6 +1,6 @@
 import pytest
 from uuid import uuid4, UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from tensorus.metadata.schemas import (
     TensorDescriptor, SemanticMetadata, DataType, StorageFormat,
@@ -207,7 +207,7 @@ def test_delete_relational_metadata(mem_storage: InMemoryStorage, base_td: Tenso
 # --- UsageMetadata Storage Tests ---
 @pytest.fixture
 def sample_um(base_td: TensorDescriptor) -> UsageMetadata:
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     return UsageMetadata(
         tensor_id=base_td.tensor_id,
         access_history=[UsageAccessRecord(user_or_service="tester", operation_type="read", accessed_at=now)],
@@ -224,7 +224,7 @@ def test_add_get_usage_metadata(mem_storage: InMemoryStorage, base_td: TensorDes
 
 def test_add_usage_metadata_upsert(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_um: UsageMetadata):
     mem_storage.add_usage_metadata(sample_um)
-    new_record = UsageAccessRecord(user_or_service="tester2", operation_type="write", accessed_at=datetime.utcnow())
+    new_record = UsageAccessRecord(user_or_service="tester2", operation_type="write", accessed_at=datetime.now(UTC))
     new_um = UsageMetadata(**{**sample_um.model_dump(), "access_history": [new_record]})
     mem_storage.add_usage_metadata(new_um)
     retrieved = mem_storage.get_usage_metadata(base_td.tensor_id)
@@ -234,7 +234,7 @@ def test_add_usage_metadata_upsert(mem_storage: InMemoryStorage, base_td: Tensor
 
 def test_update_usage_metadata(mem_storage: InMemoryStorage, base_td: TensorDescriptor, sample_um: UsageMetadata):
     mem_storage.add_usage_metadata(sample_um)
-    new_access = UsageAccessRecord(user_or_service="user_x", operation_type="read", accessed_at=datetime.utcnow())
+    new_access = UsageAccessRecord(user_or_service="user_x", operation_type="read", accessed_at=datetime.now(UTC))
     updated = mem_storage.update_usage_metadata(base_td.tensor_id, access_history=sample_um.access_history + [new_access])
     assert updated is not None
     assert updated.usage_frequency == 2

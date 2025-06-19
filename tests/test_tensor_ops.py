@@ -1028,6 +1028,7 @@ class TestTensorOps(unittest.TestCase):
         error = torch.norm(sample_tensor - reconstructed_torch_tensor) / torch.norm(sample_tensor)
         self.assertLess(error.item(), 0.8)
 
+    @pytest.mark.filterwarnings("ignore:Determining the TR-rank for the trivial case of a matrix")
     def test_tr_decomposition_valid_matrix_list_rank(self):
         """Test TR decomposition on a 2D matrix with a list rank."""
         shape = (5, 6)

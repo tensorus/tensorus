@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Dict, Optional, Any
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, UTC
 
 from pydantic import BaseModel, Field, field_validator, model_validator, ValidationInfo
 
@@ -49,8 +49,8 @@ class TensorDescriptor(BaseModel):
     shape: List[int]
     data_type: DataType
     storage_format: StorageFormat = StorageFormat.RAW
-    creation_timestamp: datetime = Field(default_factory=datetime.utcnow)
-    last_modified_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    creation_timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_modified_timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     owner: str # User or service ID
     access_control: AccessControl = Field(default_factory=AccessControl)
     byte_size: int = Field(..., ge=0)
@@ -86,7 +86,7 @@ class TensorDescriptor(BaseModel):
         return v
 
     def update_last_modified(self):
-        self.last_modified_timestamp = datetime.utcnow()
+        self.last_modified_timestamp = datetime.now(UTC)
 
 
 class SemanticMetadata(BaseModel):
@@ -129,7 +129,7 @@ class ParentTensorLink(BaseModel):
 class TransformationStep(BaseModel):
     operation: str # e.g., "normalize", "resize", "fft", "model_inference"
     parameters: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     operator: Optional[str] = None # User or service that performed the operation
     software_version: Optional[str] = None # e.g., library version used for the operation
 
@@ -214,7 +214,7 @@ class RelationalMetadata(BaseModel):
 
 # Part of UsageMetadata
 class UsageAccessRecord(BaseModel):
-    accessed_at: datetime = Field(default_factory=datetime.utcnow)
+    accessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     user_or_service: str
     operation_type: str # e.g., "read", "write", "query", "transform", "visualize"
     details: Optional[Dict[str, Any]] = Field(default_factory=dict) # e.g., query parameters, sub-selection info

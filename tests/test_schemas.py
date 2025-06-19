@@ -1,6 +1,6 @@
 import pytest
 from uuid import UUID, uuid4
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from pydantic import ValidationError
 
@@ -32,7 +32,7 @@ from tensorus.metadata.schemas import (
 # --- TensorDescriptor Enhanced Tests (from previous phase, plus new fields) ---
 
 def test_tensor_descriptor_enhanced_valid():
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     td = TensorDescriptor(
         tensor_id=uuid4(),
         dimensionality=2,
@@ -72,7 +72,7 @@ def test_transformation_step_valid():
     ts = TransformationStep(operation="normalized", parameters={"mean": 0, "std": 1}, operator="proc_x", software_version="lib-v1.2")
     assert ts.operation == "normalized"
     assert ts.parameters["mean"] == 0
-    assert ts.timestamp <= datetime.utcnow()
+    assert ts.timestamp <= datetime.now(UTC)
 
 def test_version_control_info_valid():
     vci = VersionControlInfo(repository="http://git.example.com/repo.git", commit_hash="abcdef123", branch="main")
@@ -179,7 +179,7 @@ def test_usage_access_record_valid():
 
 def test_usage_metadata_valid():
     tensor_id = uuid4()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     um = UsageMetadata(
         tensor_id=tensor_id,
         access_history=[
@@ -198,8 +198,8 @@ def test_usage_metadata_sync_validators():
     assert um.usage_frequency == 0
     assert um.last_accessed_at is None
 
-    t1 = datetime.utcnow() - timedelta(minutes=5)
-    t2 = datetime.utcnow()
+    t1 = datetime.now(UTC) - timedelta(minutes=5)
+    t2 = datetime.now(UTC)
 
     um.access_history.append(UsageAccessRecord(user_or_service="u1", operation_type="read", accessed_at=t1))
     # Re-validate or create new model to trigger validators in Pydantic v1/v2

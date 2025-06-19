@@ -92,7 +92,7 @@ class TensorusMCPClient:
                     # For now, let's assume the API returns {..., "data": actual_list_for_datasets_field}
                     # and DatasetListResponse expects {"datasets": actual_list_for_datasets_field}
                     # So, we need to re-wrap it:
-                    return response_model.parse_obj({"datasets": data['data']})
+                    return response_model.model_validate({"datasets": data['data']})
                 elif response_model == IngestTensorResponse and isinstance(data, dict) and data.get('success') is True and isinstance(data.get('data'), dict) and 'record_id' in data['data']:
                     # Specific handling for IngestTensorResponse if data is nested and needs id mapping
                     return IngestTensorResponse(id=data['data']['record_id'], status="ingested") # Assuming "ingested" is the status on success
@@ -100,11 +100,11 @@ class TensorusMCPClient:
                     # Map API's 'record_id' to model's 'id' field
                     data_for_model = data.copy()
                     data_for_model['id'] = data_for_model.pop('record_id')
-                    return TensorDetailsResponse.parse_obj(data_for_model)
+                    return TensorDetailsResponse.model_validate(data_for_model)
 
                 # For other models (like CreateDatasetResponse, DeleteDatasetResponse, etc.),
                 # parse the data directly. This assumes 'data' dictionary as a whole matches the response_model.
-                return response_model.parse_obj(data)
+                return response_model.model_validate(data)
             except ValidationError as ve:
                 logger.error(f"Response validation failed for {name}: {ve}. Data: {data}")
                 raise

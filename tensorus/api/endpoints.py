@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Any, Annotated, Literal
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, UTC
 
 from fastapi import APIRouter, HTTPException, Body, Query, Path
 from pydantic import BaseModel, ValidationError
@@ -285,8 +285,8 @@ async def create_tensor_version(
             if new_td_data.get("metadata") is None: new_td_data["metadata"] = {}
             new_td_data["metadata"][field] = value
     new_td_data.update({
-        "tensor_id": new_version_id, "creation_timestamp": datetime.utcnow(),
-        "last_modified_timestamp": datetime.utcnow(),
+        "tensor_id": new_version_id, "creation_timestamp": datetime.now(UTC),
+        "last_modified_timestamp": datetime.now(UTC),
         "owner": new_td_data.get('owner', parent_td.owner),
         "byte_size": new_td_data.get('byte_size', parent_td.byte_size)
     })
@@ -492,7 +492,7 @@ async def export_tensor_metadata(
         try: parsed_tensor_ids = [UUID(tid.strip()) for tid in tensor_ids_str.split(',')]
         except ValueError: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid UUID format in tensor_ids.")
     export_data = storage.get_export_data(tensor_ids=parsed_tensor_ids)
-    filename = f"tensorus_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    filename = f"tensorus_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.json"
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return JSONResponse(content=export_data.model_dump(mode="json"), headers=headers)
 
