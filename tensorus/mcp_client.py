@@ -33,11 +33,12 @@ class TensorusMCPClient:
     # Retain class attribute for backward compatibility
     DEFAULT_MCP_URL = DEFAULT_MCP_URL
 
-    def __init__(self, transport: Any) -> None:
+    def __init__(self, transport: Any, api_key: Optional[str] = None) -> None:
         self._client = FastMCPClient(transport)
+        self._api_key = api_key
 
     @staticmethod
-    def from_http(url: str = DEFAULT_MCP_URL) -> TensorusMCPClient:
+    def from_http(url: str = DEFAULT_MCP_URL, api_key: Optional[str] = None) -> TensorusMCPClient:
         """Factory using Streamable HTTP transport.
 
         Args:
@@ -46,7 +47,7 @@ class TensorusMCPClient:
         """
         final_url = url.rstrip("/") + "/"
         transport = StreamableHttpTransport(url=final_url)
-        return TensorusMCPClient(transport)
+        return TensorusMCPClient(transport, api_key=api_key)
 
     async def __aenter__(self) -> TensorusMCPClient:
         await self._client.__aenter__()
@@ -69,10 +70,14 @@ class TensorusMCPClient:
         """
         Internal helper to call a tool and parse JSON or Pydantic model.
         """
+        tool_args = args or {}
+        if self._api_key is not None:
+            tool_args["api_key"] = self._api_key
+
         try:
-            result = await self._client.call_tool(name, args or {})
+            result = await self._client.call_tool(name, tool_args)
         except FastMCPError as e:
-            logger.error(f"Tool call failed: {name} args={args} error={e}")
+            logger.error(f"Tool call failed: {name} args={tool_args} error={e}")
             raise MCPResponseError(str(e))
 
         if not result:

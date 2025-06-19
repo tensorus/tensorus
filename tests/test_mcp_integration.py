@@ -6,6 +6,7 @@ import httpx
 import asyncio
 import sys
 import uuid
+import os # Added import
 
 from tensorus.mcp_client import (
     TensorusMCPClient,
@@ -16,6 +17,8 @@ from tensorus.mcp_client import (
     TensorDetailsResponse,
     DeleteTensorResponse
 )
+
+TEST_API_KEY = "test_integration_key_123abc" # Added test API key
 
 @pytest_asyncio.fixture(scope="session")
 async def mcp_servers():
@@ -29,16 +32,26 @@ async def mcp_servers():
 
     try:
         print("\nStarting FastAPI backend...")
+        api_env = os.environ.copy()
+        api_env["TENSORUS_VALID_API_KEYS"] = TEST_API_KEY
         api_process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "tensorus.api:app", "--port", "8000", "--log-level", "warning"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            env=api_env
         )
 
         print("Starting MCP server...")
         mcp_server_process = subprocess.Popen(
-            [sys.executable, "tensorus/mcp_server.py", "--port", "7860", "--api-url", api_url, "--transport", "streamable-http"],
+            [
+                sys.executable,
+                "tensorus/mcp_server.py",
+                "--port", "7860",
+                "--api-url", api_url,
+                "--transport", "streamable-http",
+                "--mcp-api-key", TEST_API_KEY
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
@@ -54,9 +67,14 @@ async def mcp_servers():
             while time.time() - start_time < max_wait_total:
                 try:
                     try:
-                        test_client = TensorusMCPClient.from_http(url=mcp_url)
+                        # Client used for readiness check does not need API key for list_datasets if it's public
+                        # However, if list_datasets becomes protected, this check might need an api_key.
+                        # For now, assuming list_datasets called by the fixture for readiness check
+                        # doesn't strictly require the key from the client perspective for this simple check.
+                        # The key purpose here is to ensure the *servers* are configured with keys.
+                        test_client = TensorusMCPClient.from_http(url=mcp_url, api_key=TEST_API_KEY)
                         async with test_client:
-                            await test_client.list_datasets()
+                            await test_client.list_datasets() # list_datasets itself doesn't take api_key param
                         print("MCP server responded to list_datasets. Ready.")
                         mcp_ready = True
                         break
@@ -135,7 +153,7 @@ async def mcp_servers():
 async def test_list_datasets_integration(mcp_servers):
     _, mcp_url = mcp_servers
 
-    async with TensorusMCPClient.from_http(url=mcp_url) as client:
+    async with TensorusMCPClient.from_http(url=mcp_url, api_key=TEST_API_KEY) as client:
         datasets_response = await client.list_datasets()
         assert isinstance(datasets_response, DatasetListResponse), f"Expected DatasetListResponse, got {type(datasets_response)}"
         assert 'count_ds' in datasets_response.datasets
@@ -146,7 +164,7 @@ async def test_create_and_delete_dataset_integration(mcp_servers):
     _, mcp_url = mcp_servers
     dataset_name = f"test_dataset_integration_{uuid.uuid4()}"
 
-    async with TensorusMCPClient.from_http(url=mcp_url) as client:
+    async with TensorusMCPClient.from_http(url=mcp_url, api_key=TEST_API_KEY) as client:
         # Create dataset
         create_response = await client.create_dataset(dataset_name)
         assert isinstance(create_response, CreateDatasetResponse)
@@ -181,7 +199,7 @@ async def test_ingest_and_get_tensor_integration(mcp_servers):
     tensor_data = [[1.0, 2.0], [3.0, 4.0]]
     metadata = {"source": "integration_test", "version": 1.0}
 
-    async with TensorusMCPClient.from_http(url=mcp_url) as client:
+    async with TensorusMCPClient.from_http(url=mcp_url, api_key=TEST_API_KEY) as client:
         # Create dataset
         create_ds_response = await client.create_dataset(dataset_name)
         assert create_ds_response.success is True
