@@ -271,6 +271,29 @@ async with TensorusMCPClient.from_http("https://tensorus-mcp.hf.space/mcp/") as 
 Generic HTTP requests won't work because the server expects the MCP protocol
 with `Accept: text/event-stream`.
 
+## Demo Mode
+
+For demonstration or testing purposes, the server can be run in demo mode. In this mode, it uses pre-configured mock data for tool responses and does not connect to the live backend API, nor does it require an API key.
+
+To start the server in demo mode, use the `--demo-mode` flag:
+
+```bash
+python tensorus/mcp_server.py --demo-mode
+```
+
+## API Key Management
+
+When not running in demo mode, many tools that interact with the Tensorus backend API require authentication via an API key.
+
+There are two ways to provide an API key:
+
+1.  **Global API Key**: Set a global API key when starting the MCP server using the `--mcp-api-key` argument. This key will be used by default for all tool calls.
+    ```bash
+    python tensorus/mcp_server.py --mcp-api-key YOUR_API_KEY_HERE
+    ```
+2.  **Per-Tool API Key**: Some tools allow you to pass an `api_key` parameter directly in the tool invocation. This can override the global key or provide a key if no global one is set.
+
+Consult the specific tool's description (e.g., via the tool list in Claude Desktop or by inspecting its docstring) to see if it requires an API key. The server will return an error message if an API key is needed but not provided.
 
 ### Running the Agents (Examples)
 
@@ -632,6 +655,18 @@ The MCP server provides tools for various Tensorus functionalities. Below is an 
     *   `tensorus_apply_einsum`: Applies Einstein summation.
 
 *Note on Tensor Operations via MCP:* Input tensors are referenced by their `dataset_name` and `record_id`. The result is typically stored as a new tensor, and the MCP tool returns details of this new result tensor (like its `record_id`).
+
+### Diagnostic Tools
+
+These tools help you check the status of the MCP server and its connection to the backend.
+
+*   **`mcp_server_status()`**:
+    *   Description: Checks the MCP server's current operational status, mode (live or demo), and API key configuration.
+    *   Usage: Call this tool to get a JSON response with server status details.
+
+*   **`backend_connectivity_test()`**:
+    *   Description: Tests connectivity to the backend API's `/health` endpoint. In demo mode, it returns a mock success response. In live mode, it attempts a real connection and reports the outcome.
+    *   Usage: Call this tool to verify if the server can communicate with the backend.
 
 ### Example Client Interaction (Conceptual)
 
