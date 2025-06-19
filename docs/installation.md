@@ -69,6 +69,12 @@ Tensorus is configured via environment variables. Key variables include:
 *   `TENSORUS_API_KEY_HEADER_NAME`: HTTP header name for the API key (default: `X-API-KEY`).
 *   `TENSORUS_MINIMAL_IMPORT`: Set to any value to skip importing the optional
     `tensorus-models` package for a lightweight installation.
+*   `NQL_USE_LLM`: Set to `true` to enable the Gemini-based natural query
+    parser. Requires `GOOGLE_API_KEY`.
+*   `NQL_LLM_MODEL`: (Optional) Gemini model name (default
+    `gemini-2.0-flash`).
+*   `GOOGLE_API_KEY`: Your key for Google AI Studio. If not provided or the
+    model fails to load, Tensorus falls back to regex parsing.
 
 ### JWT Authentication (Conceptual - For Future Use)
 *   `TENSORUS_AUTH_JWT_ENABLED`: `True` or `False` (default `False`).

@@ -424,10 +424,21 @@ Chat" page in the Streamlit UI.
 ### Enabling LLM rewriting
 
 Set `NQL_USE_LLM=true` to enable parsing of free‑form queries with
-Google's Gemini model. The agent sends the current dataset schema and
-your query to Gemini 2.0 Flash via `langchain-google`. Set
-`NQL_LLM_MODEL` (defaults to `gemini-2.0-flash`) to choose the model
-version. This may download model weights on first use.
+Google's Gemini model. Provide your API key in the `GOOGLE_API_KEY`
+environment variable and optionally set `NQL_LLM_MODEL` (defaults to
+`gemini-2.0-flash`) to choose the model version. The agent sends the
+current dataset schema and your query to Gemini via
+`langchain-google`. If the model or key are unavailable the agent
+silently falls back to the regex-based parser.
+
+Example query using the LLM parser:
+
+```text
+show me all images containing a dog from dataset animals where source is "mobile"
+```
+
+This phrasing is more natural than the regex format and will be
+rewritten into a structured NQL query by Gemini.
 
 ## Agent Details
 
