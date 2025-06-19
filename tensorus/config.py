@@ -62,6 +62,8 @@ class SettingsV1(BaseSettings):
     VALID_API_KEYS: list[str] | str = []
     API_KEY_HEADER_NAME: str = "X-API-KEY"
     AUDIT_LOG_PATH: str = "tensorus_audit.log"
+    # Development mode: allow requests without an API key.
+    API_DEV_MODE_ALLOW_NO_KEY: bool = False
 
 
 

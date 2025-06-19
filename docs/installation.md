@@ -67,6 +67,7 @@ Tensorus is configured via environment variables. Key variables include:
 *   `TENSORUS_POSTGRES_DSN`: Alternative DSN connection string for PostgreSQL.
 *   `TENSORUS_VALID_API_KEYS`: List of valid API keys. Values can be a comma-separated string (e.g., `key1,key2,anotherkey`) or a JSON array. If no keys are required, set this to `[]`.
 *   `TENSORUS_API_KEY_HEADER_NAME`: HTTP header name for the API key (default: `X-API-KEY`).
+*   `TENSORUS_API_DEV_MODE_ALLOW_NO_KEY`: Set to `True` to bypass the API key requirement when no key is provided (for development). Default is `False`.
 *   `TENSORUS_MINIMAL_IMPORT`: Set to any value to skip importing the optional
     `tensorus-models` package for a lightweight installation.
 *   `NQL_USE_LLM`: Set to `true` to enable the Gemini-based natural query
