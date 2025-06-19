@@ -24,8 +24,11 @@ Future Enhancements:
 import re
 import logging
 import math
+import os
 import torch
 from typing import List, Dict, Any, Optional, Callable, Tuple
+
+from .llm_parser import LLMParser, NQLQuery, FilterClause, QueryCondition
 
 from .tensor_storage import TensorStorage, DatasetNotFoundError
 
@@ -51,19 +54,18 @@ class NQLAgent:
         if not isinstance(tensor_storage, TensorStorage):
             raise TypeError("tensor_storage must be an instance of TensorStorage")
         self.tensor_storage = tensor_storage
-        self.use_llm = use_llm
+        env_flag = os.getenv("NQL_USE_LLM")
+        self.use_llm = use_llm or (str(env_flag).lower() in {"1", "true", "yes"})
+
+        self.llm_model_name = os.getenv("NQL_LLM_MODEL", "gemini-2.0-flash")
         if self.use_llm:
-            if llm_pipeline is None:
-                try:
-                    from transformers import pipeline
-                    self.llm_pipeline = pipeline("text2text-generation")
-                except Exception as e:
-                    logger.error(f"Failed to initialize default LLM pipeline: {e}")
-                    self.llm_pipeline = None
-            else:
-                self.llm_pipeline = llm_pipeline
+            try:
+                self.llm_parser = LLMParser(model_name=self.llm_model_name)
+            except Exception as e:
+                logger.error(f"Failed to initialize LLM parser: {e}")
+                self.llm_parser = None
         else:
-            self.llm_pipeline = None
+            self.llm_parser = None
 
         # --- Compile Regex Patterns for Query Parsing ---
         # Pattern to match variations of "get/show/find [all] X from dataset Y"
@@ -104,6 +106,13 @@ class NQLAgent:
 
         logger.info("NQLAgent initialized with basic regex patterns.")
 
+    def _schema_snapshot(self) -> Dict[str, Any]:
+        """Return current dataset schemas for LLM context."""
+        info = {}
+        for name, ds in self.tensor_storage.datasets.items():
+            info[name] = ds.get("schema")
+        return info
+
 
     def _parse_operator_and_value(self, op_str: str, val_str: str, is_string_literal: bool) -> Tuple[Callable, Any]:
         """
@@ -138,22 +147,58 @@ class NQLAgent:
                 value = val_str
         return op_func, value
 
+    def _execute_parsed_query(self, parsed: NQLQuery) -> Dict[str, Any]:
+        """Execute an ``NQLQuery`` produced by the LLM parser."""
+        dataset_name = parsed.dataset
 
-    def _llm_rewrite_query(self, query: str) -> str:
-        """Rewrite a query using the configured LLM pipeline."""
-        if not self.llm_pipeline:
-            return query
+        def op_func(op: str):
+            return {
+                "=": lambda a, b: a == b,
+                "==": lambda a, b: a == b,
+                "!=": lambda a, b: a != b,
+                "<": lambda a, b: a < b,
+                "<=": lambda a, b: a <= b,
+                ">": lambda a, b: a > b,
+                ">=": lambda a, b: a >= b,
+            }.get(op)
+
+        def build_clause_fn(clause: FilterClause) -> Callable[[Dict[str, Any]], bool]:
+            cond_fns = []
+            for cond in clause.conditions:
+                func = op_func(cond.operator)
+                if func is None:
+                    continue
+                key = cond.key
+                val = cond.value
+
+                def f(meta, func=func, key=key, val=val):
+                    return func(meta.get(key), val)
+
+                cond_fns.append(f)
+
+            if clause.joiner.upper() == "OR":
+                return lambda meta: any(fn(meta) for fn in cond_fns)
+            return lambda meta: all(fn(meta) for fn in cond_fns)
+
+        clause_fns = [build_clause_fn(c) for c in parsed.filters]
+
+        def query_fn(tensor: torch.Tensor, meta: Dict[str, Any]) -> bool:
+            return all(fn(meta) for fn in clause_fns)
+
         try:
-            result = self.llm_pipeline(query)
-            if isinstance(result, list) and result:
-                result = result[0].get("generated_text") or result[0].get("translation_text")
-            return str(result).strip()
+            results = self.tensor_storage.query(dataset_name, query_fn)
+            return {
+                "success": True,
+                "message": f"LLM query executed. Found {len(results)} matching records.",
+                "count": len(results),
+                "results": results,
+            }
         except Exception as e:
-            logger.error(f"LLM rewrite failed: {e}")
-            return query
+            logger.error(f"Failed executing parsed query: {e}")
+            return {"success": False, "message": str(e), "count": None, "results": None}
 
 
-    def process_query(self, query: str, _rewrite_attempted: bool = False) -> Dict[str, Any]:
+    def process_query(self, query: str) -> Dict[str, Any]:
         """
         Processes a natural language query string.
 
@@ -403,10 +448,10 @@ class NQLAgent:
         # --- No Match Found ---
         logger.warning(f"Query did not match any known patterns: '{query}'")
 
-        if self.use_llm and not _rewrite_attempted:
-            rewritten = self._llm_rewrite_query(query)
-            if rewritten and rewritten != query:
-                return self.process_query(rewritten, _rewrite_attempted=True)
+        if self.use_llm and self.llm_parser:
+            parsed = self.llm_parser.parse(query, self._schema_snapshot())
+            if parsed:
+                return self._execute_parsed_query(parsed)
 
         return {
             "success": False,

@@ -423,11 +423,11 @@ Chat" page in the Streamlit UI.
 
 ### Enabling LLM rewriting
 
-Set `NQL_USE_LLM=true` before starting the API server or Streamlit UI to enable
-experimental LLM rewriting of natural language queries. Optionally specify a
-model with `NQL_LLM_MODEL=<model-name>` (e.g., `google/flan-t5-base`). This
-feature relies on the heavy `transformers` dependency and may trigger a model
-download the first time it runs, which can take some time.
+Set `NQL_USE_LLM=true` to enable parsing of free‑form queries with
+Google's Gemini model. The agent sends the current dataset schema and
+your query to Gemini 2.0 Flash via `langchain-google`. Set
+`NQL_LLM_MODEL` (defaults to `gemini-2.0-flash`) to choose the model
+version. This may download model weights on first use.
 
 ## Agent Details
 

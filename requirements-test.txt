@@ -16,3 +16,5 @@ transformers
 psycopg2-binary
 python-jose[cryptography]
 fastmcp>=0.2.0
+langchain-google>=0.1.1
+langchain-google-genai>=2.1.5
