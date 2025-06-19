@@ -7,9 +7,6 @@ from tensorus.config import settings
 from tensorus.audit import log_audit_event
 from jose import jwt, JWTError
 import requests
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 class MutableAPIKeyHeader(APIKeyHeader):
@@ -37,9 +34,6 @@ async def verify_api_key(api_key: Optional[str] = Security(api_key_header_auth))
         # Endpoints depending on this will be inaccessible unless keys are provided.
         pass
     if not api_key:
-        if settings.API_DEV_MODE_ALLOW_NO_KEY:
-            logger.warning("API_DEV_MODE_ALLOW_NO_KEY enabled - bypassing API key check")
-            return "dev_mode_no_key"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API Key"
