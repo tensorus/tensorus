@@ -28,7 +28,31 @@ class MCPResponseError(Exception):
     pass
 
 class TensorusMCPClient:
-    """High-level client for the Tensorus MCP server with typed, prompt, sync, and streaming support."""
+    """High-level client for the Tensorus MCP server with typed, prompt, sync, and streaming support.
+
+    API Key Handling:
+    The Tensorus MCP server (`mcp_server.py`) can be configured with a global API key
+    (via the `--mcp-api-key` command-line argument) that it uses for requests
+    to its backend (e.g., the Tensorus Core API). This is a server-side setup.
+
+    Additionally, many tools exposed by the MCP server are defined to accept an
+    `api_key` argument. If these tools require an API key for the backend, and
+    the MCP server is not using a global key, this key must be provided in the
+    tool call.
+
+    Note: Most methods in the current version of `TensorusMCPClient` do not
+    explicitly include an `api_key` parameter to be passed to the server-side tools.
+    If you encounter authorization errors or tools fail due to missing API keys,
+    you may need to:
+    1. Ensure the deployed MCP server is configured with the appropriate global
+       API key for its backend.
+    2. Modify the specific `TensorusMCPClient` methods you are using to accept
+       an `api_key` argument and include it in the payload passed to `_call_json`.
+       For example, for a tool 'example_tool', the call would be
+       `self._call_json("example_tool", {"arg1": "value1", "api_key": "your_key"}, ...)`.
+    Always check the API key requirements of the specific MCP server deployment
+    and its backend Tensorus Core API.
+    """
 
     # Retain class attribute for backward compatibility
     DEFAULT_MCP_URL = DEFAULT_MCP_URL
@@ -66,48 +90,101 @@ class TensorusMCPClient:
         args: Optional[dict] = None,
         response_model: Type[T] | None = None
     ) -> Union[dict, T, None]:
-        """
-        Internal helper to call a tool and parse JSON or Pydantic model.
-        """
         try:
+            # Ensure args is not None for the call_tool itself for consistency, though FastMCPClient might handle None.
             result = await self._client.call_tool(name, args or {})
         except FastMCPError as e:
-            logger.error(f"Tool call failed: {name} args={args} error={e}")
-            raise MCPResponseError(str(e))
+            error_str = str(e).lower()
+            log_message = f"Tool call failed for tool '{name}' with args {args or {{}}}: {e}"
+            if "unauthorized" in error_str or "forbidden" in error_str or "authentication" in error_str:
+                log_message += " (Hint: This might be related to missing or incorrect API keys. Check server and tool requirements.)"
+            logger.error(log_message)
+            raise MCPResponseError(f"Tool call failed for tool '{name}' with args {args or {{}}}: {e}") from e
 
         if not result:
+            logger.warning(f"Tool call for '{name}' with args {args or {{}}} returned no result.")
             return None
+
         content = result[0]
         if not isinstance(content, TextContent):
-            raise TypeError(f"Unexpected content type: {type(content)}")
+            err_msg = f"Unexpected content type: {type(content)} for tool '{name}' with args {args or {{}}}. Expected TextContent. Received: {str(content)[:200]}"
+            logger.error(err_msg)
+            raise MCPResponseError(err_msg)
 
-        data = json.loads(content.text)
+        raw_response_text = content.text
+
+        try:
+            data = json.loads(raw_response_text)
+        except json.JSONDecodeError as e:
+            response_snippet = raw_response_text[:200] + ('...' if len(raw_response_text) > 200 else '')
+            logger.error(f"Failed to decode JSON response for tool '{name}' with args {args or {{}}}. Raw response snippet: '{response_snippet}'. Error: {e}")
+            raise MCPResponseError(f"Failed to decode JSON response for tool '{name}' with args {args or {{}}}. Raw response snippet: '{response_snippet}'.") from e
+
         if response_model:
-            try:
-                # Handle cases where the actual data for the model is nested
-                if isinstance(data, dict) and 'data' in data and response_model == DatasetListResponse :
-                    # Specific handling for DatasetListResponse if data is nested under 'data'
-                    # and the model itself expects a flat structure like {"datasets": []}
-                    # This might indicate an API inconsistency or a client model mismatch.
-                    # For now, let's assume the API returns {..., "data": actual_list_for_datasets_field}
-                    # and DatasetListResponse expects {"datasets": actual_list_for_datasets_field}
-                    # So, we need to re-wrap it:
-                    return response_model.parse_obj({"datasets": data['data']})
-                elif response_model == IngestTensorResponse and isinstance(data, dict) and data.get('success') is True and isinstance(data.get('data'), dict) and 'record_id' in data['data']:
-                    # Specific handling for IngestTensorResponse if data is nested and needs id mapping
-                    return IngestTensorResponse(id=data['data']['record_id'], status="ingested") # Assuming "ingested" is the status on success
-                elif response_model == TensorDetailsResponse and isinstance(data, dict) and 'record_id' in data:
-                    # Map API's 'record_id' to model's 'id' field
-                    data_for_model = data.copy()
-                    data_for_model['id'] = data_for_model.pop('record_id')
-                    return TensorDetailsResponse.parse_obj(data_for_model)
+            primary_validation_error = None
 
-                # For other models (like CreateDatasetResponse, DeleteDatasetResponse, etc.),
-                # parse the data directly. This assumes 'data' dictionary as a whole matches the response_model.
-                return response_model.parse_obj(data)
-            except ValidationError as ve:
-                logger.error(f"Response validation failed for {name}: {ve}. Data: {data}")
-                raise
+            # 1. Attempt generic parsing first. This is the preferred path.
+            try:
+                parsed_model = response_model.parse_obj(data)
+                return parsed_model
+            except ValidationError as ve_generic:
+                primary_validation_error = ve_generic # Save the error from the primary attempt.
+
+            # 2. If generic parsing failed (primary_validation_error is set), try specific handlers as fallbacks.
+            # These handlers are for known quirks or historical API response structures.
+            if primary_validation_error:
+                original_data_for_specific_parse = data # Keep original data reference
+                data_for_specific_parse = None # This will hold the data structure for a specific model if a handler matches
+
+                try:
+                    if response_model == DatasetListResponse and isinstance(original_data_for_specific_parse, dict) and 'data' in original_data_for_specific_parse and isinstance(original_data_for_specific_parse['data'], list):
+                        data_for_specific_parse = {"datasets": original_data_for_specific_parse['data']}
+                    elif response_model == IngestTensorResponse and isinstance(original_data_for_specific_parse, dict) and original_data_for_specific_parse.get('success') is True and isinstance(original_data_for_specific_parse.get('data'), dict) and 'record_id' in original_data_for_specific_parse['data']:
+                        # This handler constructs the model directly, not using parse_obj on a potentially incomplete dict.
+                        # Ensure record_id is string as per model.
+                        return IngestTensorResponse(id=str(original_data_for_specific_parse['data']['record_id']), status="ingested")
+                    elif response_model == TensorDetailsResponse and isinstance(original_data_for_specific_parse, dict) and 'record_id' in original_data_for_specific_parse:
+                        # This handler modifies the data structure to fit TensorDetailsResponse.
+                        # It assumes other required fields (shape, dtype, data) are already in original_data_for_specific_parse.
+                        data_for_specific_parse = original_data_for_specific_parse.copy()
+                        data_for_specific_parse['id'] = str(data_for_specific_parse.pop('record_id'))
+
+                    # If a specific handler prepared data_for_specific_parse, attempt to parse it.
+                    if data_for_specific_parse is not None:
+                        parsed_model = response_model.parse_obj(data_for_specific_parse)
+                        logger.info(f"Successfully parsed response for tool '{name}' using a specific fallback handler after generic parse failed.")
+                        return parsed_model
+                    else:
+                        # No specific handler matched, so the primary_validation_error from the generic attempt is the one to report.
+                        # Re-raise it to be caught by the final error handling block below.
+                        raise primary_validation_error
+
+                except ValidationError as ve_specific:
+                    # A specific handler was chosen, and its parse_obj attempt failed.
+                    # This ve_specific is now the most relevant error.
+                    primary_validation_error = ve_specific
+                # Note: Not catching other exceptions like KeyError here to keep it focused on ValidationError.
+                # If KeyErrors occur, they might lead to ValidationErrors if Pydantic models expect those fields.
+
+            # 3. If primary_validation_error is still set, it means all attempts (generic and applicable specific fallbacks) failed.
+            if primary_validation_error:
+                response_snippet = raw_response_text[:500] + ('...' if len(raw_response_text) > 500 else '')
+                # Log the detailed error including the type of validation error and affected fields if available from Pydantic's error.
+                error_log_message = (
+                    f"Response validation failed for tool '{name}' with args {args or {{}}}. "
+                    f"Error: {primary_validation_error}. "
+                    f"Raw response snippet: '{response_snippet}'"
+                )
+                logger.error(error_log_message)
+
+                # The error raised to the caller should be informative. str(primary_validation_error) is often user-friendly.
+                raise MCPResponseError(
+                    f"Failed to parse response for tool '{name}' with args {args or {{}}}. "
+                    f"Validation Error: {str(primary_validation_error)}. "
+                    f"Raw response snippet: '{response_snippet}'"
+                ) from primary_validation_error
+
+        # If response_model was None, return the raw JSON data.
         return data
 
     async def call_tool_stream(
@@ -142,10 +219,18 @@ class TensorusMCPClient:
 
     # --- Dataset management ---
     async def list_datasets(self) -> list[str]:
-        return await self._call_json(
+        response_data = await self._call_json(
             "tensorus_list_datasets",
             response_model=DatasetListResponse
         )
+        if response_data is None: # Check for None first
+             logger.warning("list_datasets received no data from _call_json.")
+             return []
+        if isinstance(response_data, DatasetListResponse): # Then check for type
+            return response_data.datasets
+        # If not None and not DatasetListResponse, it's an unexpected type
+        logger.error(f"list_datasets received unexpected data type: {type(response_data)}")
+        return []
 
     def list_datasets_sync(self) -> list[str]:
         """Sync wrapper for list_datasets"""
@@ -351,10 +436,30 @@ class TensorusMCPClient:
     async def get_all_semantic_metadata_for_tensor(
         self, tensor_id: str
     ) -> list[SemanticMetadataResponse]:
-        return await self._call_json(
-            "get_all_semantic_metadata_for_tensor",
-            {"tensor_id": tensor_id},
+        raw_data_list = await self._call_json(
+            "get_all_semantic_metadata_for_tensor", # Tool name
+            {"tensor_id": tensor_id} # Arguments
+            # No response_model, so _call_json returns raw dict/list
         )
+        if isinstance(raw_data_list, list):
+            parsed_list = []
+            for item in raw_data_list:
+                try:
+                    if isinstance(item, dict):
+                       parsed_list.append(SemanticMetadataResponse.parse_obj(item))
+                    else:
+                       logger.warning(f"Item in list for get_all_semantic_metadata_for_tensor is not a dict: {type(item)}")
+                       # Optionally skip, or add placeholder, or error out
+                except ValidationError as e:
+                    logger.error(f"Failed to parse item in get_all_semantic_metadata_for_tensor: {item}. Error: {e}")
+                    # Optionally skip, or add placeholder, or error out
+            return parsed_list
+        elif raw_data_list is None:
+            logger.warning(f"get_all_semantic_metadata_for_tensor for {tensor_id} received no data.")
+            return []
+        else:
+            logger.error(f"get_all_semantic_metadata_for_tensor for {tensor_id} received unexpected data type: {type(raw_data_list)}. Expected list.")
+            return [] # Or raise error
 
     async def update_named_semantic_metadata_for_tensor(
         self, tensor_id: str, current_name: str, updates: dict
