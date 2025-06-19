@@ -11,6 +11,8 @@ from typing import Any, Optional, Sequence, Dict
 
 from pydantic import Field
 
+from tensorus.config import settings
+
 import httpx
 from fastmcp import FastMCP
 try:
@@ -25,54 +27,75 @@ except ImportError:  # pragma: no cover - support older fastmcp versions
     PromptMessage = Message = Any  # type: ignore
 
 API_BASE_URL = "https://tensorus-core.hf.space"
+GLOBAL_API_KEY: Optional[str] = None
 
 server = FastMCP(name="Tensorus FastMCP")
 
 
-async def _post(path: str, payload: dict, params: Optional[Dict[str, Any]] = None) -> dict:
+async def _post(path: str, payload: dict, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
     try:
+        headers = {}
+        actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
+        if actual_api_key:
+            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE_URL}{path}", json=payload, params=params)
+            response = await client.post(f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
         return {"error": str(exc)}
 
 
-async def _get(path: str, params: Optional[Dict[str, Any]] = None) -> dict:
+async def _get(path: str, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
     try:
+        headers = {}
+        actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
+        if actual_api_key:
+            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE_URL}{path}", params=params)
+            response = await client.get(f"{API_BASE_URL}{path}", params=params, headers=headers)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
         return {"error": str(exc)}
 
 
-async def _put(path: str, payload: dict, params: Optional[Dict[str, Any]] = None) -> dict:
+async def _put(path: str, payload: dict, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
     try:
+        headers = {}
+        actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
+        if actual_api_key:
+            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.put(f"{API_BASE_URL}{path}", json=payload, params=params)
+            response = await client.put(f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
         return {"error": str(exc)}
 
 
-async def _delete(path: str) -> dict:
+async def _delete(path: str, api_key: Optional[str] = None) -> dict:
     try:
+        headers = {}
+        actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
+        if actual_api_key:
+            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.delete(f"{API_BASE_URL}{path}")
+            response = await client.delete(f"{API_BASE_URL}{path}", headers=headers)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
         return {"error": str(exc)}
 
 
-async def _patch(path: str, payload: dict, params: Optional[Dict[str, Any]] = None) -> dict:
+async def _patch(path: str, payload: dict, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
     try:
+        headers = {}
+        actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
+        if actual_api_key:
+            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.patch(f"{API_BASE_URL}{path}", json=payload, params=params)
+            response = await client.patch(f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as exc:  # pragma: no cover - network failures
@@ -117,6 +140,7 @@ async def save_tensor(
     tensor_dtype: str,
     tensor_data: Any,
     metadata: Optional[dict] = None,
+    api_key: Optional[str] = None,
 ) -> TextContent:
     """Save a tensor to a dataset."""
     payload = {
@@ -125,7 +149,7 @@ async def save_tensor(
         "data": tensor_data,
         "metadata": metadata,
     }
-    result = await _post(f"/datasets/{dataset_name}/ingest", payload)
+    result = await _post(f"/datasets/{dataset_name}/ingest", payload, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -137,9 +161,9 @@ async def get_tensor(dataset_name: str, record_id: str) -> TextContent:
 
 
 @server.tool()
-async def execute_nql_query(query: str) -> TextContent:
+async def execute_nql_query(query: str, api_key: Optional[str] = None) -> TextContent:
     """Execute a Natural Query Language query."""
-    result = await _post("/query", {"query": query})
+    result = await _post("/query", {"query": query}, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -153,16 +177,16 @@ async def tensorus_list_datasets() -> TextContent:
 
 
 @server.tool(name="tensorus_create_dataset")
-async def tensorus_create_dataset(dataset_name: str) -> TextContent:
+async def tensorus_create_dataset(dataset_name: str, api_key: Optional[str] = None) -> TextContent:
     """Create a new dataset."""
-    result = await _post("/datasets/create", {"name": dataset_name})
+    result = await _post("/datasets/create", {"name": dataset_name}, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 @server.tool(name="tensorus_delete_dataset")
-async def tensorus_delete_dataset(dataset_name: str) -> TextContent:
+async def tensorus_delete_dataset(dataset_name: str, api_key: Optional[str] = None) -> TextContent:
     """Delete an existing dataset."""
-    result = await _delete(f"/datasets/{dataset_name}")
+    result = await _delete(f"/datasets/{dataset_name}", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -175,6 +199,7 @@ async def tensorus_ingest_tensor(
     tensor_dtype: str,
     tensor_data: Any,
     metadata: Optional[dict] = None,
+    api_key: Optional[str] = None,
 ) -> TextContent:
     """Ingest a new tensor into a dataset."""
     payload = {
@@ -183,7 +208,7 @@ async def tensorus_ingest_tensor(
         "data": tensor_data,
         "metadata": metadata,
     }
-    result = await _post(f"/datasets/{dataset_name}/ingest", payload)
+    result = await _post(f"/datasets/{dataset_name}/ingest", payload, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -195,9 +220,9 @@ async def tensorus_get_tensor_details(dataset_name: str, record_id: str) -> Text
 
 
 @server.tool(name="tensorus_delete_tensor")
-async def tensorus_delete_tensor(dataset_name: str, record_id: str) -> TextContent:
+async def tensorus_delete_tensor(dataset_name: str, record_id: str, api_key: Optional[str] = None) -> TextContent:
     """Delete a tensor from a dataset."""
-    result = await _delete(f"/datasets/{dataset_name}/tensors/{record_id}")
+    result = await _delete(f"/datasets/{dataset_name}/tensors/{record_id}", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -206,49 +231,50 @@ async def tensorus_update_tensor_metadata(
     dataset_name: str,
     record_id: str,
     new_metadata: dict,
+    api_key: Optional[str] = None,
 ) -> TextContent:
     """Replace metadata for a specific tensor."""
     payload = {"new_metadata": new_metadata}
-    result = await _put(f"/datasets/{dataset_name}/tensors/{record_id}/metadata", payload)
+    result = await _put(f"/datasets/{dataset_name}/tensors/{record_id}/metadata", payload, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 # --- Tensor Operation Tools ---
 
 @server.tool(name="tensorus_apply_unary_operation")
-async def tensorus_apply_unary_operation(operation: str, request_payload: dict) -> TextContent:
+async def tensorus_apply_unary_operation(operation: str, request_payload: dict, api_key: Optional[str] = None) -> TextContent:
     """Apply a unary TensorOps operation (e.g., log, reshape)."""
-    result = await _post(f"/ops/{operation}", request_payload)
+    result = await _post(f"/ops/{operation}", request_payload, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 @server.tool(name="tensorus_apply_binary_operation")
-async def tensorus_apply_binary_operation(operation: str, request_payload: dict) -> TextContent:
+async def tensorus_apply_binary_operation(operation: str, request_payload: dict, api_key: Optional[str] = None) -> TextContent:
     """Apply a binary TensorOps operation (e.g., add, subtract)."""
-    result = await _post(f"/ops/{operation}", request_payload)
+    result = await _post(f"/ops/{operation}", request_payload, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 @server.tool(name="tensorus_apply_list_operation")
-async def tensorus_apply_list_operation(operation: str, request_payload: dict) -> TextContent:
+async def tensorus_apply_list_operation(operation: str, request_payload: dict, api_key: Optional[str] = None) -> TextContent:
     """Apply a TensorOps list operation such as concatenate or stack."""
-    result = await _post(f"/ops/{operation}", request_payload)
+    result = await _post(f"/ops/{operation}", request_payload, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 @server.tool(name="tensorus_apply_einsum")
-async def tensorus_apply_einsum(request_payload: dict) -> TextContent:
+async def tensorus_apply_einsum(request_payload: dict, api_key: Optional[str] = None) -> TextContent:
     """Apply an einsum operation."""
-    result = await _post("/ops/einsum", request_payload)
+    result = await _post("/ops/einsum", request_payload, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 # --- Tensor Descriptor Tools ---
 
 @server.tool()
-async def create_tensor_descriptor(descriptor_data: Dict) -> TextContent:
+async def create_tensor_descriptor(descriptor_data: Dict, api_key: Optional[str] = None) -> TextContent:
     """Create a new tensor descriptor."""
-    result = await _post("/tensor_descriptors/", descriptor_data)
+    result = await _post("/tensor_descriptors/", descriptor_data, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -318,25 +344,25 @@ async def get_tensor_descriptor(tensor_id: str) -> TextContent:
 
 
 @server.tool()
-async def update_tensor_descriptor(tensor_id: str, updates: Dict) -> TextContent:
+async def update_tensor_descriptor(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
     """Update a tensor descriptor by its ID."""
-    result = await _put(f"/tensor_descriptors/{tensor_id}", updates)
+    result = await _put(f"/tensor_descriptors/{tensor_id}", updates, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 @server.tool()
-async def delete_tensor_descriptor(tensor_id: str) -> TextContent:
+async def delete_tensor_descriptor(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
     """Delete a tensor descriptor by its ID."""
-    result = await _delete(f"/tensor_descriptors/{tensor_id}")
+    result = await _delete(f"/tensor_descriptors/{tensor_id}", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 # --- Semantic Metadata Tools ---
 
 @server.tool()
-async def create_semantic_metadata_for_tensor(tensor_id: str, metadata_in: Dict) -> TextContent:
+async def create_semantic_metadata_for_tensor(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
     """Create semantic metadata for a given tensor descriptor."""
-    result = await _post(f"/tensor_descriptors/{tensor_id}/semantic/", metadata_in)
+    result = await _post(f"/tensor_descriptors/{tensor_id}/semantic/", metadata_in, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -348,16 +374,16 @@ async def get_all_semantic_metadata_for_tensor(tensor_id: str) -> TextContent:
 
 
 @server.tool()
-async def update_named_semantic_metadata_for_tensor(tensor_id: str, current_name: str, updates: Dict) -> TextContent:
+async def update_named_semantic_metadata_for_tensor(tensor_id: str, current_name: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
     """Update a named piece of semantic metadata for a given tensor descriptor."""
-    result = await _put(f"/tensor_descriptors/{tensor_id}/semantic/{current_name}", updates)
+    result = await _put(f"/tensor_descriptors/{tensor_id}/semantic/{current_name}", updates, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
 @server.tool()
-async def delete_named_semantic_metadata_for_tensor(tensor_id: str, name: str) -> TextContent:
+async def delete_named_semantic_metadata_for_tensor(tensor_id: str, name: str, api_key: Optional[str] = None) -> TextContent:
     """Delete a named piece of semantic metadata for a given tensor descriptor."""
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/semantic/{name}")
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/semantic/{name}", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -365,9 +391,9 @@ async def delete_named_semantic_metadata_for_tensor(tensor_id: str, name: str) -
 
 # --- Lineage Metadata Tools ---
 @server.tool()
-async def upsert_lineage_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+async def upsert_lineage_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
     """Upsert lineage metadata for a given tensor descriptor."""
-    result = await _post(f"/tensor_descriptors/{tensor_id}/lineage/", metadata_in)
+    result = await _post(f"/tensor_descriptors/{tensor_id}/lineage/", metadata_in, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
@@ -377,22 +403,22 @@ async def get_lineage_metadata(tensor_id: str) -> TextContent:
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def patch_lineage_metadata(tensor_id: str, updates: Dict) -> TextContent:
+async def patch_lineage_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
     """Patch lineage metadata for a given tensor descriptor."""
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/lineage/", updates)
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/lineage/", updates, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def delete_lineage_metadata(tensor_id: str) -> TextContent:
+async def delete_lineage_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
     """Delete lineage metadata for a given tensor descriptor."""
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/lineage/")
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/lineage/", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 # --- Computational Metadata Tools ---
 @server.tool()
-async def upsert_computational_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+async def upsert_computational_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
     """Upsert computational metadata for a given tensor descriptor."""
-    result = await _post(f"/tensor_descriptors/{tensor_id}/computational/", metadata_in)
+    result = await _post(f"/tensor_descriptors/{tensor_id}/computational/", metadata_in, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
@@ -402,22 +428,22 @@ async def get_computational_metadata(tensor_id: str) -> TextContent:
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def patch_computational_metadata(tensor_id: str, updates: Dict) -> TextContent:
+async def patch_computational_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
     """Patch computational metadata for a given tensor descriptor."""
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/computational/", updates)
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/computational/", updates, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def delete_computational_metadata(tensor_id: str) -> TextContent:
+async def delete_computational_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
     """Delete computational metadata for a given tensor descriptor."""
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/computational/")
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/computational/", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 # --- Quality Metadata Tools ---
 @server.tool()
-async def upsert_quality_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+async def upsert_quality_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
     """Upsert quality metadata for a given tensor descriptor."""
-    result = await _post(f"/tensor_descriptors/{tensor_id}/quality/", metadata_in)
+    result = await _post(f"/tensor_descriptors/{tensor_id}/quality/", metadata_in, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
@@ -427,22 +453,22 @@ async def get_quality_metadata(tensor_id: str) -> TextContent:
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def patch_quality_metadata(tensor_id: str, updates: Dict) -> TextContent:
+async def patch_quality_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
     """Patch quality metadata for a given tensor descriptor."""
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/quality/", updates)
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/quality/", updates, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def delete_quality_metadata(tensor_id: str) -> TextContent:
+async def delete_quality_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
     """Delete quality metadata for a given tensor descriptor."""
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/quality/")
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/quality/", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 # --- Relational Metadata Tools ---
 @server.tool()
-async def upsert_relational_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+async def upsert_relational_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
     """Upsert relational metadata for a given tensor descriptor."""
-    result = await _post(f"/tensor_descriptors/{tensor_id}/relational/", metadata_in)
+    result = await _post(f"/tensor_descriptors/{tensor_id}/relational/", metadata_in, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
@@ -452,22 +478,22 @@ async def get_relational_metadata(tensor_id: str) -> TextContent:
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def patch_relational_metadata(tensor_id: str, updates: Dict) -> TextContent:
+async def patch_relational_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
     """Patch relational metadata for a given tensor descriptor."""
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/relational/", updates)
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/relational/", updates, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def delete_relational_metadata(tensor_id: str) -> TextContent:
+async def delete_relational_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
     """Delete relational metadata for a given tensor descriptor."""
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/relational/")
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/relational/", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 # --- Usage Metadata Tools ---
 @server.tool()
-async def upsert_usage_metadata(tensor_id: str, metadata_in: Dict) -> TextContent:
+async def upsert_usage_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
     """Upsert usage metadata for a given tensor descriptor."""
-    result = await _post(f"/tensor_descriptors/{tensor_id}/usage/", metadata_in)
+    result = await _post(f"/tensor_descriptors/{tensor_id}/usage/", metadata_in, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
@@ -477,15 +503,15 @@ async def get_usage_metadata(tensor_id: str) -> TextContent:
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def patch_usage_metadata(tensor_id: str, updates: Dict) -> TextContent:
+async def patch_usage_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
     """Patch usage metadata for a given tensor descriptor."""
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/usage/", updates)
+    result = await _patch(f"/tensor_descriptors/{tensor_id}/usage/", updates, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 @server.tool()
-async def delete_usage_metadata(tensor_id: str) -> TextContent:
+async def delete_usage_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
     """Delete usage metadata for a given tensor descriptor."""
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/usage/")
+    result = await _delete(f"/tensor_descriptors/{tensor_id}/usage/", api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -524,9 +550,9 @@ async def aggregate_tensors(
 # --- Versioning and Lineage Tools ---
 
 @server.tool()
-async def create_tensor_version(tensor_id: str, version_request: Dict) -> TextContent:
+async def create_tensor_version(tensor_id: str, version_request: Dict, api_key: Optional[str] = None) -> TextContent:
     """Create a new version for a given tensor."""
-    result = await _post(f"/tensors/{tensor_id}/versions", version_request)
+    result = await _post(f"/tensors/{tensor_id}/versions", version_request, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -538,10 +564,10 @@ async def list_tensor_versions(tensor_id: str) -> TextContent:
 
 
 @server.tool()
-async def create_lineage_relationship(relationship_request: Dict) -> TextContent:
+async def create_lineage_relationship(relationship_request: Dict, api_key: Optional[str] = None) -> TextContent:
     """Create a lineage relationship between tensors."""
     # relationship_request should contain source_tensor_id, target_tensor_id, relationship_type, etc.
-    result = await _post("/lineage/relationships/", relationship_request)
+    result = await _post("/lineage/relationships/", relationship_request, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -581,11 +607,12 @@ async def export_tensor_metadata(tensor_ids_str: Optional[str] = None) -> TextCo
 @server.tool()
 async def import_tensor_metadata(
     import_data_payload: Dict,
-    conflict_strategy: Optional[str] = "skip"
+    conflict_strategy: Optional[str] = "skip",
+    api_key: Optional[str] = None,
 ) -> TextContent:
     """Import tensor metadata with a specified conflict strategy (skip or overwrite)."""
     params = {"conflict_strategy": conflict_strategy}
-    result = await _post("/tensors/import", payload=import_data_payload, params=params)
+    result = await _post("/tensors/import", payload=import_data_payload, params=params, api_key=api_key)
     return TextContent(type="text", text=json.dumps(result))
 
 
@@ -656,7 +683,7 @@ async def analytics_get_complex_tensors(
 
 
 def main() -> None:
-    global API_BASE_URL
+    global API_BASE_URL, GLOBAL_API_KEY
 
     parser = argparse.ArgumentParser(
         description="Run the Tensorus FastMCP server exposing dataset and tensor tools"
@@ -675,9 +702,11 @@ def main() -> None:
     parser.add_argument(
         "--api-url", default=API_BASE_URL, help="Base URL of the running FastAPI backend"
     )
+    parser.add_argument("--mcp-api-key", default=None, help="Global API key for the MCP server to use for backend requests")
     args = parser.parse_args()
 
     API_BASE_URL = args.api_url.rstrip("/")
+    GLOBAL_API_KEY = args.mcp_api_key
 
     if args.transport == "streamable-http":
         server.run(
