@@ -3,7 +3,6 @@ import importlib.util
 import pytest
 from unittest.mock import patch
 pytest.importorskip("torch")
-pytest.importorskip("transformers")
 import torch
 
 from fastapi.testclient import TestClient
@@ -16,12 +15,13 @@ api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 from tensorus.nql_agent import NQLAgent
 from tensorus.tensor_storage import TensorStorage
+from tensorus.llm_parser import LLMParser, NQLQuery
 
 
 @pytest.fixture
 def client_with_llm(monkeypatch):
-    with patch("transformers.pipeline") as mock_root, patch("transformers.pipelines.pipeline") as mock_pipe:
-        mock_root.return_value = mock_pipe.return_value = lambda q: [{"generated_text": "get all data from test_ds"}]
+    with patch("tensorus.nql_agent.LLMParser") as MockParser:
+        MockParser.return_value.parse.return_value = NQLQuery(dataset="test_ds")
         storage = TensorStorage(storage_path=None)
         storage.create_dataset("test_ds")
         storage.insert("test_ds", torch.tensor([1.0]), metadata={"record_id": "r1"})
