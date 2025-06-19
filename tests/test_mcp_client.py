@@ -79,6 +79,29 @@ def dummy_fast_client(monkeypatch):
     monkeypatch.setattr(mcp_client, "FastMCPClient", lambda transport: dummy)
     return dummy
 
+
+def _patch_transport(monkeypatch, capture_dict):
+    class DummyTransport:
+        def __init__(self, url, headers=None, **kwargs):
+            capture_dict["url"] = url
+            capture_dict["headers"] = headers
+
+    monkeypatch.setattr(mcp_client, "StreamableHttpTransport", DummyTransport)
+
+
+def test_from_http_with_token(dummy_fast_client, monkeypatch):
+    captured = {}
+    _patch_transport(monkeypatch, captured)
+    TensorusMCPClient.from_http("https://example.com", token="sek")
+    assert captured["headers"] == {"Authorization": "Bearer sek"}
+
+
+def test_from_http_without_token(dummy_fast_client, monkeypatch):
+    captured = {}
+    _patch_transport(monkeypatch, captured)
+    TensorusMCPClient.from_http("https://example.com")
+    assert captured["headers"] is None
+
 @pytest.mark.asyncio
 async def test_create_dataset(dummy_fast_client):
     async with TensorusMCPClient("dummy") as client:

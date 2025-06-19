@@ -62,15 +62,18 @@ class TensorusMCPClient:
         self._client = FastMCPClient(transport)
 
     @staticmethod
-    def from_http(url: str = DEFAULT_MCP_URL) -> TensorusMCPClient:
+    def from_http(url: str = DEFAULT_MCP_URL, token: Optional[str] = None) -> TensorusMCPClient:
         """Factory using Streamable HTTP transport.
 
         Args:
             url: Base URL of the MCP server. Defaults to the public
                 HuggingFace deployment.
+            token: Optional bearer token for accessing a private HuggingFace
+                Space or other authenticated deployment.
         """
         final_url = url.rstrip("/") + "/"
-        transport = StreamableHttpTransport(url=final_url)
+        headers = {"Authorization": f"Bearer {token}"} if token else None
+        transport = StreamableHttpTransport(url=final_url, headers=headers)
         return TensorusMCPClient(transport)
 
     async def __aenter__(self) -> TensorusMCPClient:
