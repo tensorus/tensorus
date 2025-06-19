@@ -18,6 +18,28 @@ Below is a summary of all available methods.  See the
 [API Guide](api_guide.md) and [API Endpoints](../README.md#api-endpoints) in the
 README for details on the REST endpoints each method calls.
 
+## Session Handshake
+
+Before making any tool calls, a client must obtain a session identifier from the
+MCP server. Issue an initial `GET` or `HEAD` request to `/mcp/` and capture the
+value of the `mcp-session-id` response header. This ID must then be included in
+the `mcp-session-id` header on all subsequent MCP requests.
+
+Example using `curl`:
+
+```bash
+# Fetch the session ID
+SESSION_ID=$(curl -i https://your-server.example/mcp/ \
+  | grep -Fi "mcp-session-id" | awk '{print $2}' | tr -d '\r')
+
+# Call a tool using the session header
+curl -X POST https://your-server.example/mcp/ \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  -H "mcp-session-id: $SESSION_ID" \
+  -d '{"method":"tools/list"}'
+```
+
 ## Dataset Management
 
 - `list_datasets()` – list existing datasets.

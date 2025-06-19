@@ -600,6 +600,7 @@ The Tensorus Model Context Protocol (MCP) Server allows external AI agents, LLM-
 *   **Language:** Python, using the `fastmcp` library.
 *   **Communication:** Typically uses stdio for communication with a single client.
 *   **Interface:** Exposes Tensorus capabilities as a set of "tools" that an MCP client can list and call.
+*   **Session Handshake:** Clients must first request `/mcp/` with `GET` or `HEAD` to receive an `mcp-session-id` header. Include this value in subsequent calls. See [Session Handshake](docs/mcp_client.md#session-handshake) for an example.
 
 ### Available Tools
 
