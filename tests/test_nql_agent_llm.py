@@ -22,7 +22,9 @@ def test_process_query_uses_llm(sample_storage):
         result = agent.process_query("unknown text")
         MockParser.return_value.parse.assert_called_once()
         assert result["success"]
-        assert result["count"] == 1
+        # Empty/non-actionable filters now correctly result in 0 count
+        assert result["count"] == 0
+        assert result["results"] == []
 
 
 def test_parse_failure_returns_error(sample_storage):

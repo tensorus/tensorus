@@ -40,7 +40,7 @@ class NQLAgent:
     """Parses simple natural language queries and executes them against TensorStorage."""
 
     def __init__(self, tensor_storage: TensorStorage, *, use_llm: bool = False,
-                 llm_pipeline: Optional[Callable] = None):
+                 llm_pipeline: Optional[Callable] = None, gemini_api_key: Optional[str] = None):
         """Initializes the NQL Agent.
 
         Args:
@@ -50,6 +50,7 @@ class NQLAgent:
             llm_pipeline: Optional text generation pipeline. If ``use_llm`` is
                 True and this is ``None`` a default ``transformers.pipeline`` is
                 created.
+            gemini_api_key: Optional Gemini API key to be passed to the LLMParser.
         """
         if not isinstance(tensor_storage, TensorStorage):
             raise TypeError("tensor_storage must be an instance of TensorStorage")
@@ -60,7 +61,7 @@ class NQLAgent:
         self.llm_model_name = os.getenv("NQL_LLM_MODEL", "gemini-2.0-flash")
         if self.use_llm:
             try:
-                self.llm_parser = LLMParser(model_name=self.llm_model_name)
+                self.llm_parser = LLMParser(model_name=self.llm_model_name, api_key=gemini_api_key)
             except Exception as e:
                 logger.error(f"Failed to initialize LLM parser: {e}")
                 self.llm_parser = None
@@ -169,15 +170,46 @@ class NQLAgent:
                 if func is None:
                     continue
                 key = cond.key
-                val = cond.value
+                raw_val = cond.value
 
-                def f(meta, func=func, key=key, val=val):
-                    return func(meta.get(key), val)
+                # Attempt to clean and convert value if it's a string and operator suggests numeric comparison
+                processed_val = raw_val
+                if isinstance(raw_val, str) and cond.operator in ["<", "<=", ">", ">=", "==", "!="]:
+                    cleaned_val = raw_val.replace("$", "").replace(",", "")
+                    try:
+                        processed_val = float(cleaned_val)
+                        if processed_val.is_integer():
+                            processed_val = int(processed_val)
+                    except ValueError:
+                        # Keep as string if conversion fails, comparison will likely fail gracefully or as per existing logic
+                        processed_val = raw_val
+
+                def f(meta, func=func, key=key, val=processed_val):
+                    # Ensure metadata value is also of a comparable type if possible
+                    meta_val = meta.get(key)
+                    if isinstance(val, (int, float)) and isinstance(meta_val, str):
+                        # If filter val is num but meta val is str, this is tricky.
+                        # Current _parse_operator_and_value handles this for regex path.
+                        # For LLM, we might need to be more robust or ensure LLM gives correct types.
+                        # For now, let existing logic try to handle or fail.
+                        pass
+                    elif isinstance(val, str) and isinstance(meta_val, (int, float)):
+                        # If filter val is str but meta val is num, try converting filter val if it looks numeric
+                        # This is partially handled by the processed_val logic above.
+                        pass
+
+                    return func(meta_val, val)
 
                 cond_fns.append(f)
 
+            if not cond_fns: # No conditions in this clause
+                # An empty AND clause should not match anything by itself.
+                # An empty OR clause also should not match anything.
+                return lambda meta: False
+
             if clause.joiner.upper() == "OR":
                 return lambda meta: any(fn(meta) for fn in cond_fns)
+            # Default is AND
             return lambda meta: all(fn(meta) for fn in cond_fns)
 
         clause_fns = [build_clause_fn(c) for c in parsed.filters]
@@ -186,6 +218,18 @@ class NQLAgent:
             return all(fn(meta) for fn in clause_fns)
 
         try:
+            # If there are no valid clauses to apply, it implies the query didn't resolve to any specific filters.
+            # This could mean the query was too vague or unrelated to the schema.
+            # Instead of returning all records, return none.
+            if not clause_fns or not any(c.conditions for c in parsed.filters):
+                logger.info(f"LLM query for dataset '{dataset_name}' resulted in no actionable filters. Returning 0 results.")
+                return {
+                    "success": True,
+                    "message": "Query processed, but no specific filters could be applied based on the dataset schema.",
+                    "count": 0,
+                    "results": [],
+                }
+
             results = self.tensor_storage.query(dataset_name, query_fn)
             return {
                 "success": True,

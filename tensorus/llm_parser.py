@@ -30,11 +30,17 @@ class NQLQuery(BaseModel):
 class LLMParser:
     """Parse natural language queries into ``NQLQuery`` objects using Gemini."""
 
-    def __init__(self, model_name: Optional[str] = None):
+    def __init__(self, model_name: Optional[str] = None, api_key: Optional[str] = None):
         model_name = model_name or os.getenv("NQL_LLM_MODEL", "gemini-2.0-flash")
         if ChatGoogleGenerativeAI is None:
             raise ImportError("langchain-google-genai is required for LLM parsing")
-        self.model = ChatGoogleGenerativeAI(model=model_name, temperature=0)
+
+        if api_key:
+            self.model = ChatGoogleGenerativeAI(model=model_name, temperature=0, google_api_key=api_key)
+        else:
+            # This will try to use Application Default Credentials or other implicit methods
+            self.model = ChatGoogleGenerativeAI(model=model_name, temperature=0)
+
         self.output_parser = PydanticOutputParser(pydantic_object=NQLQuery)
         self.prompt = ChatPromptTemplate.from_messages(
             [
