@@ -1920,6 +1920,38 @@ async def test_delete_named_semantic_metadata_for_tensor_with_api_key(monkeypatc
     assert isinstance(result, mcp_server.TextContent)
     assert json.loads(result.text) == response
 
+@pytest.mark.asyncio
+async def test_delete_named_semantic_metadata_for_tensor_with_global_key(monkeypatch):
+    global_key = "delete_named_sem_global"
+    original_global_key = mcp_server.GLOBAL_API_KEY
+    mcp_server.GLOBAL_API_KEY = global_key
+    try:
+        tensor_id = "tensor123"
+        name = "sem_meta_1_global"
+        response = {"message": f"Semantic metadata '{name}' for tensor descriptor '{tensor_id}' deleted successfully."}
+        url = f"{mcp_server.API_BASE_URL}/tensor_descriptors/{tensor_id}/semantic/{name}"
+        make_mock_client(monkeypatch, "delete", url, None, response, expected_headers={settings.API_KEY_HEADER_NAME: global_key})
+        result = await mcp_server.delete_named_semantic_metadata_for_tensor.fn(tensor_id=tensor_id, name=name)
+        assert isinstance(result, mcp_server.TextContent)
+        assert json.loads(result.text) == response
+    finally:
+        mcp_server.GLOBAL_API_KEY = original_global_key
+
+@pytest.mark.asyncio
+async def test_delete_named_semantic_metadata_for_tensor_no_key(monkeypatch):
+    original_global_key = mcp_server.GLOBAL_API_KEY
+    mcp_server.GLOBAL_API_KEY = None
+    try:
+        tensor_id = "tensor123"
+        name = "sem_meta_1_no_key"
+        response = {"message": f"Semantic metadata '{name}' for tensor descriptor '{tensor_id}' deleted successfully."}
+        url = f"{mcp_server.API_BASE_URL}/tensor_descriptors/{tensor_id}/semantic/{name}"
+        make_mock_client(monkeypatch, "delete", url, None, response, expected_headers={})
+        result = await mcp_server.delete_named_semantic_metadata_for_tensor.fn(tensor_id=tensor_id, name=name)
+        assert isinstance(result, mcp_server.TextContent)
+        assert json.loads(result.text) == response
+    finally:
+        mcp_server.GLOBAL_API_KEY = original_global_key
 
 @pytest.mark.asyncio
 async def test_prompt_functions(monkeypatch):
