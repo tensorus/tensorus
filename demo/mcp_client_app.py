@@ -19,6 +19,7 @@ st.title("Tensorus MCP Client Demo")
 st.markdown("Interact with a Tensorus MCP server without writing any code.")
 
 mcp_url = st.text_input("MCP server URL", DEFAULT_MCP_URL)
+api_key = st.text_input("API Key (Optional)", type="password", key="api_key_input")
 
 
 def run_async(coro):
@@ -40,7 +41,11 @@ st.header("Datasets")
 if st.button("List datasets"):
 
     async def _list():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.list_datasets()
 
     result = run_async(_list())
@@ -51,7 +56,11 @@ create_name = st.text_input("New dataset name")
 if st.button("Create dataset") and create_name:
 
     async def _create():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.create_dataset(create_name)
 
     res = run_async(_create())
@@ -74,7 +83,11 @@ if submitted:
         meta = json.loads(metadata) if metadata.strip() else None
 
         async def _ingest():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with TensorusMCPClient.from_http(
+                url=mcp_url,
+                auth_token=api_key if api_key else None,
+                auth_header_name="X-API-KEY"
+            ) as client:
                 return await client.ingest_tensor(
                     dataset_name=ingest_ds,
                     tensor_shape=shape,
@@ -94,7 +107,11 @@ query = st.text_input("Query", key="nql_query")
 if st.button("Execute") and query:
 
     async def _query():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.execute_nql_query(query)
 
     result = run_async(_query())
@@ -114,7 +131,11 @@ if submitted_create_td:
     data = parse_json_field(descriptor_data) or {}
 
     async def _create_td():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.create_tensor_descriptor(data)
 
     res = run_async(_create_td())
@@ -161,7 +182,11 @@ if submitted_list_tds:
     }
 
     async def _list_tds():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.list_tensor_descriptors(**{k: v for k, v in params.items() if v is not None})
 
     res = run_async(_list_tds())
@@ -174,7 +199,11 @@ with st.form("get_td"):
 
 if submitted_get_td:
     async def _get_td():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.get_tensor_descriptor(g_tensor_id)
 
     res = run_async(_get_td())
@@ -190,7 +219,11 @@ if submitted_update_td:
     updates_data = parse_json_field(updates) or {}
 
     async def _update_td():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.update_tensor_descriptor(u_tensor_id, updates_data)
 
     res = run_async(_update_td())
@@ -203,7 +236,11 @@ with st.form("delete_td"):
 
 if submitted_delete_td:
     async def _delete_td():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.delete_tensor_descriptor(d_tensor_id)
 
     res = run_async(_delete_td())
@@ -221,7 +258,11 @@ if submitted_sem_create:
     sem_payload = parse_json_field(sem_data) or {}
 
     async def _create_sem():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.create_semantic_metadata_for_tensor(sem_tensor_id, sem_payload)
 
     res = run_async(_create_sem())
@@ -234,7 +275,11 @@ with st.form("list_sem_meta"):
 
 if submitted_list_sem:
     async def _list_sem():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.get_all_semantic_metadata_for_tensor(list_sem_tensor_id)
 
     res = run_async(_list_sem())
@@ -251,7 +296,11 @@ if submitted_update_sem:
     updates_sem_data = parse_json_field(updates_sem) or {}
 
     async def _update_sem():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.update_named_semantic_metadata_for_tensor(
                 upd_sem_tensor_id, current_name, updates_sem_data
             )
@@ -267,7 +316,11 @@ with st.form("delete_sem_meta"):
 
 if submitted_delete_sem:
     async def _delete_sem():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.delete_named_semantic_metadata_for_tensor(del_sem_tensor_id, del_name)
 
     res = run_async(_delete_sem())
@@ -286,7 +339,11 @@ def metadata_forms(prefix: str, upsert_func, get_func, patch_func, delete_func):
         payload = parse_json_field(metadata_in) or {}
 
         async def _upsert():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with TensorusMCPClient.from_http(
+                url=mcp_url,
+                auth_token=api_key if api_key else None,
+                auth_header_name="X-API-KEY"
+            ) as client:
                 return await upsert_func(client, m_tensor_id, payload)
 
         res = run_async(_upsert())
@@ -298,7 +355,11 @@ def metadata_forms(prefix: str, upsert_func, get_func, patch_func, delete_func):
 
     if submitted_get:
         async def _get():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with TensorusMCPClient.from_http(
+                url=mcp_url,
+                auth_token=api_key if api_key else None,
+                auth_header_name="X-API-KEY"
+            ) as client:
                 return await get_func(client, g_id)
 
         res = run_async(_get())
@@ -313,7 +374,11 @@ def metadata_forms(prefix: str, upsert_func, get_func, patch_func, delete_func):
         upd = parse_json_field(updates) or {}
 
         async def _patch():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with TensorusMCPClient.from_http(
+                url=mcp_url,
+                auth_token=api_key if api_key else None,
+                auth_header_name="X-API-KEY"
+            ) as client:
                 return await patch_func(client, p_id, upd)
 
         res = run_async(_patch())
@@ -325,7 +390,11 @@ def metadata_forms(prefix: str, upsert_func, get_func, patch_func, delete_func):
 
     if submitted_del:
         async def _del():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with TensorusMCPClient.from_http(
+                url=mcp_url,
+                auth_token=api_key if api_key else None,
+                auth_header_name="X-API-KEY"
+            ) as client:
                 return await delete_func(client, d_id)
 
         res = run_async(_del())
@@ -382,7 +451,11 @@ with st.form("search_tensors"):
 
 if submitted_search:
     async def _search():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.search_tensors(text_query, fields_to_search or None)
 
     res = run_async(_search())
@@ -397,7 +470,11 @@ with st.form("aggregate_tensors"):
 
 if submitted_agg:
     async def _agg():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.aggregate_tensors(
                 group_by_field,
                 agg_function,
@@ -419,7 +496,11 @@ if submitted_version:
     vr = parse_json_field(version_request) or {}
 
     async def _create_ver():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.create_tensor_version(ver_tensor_id, vr)
 
     res = run_async(_create_ver())
@@ -432,7 +513,11 @@ with st.form("list_versions"):
 
 if submitted_list_ver:
     async def _list_ver():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.list_tensor_versions(list_ver_tensor_id)
 
     res = run_async(_list_ver())
@@ -447,7 +532,11 @@ if submitted_rel:
     req = parse_json_field(rel_request) or {}
 
     async def _create_rel():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.create_lineage_relationship(req)
 
     res = run_async(_create_rel())
@@ -460,7 +549,11 @@ with st.form("get_parents"):
 
 if submitted_parents:
     async def _parents():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.get_parent_tensors(parent_tensor_id)
 
     res = run_async(_parents())
@@ -473,7 +566,11 @@ with st.form("get_children"):
 
 if submitted_children:
     async def _children():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.get_child_tensors(child_tensor_id)
 
     res = run_async(_children())
@@ -488,7 +585,11 @@ with st.form("export_metadata"):
 
 if submitted_export:
     async def _export():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.export_tensor_metadata(tensor_ids_str or None)
 
     res = run_async(_export())
@@ -504,7 +605,11 @@ if submitted_import:
     payload = parse_json_field(import_payload) or {}
 
     async def _import():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.import_tensor_metadata(payload, conflict_strategy or None)
 
     res = run_async(_import())
@@ -514,7 +619,11 @@ col1, col2 = st.columns(2)
 with col1:
     if st.button("Management Health Check"):
         async def _health():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with TensorusMCPClient.from_http(
+                url=mcp_url,
+                auth_token=api_key if api_key else None,
+                auth_header_name="X-API-KEY"
+            ) as client:
                 return await client.management_health_check()
 
         st.json(run_async(_health()))
@@ -522,7 +631,11 @@ with col1:
 with col2:
     if st.button("Management Get Metrics"):
         async def _metrics():
-            async with TensorusMCPClient.from_http(url=mcp_url) as client:
+            async with TensorusMCPClient.from_http(
+                url=mcp_url,
+                auth_token=api_key if api_key else None,
+                auth_header_name="X-API-KEY"
+            ) as client:
                 return await client.management_get_metrics()
 
         st.json(run_async(_metrics()))
@@ -537,7 +650,11 @@ with st.form("analytics_co_tags"):
 
 if submitted_co:
     async def _co():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.analytics_get_co_occurring_tags(
                 int(min_co_occurrence) if min_co_occurrence else None,
                 int(limit_co) if limit_co else None,
@@ -553,7 +670,11 @@ with st.form("analytics_stale"):
 
 if submitted_stale:
     async def _stale():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.analytics_get_stale_tensors(
                 int(threshold_days) if threshold_days else None,
                 int(limit_stale) if limit_stale else None,
@@ -570,7 +691,11 @@ with st.form("analytics_complex"):
 
 if submitted_complex:
     async def _complex():
-        async with TensorusMCPClient.from_http(url=mcp_url) as client:
+        async with TensorusMCPClient.from_http(
+            url=mcp_url,
+            auth_token=api_key if api_key else None,
+            auth_header_name="X-API-KEY"
+        ) as client:
             return await client.analytics_get_complex_tensors(
                 int(min_parent_count) if min_parent_count else None,
                 int(min_steps) if min_steps else None,
@@ -582,7 +707,7 @@ if submitted_complex:
 if __name__ == "__main__":
     print("Attempting to list datasets automatically...")
     async def _list_for_testing():
-        async with TensorusMCPClient.from_http(url=DEFAULT_MCP_URL) as client: # Use DEFAULT_MCP_URL
+        async with TensorusMCPClient.from_http(url=DEFAULT_MCP_URL, auth_token=None) as client: # Use DEFAULT_MCP_URL
             print("Client created, listing datasets...")
             datasets = await client.list_datasets()
             print(f"Successfully listed datasets: {datasets}")

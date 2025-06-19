@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, List, Optional, Sequence, Type, TypeVar, Union
+from typing import Any, AsyncIterator, List, Optional, Sequence, Type, TypeVar, Union, Dict
 
 from pydantic import BaseModel, ValidationError
 from fastmcp.client import Client as FastMCPClient
@@ -37,15 +37,26 @@ class TensorusMCPClient:
         self._client = FastMCPClient(transport)
 
     @staticmethod
-    def from_http(url: str = DEFAULT_MCP_URL) -> TensorusMCPClient:
+    def from_http(
+        url: str = DEFAULT_MCP_URL,
+        auth_token: Optional[str] = None,
+        auth_header_name: str = "X-API-KEY"
+    ) -> TensorusMCPClient:
         """Factory using Streamable HTTP transport.
 
         Args:
             url: Base URL of the MCP server. Defaults to the public
                 HuggingFace deployment.
+            auth_token: Optional authentication token (e.g., API key).
+            auth_header_name: The name of the HTTP header to use for the auth token.
+                Defaults to "X-API-KEY".
         """
         final_url = url.rstrip("/") + "/"
-        transport = StreamableHttpTransport(url=final_url)
+        headers: Optional[Dict[str, str]] = None
+        if auth_token:
+            headers = {auth_header_name: auth_token}
+
+        transport = StreamableHttpTransport(url=final_url, headers=headers)
         return TensorusMCPClient(transport)
 
     async def __aenter__(self) -> TensorusMCPClient:

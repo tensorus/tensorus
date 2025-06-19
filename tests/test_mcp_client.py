@@ -1,8 +1,9 @@
 import json
 import pytest
+from unittest.mock import patch
 
 from tensorus import mcp_client
-from tensorus.mcp_client import TensorusMCPClient, TextContent
+from tensorus.mcp_client import TensorusMCPClient, TextContent, DEFAULT_MCP_URL
 
 
 class DummyFastClient:
@@ -102,3 +103,55 @@ async def test_additional_methods(monkeypatch):
         "export_tensor_metadata",
         "analytics_get_complex_tensors",
     ]
+
+
+@patch('tensorus.mcp_client.StreamableHttpTransport')
+async def test_from_http_auth_headers(mock_streamable_http_transport):
+    test_url_no_slash = "http://fake-mcp.com/api"
+    test_url_with_slash = "http://fake-mcp.com/api/" # Expected URL after processing
+    test_token = "mysecrettoken"
+    custom_header_name = "X-My-Token"
+
+    # Test with custom token and header name
+    TensorusMCPClient.from_http(
+        url=test_url_no_slash, # Use URL without trailing slash for input
+        auth_token=test_token,
+        auth_header_name=custom_header_name
+    )
+    mock_streamable_http_transport.assert_called_with(
+        url=test_url_with_slash,
+        headers={custom_header_name: test_token}
+    )
+
+    # Reset mock for the next call
+    mock_streamable_http_transport.reset_mock()
+
+    # Test with token and default header name ("X-API-KEY")
+    TensorusMCPClient.from_http(
+        url=test_url_no_slash, # Use URL without trailing slash for input
+        auth_token=test_token
+        # auth_header_name defaults to "X-API-KEY"
+    )
+    mock_streamable_http_transport.assert_called_with(
+        url=test_url_with_slash,
+        headers={"X-API-KEY": test_token}
+    )
+
+    # Reset mock for the next call
+    mock_streamable_http_transport.reset_mock()
+
+    # Test without token (headers should be None)
+    TensorusMCPClient.from_http(url=test_url_no_slash) # Use URL without trailing slash for input
+    mock_streamable_http_transport.assert_called_with(
+        url=test_url_with_slash,
+        headers=None
+    )
+
+    # Test with default URL and no token
+    mock_streamable_http_transport.reset_mock()
+    TensorusMCPClient.from_http() # Uses DEFAULT_MCP_URL
+    expected_default_url = DEFAULT_MCP_URL.rstrip("/") + "/"
+    mock_streamable_http_transport.assert_called_with(
+        url=expected_default_url,
+        headers=None
+    )
