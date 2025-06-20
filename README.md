@@ -664,6 +664,14 @@ These tools help you check the status of the MCP server and its connection to th
     *   Description: Checks the MCP server's current operational status, mode (live or demo), and API key configuration.
     *   Usage: Call this tool to get a JSON response with server status details.
 
+*   **`connection_test()`**:
+    *   Description: Lightweight connectivity check that simply returns `{"status": "ok"}`.
+    *   Usage: Call this tool to confirm the MCP server is reachable.
+
+*   **`backend_ping()`**:
+    *   Description: Calls the backend API's `/health` endpoint and returns the result (or demo data when in demo mode).
+    *   Usage: Use this when you want the raw response from the backend health check.
+
 *   **`backend_connectivity_test()`**:
     *   Description: Tests connectivity to the backend API's `/health` endpoint. In demo mode, it returns a mock success response. In live mode, it attempts a real connection and reports the outcome.
     *   Usage: Call this tool to verify if the server can communicate with the backend.
