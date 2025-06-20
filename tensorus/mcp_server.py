@@ -750,6 +750,23 @@ async def mcp_server_status() -> TextContent:
 
 
 @server.tool()
+async def connection_test() -> TextContent:
+    """Simple connectivity test returning a static ok status."""
+    return TextContent(type="text", text=json.dumps({"status": "ok"}))
+
+
+@server.tool()
+async def backend_ping() -> TextContent:
+    """Ping the backend `/health` endpoint and forward the response."""
+    if DEMO_MODE:
+        return TextContent(
+            type="text", text=json.dumps(DEMO_RESPONSES.get("/health", {"status": "healthy", "demo_mode": True}))
+        )
+    result = await _get("/health")
+    return TextContent(type="text", text=json.dumps(result))
+
+
+@server.tool()
 async def backend_connectivity_test() -> TextContent:
     """Test connectivity to the backend API.
     In demo mode, this will return a mock success response.
