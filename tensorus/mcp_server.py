@@ -59,9 +59,9 @@ async def _post(path: str, payload: dict, params: Optional[Dict[str, Any]] = Non
 
     except HTTPStatusError as exc:
         if exc.response.status_code == 401:
-            return {"error": "API key required", "message": "Operation requires an API key. If you are an administrator, set it via --mcp-api-key for global use or pass 'api_key' parameter in the tool call. In demo mode, this operation would use mock data."}
+            return {"error": "API key required"}
         elif exc.response.status_code == 403:
-            return {"error": "Access forbidden", "message": "You do not have permission for this action. The API key may be invalid, expired, or lack necessary privileges. If in demo mode, this check is bypassed."}
+            return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
             return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
@@ -93,9 +93,9 @@ async def _get(path: str, params: Optional[Dict[str, Any]] = None, api_key: Opti
 
     except HTTPStatusError as exc:
         if exc.response.status_code == 401:
-            return {"error": "API key required", "message": "Operation requires an API key. If you are an administrator, set it via --mcp-api-key for global use or pass 'api_key' parameter in the tool call. In demo mode, this operation would use mock data."}
+            return {"error": "API key required"}
         elif exc.response.status_code == 403:
-            return {"error": "Access forbidden", "message": "You do not have permission for this action. The API key may be invalid, expired, or lack necessary privileges. If in demo mode, this check is bypassed."}
+            return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
             return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
@@ -119,9 +119,9 @@ async def _put(path: str, payload: dict, params: Optional[Dict[str, Any]] = None
 
     except HTTPStatusError as exc:
         if exc.response.status_code == 401:
-            return {"error": "API key required", "message": "Operation requires an API key. If you are an administrator, set it via --mcp-api-key for global use or pass 'api_key' parameter in the tool call. In demo mode, this operation would use mock data."}
+            return {"error": "API key required"}
         elif exc.response.status_code == 403:
-            return {"error": "Access forbidden", "message": "You do not have permission for this action. The API key may be invalid, expired, or lack necessary privileges. If in demo mode, this check is bypassed."}
+            return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
             return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
@@ -145,9 +145,9 @@ async def _delete(path: str, api_key: Optional[str] = None) -> dict:
 
     except HTTPStatusError as exc:
         if exc.response.status_code == 401:
-            return {"error": "API key required", "message": "Operation requires an API key. If you are an administrator, set it via --mcp-api-key for global use or pass 'api_key' parameter in the tool call. In demo mode, this operation would use mock data."}
+            return {"error": "API key required"}
         elif exc.response.status_code == 403:
-            return {"error": "Access forbidden", "message": "You do not have permission for this action. The API key may be invalid, expired, or lack necessary privileges. If in demo mode, this check is bypassed."}
+            return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
             return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
@@ -171,9 +171,9 @@ async def _patch(path: str, payload: dict, params: Optional[Dict[str, Any]] = No
 
     except HTTPStatusError as exc:
         if exc.response.status_code == 401:
-            return {"error": "API key required", "message": "Operation requires an API key. If you are an administrator, set it via --mcp-api-key for global use or pass 'api_key' parameter in the tool call. In demo mode, this operation would use mock data."}
+            return {"error": "API key required"}
         elif exc.response.status_code == 403:
-            return {"error": "Access forbidden", "message": "You do not have permission for this action. The API key may be invalid, expired, or lack necessary privileges. If in demo mode, this check is bypassed."}
+            return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
             return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
