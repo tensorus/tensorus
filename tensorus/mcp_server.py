@@ -16,7 +16,8 @@ from tensorus.config import settings
 import httpx
 from httpx import HTTPStatusError
 from fastmcp import FastMCP
-from httpx import HTTPStatusError # Ensure this is kept from previous change
+from httpx import HTTPStatusError  # Ensure this is kept from previous change
+
 try:
     from fastmcp.prompts.prompt import PromptMessage, Message, TextContent
 except ImportError:  # pragma: no cover - support older fastmcp versions
@@ -26,35 +27,90 @@ except ImportError:  # pragma: no cover - support older fastmcp versions
     class TextContent:  # minimal fallback for tests
         type: str
         text: str
+
     PromptMessage = Message = Any  # type: ignore
 
 API_BASE_URL = "https://tensorus-core.hf.space"
 GLOBAL_API_KEY: Optional[str] = None
 DEMO_MODE: bool = False
 DEMO_RESPONSES: Dict[str, Any] = {
-    "/datasets": {"data": [{"name": "sample_dataset_1", "id": "demo_ds_001"}, {"name": "sample_dataset_2", "id": "demo_ds_002"}]},
-    "/health": {"status": "healthy", "demo_mode": True, "message": "Backend is mocked in demo mode."},
-    "generic_tensor": {"id": "tensor_demo_001", "shape": [64, 64, 3], "dtype": "float32", "demo_content": True},
-    "default_tool_demo": {"message": "This tool is running in demo mode. No actual API call was made.", "data": "sample demo data"}
+    "/datasets": {
+        "data": [
+            {"name": "sample_dataset_1", "id": "demo_ds_001"},
+            {"name": "sample_dataset_2", "id": "demo_ds_002"},
+        ]
+    },
+    "/health": {
+        "status": "healthy",
+        "demo_mode": True,
+        "message": "Backend is mocked in demo mode.",
+    },
+    "generic_tensor": {
+        "id": "tensor_demo_001",
+        "shape": [64, 64, 3],
+        "dtype": "float32",
+        "demo_content": True,
+    },
+    "default_tool_demo": {
+        "message": "This tool is running in demo mode. No actual API call was made.",
+        "data": "sample demo data",
+    },
 }
 
 server = FastMCP(name="Tensorus FastMCP")
 
 
-async def _post(path: str, payload: dict, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
+def _wrap_backend_response(action: str, result: Dict[str, Any]) -> TextContent:
+    """Return a TextContent message with guidance for API key or network errors."""
+    status = result.get("status")
+    if isinstance(result.get("detail"), dict) and "status" in result["detail"]:
+        status = result["detail"]["status"]
+
+    if result.get("error") == "Network error":
+        msg = "Backend service is unreachable."
+        return TextContent(type="text", text=f"{msg} Response: {json.dumps(result)}")
+
+    if result.get("error") == "API key required" or status == 401:
+        msg = f"This demo server does not support {action} without an API key."
+        return TextContent(type="text", text=f"{msg} Response: {json.dumps(result)}")
+
+    if result.get("error") == "Access forbidden" or status == 403:
+        msg = f"Access forbidden when performing {action}. Provide a valid API key."
+        return TextContent(type="text", text=f"{msg} Response: {json.dumps(result)}")
+
+    return TextContent(type="text", text=json.dumps(result))
+
+
+async def _post(
+    path: str,
+    payload: dict,
+    params: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
+) -> dict:
     if DEMO_MODE:
         if path == "/datasets/create":
-            return {"status": "success", "demo_mode": True, "message": "Dataset creation mocked.", "dataset_info": payload}
+            return {
+                "status": "success",
+                "demo_mode": True,
+                "message": "Dataset creation mocked.",
+                "dataset_info": payload,
+            }
         # Generic POST demo response
-        return {"message": f"Demo mode: No specific mock for POST {path}", "payload_received": payload, "data": DEMO_RESPONSES["default_tool_demo"]}
+        return {
+            "message": f"Demo mode: No specific mock for POST {path}",
+            "payload_received": payload,
+            "data": DEMO_RESPONSES["default_tool_demo"],
+        }
     try:
         headers = {}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers)
-            response.raise_for_status() # Will raise HTTPStatusError for 4xx/5xx
+            response = await client.post(
+                f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
+            )
+            response.raise_for_status()  # Will raise HTTPStatusError for 4xx/5xx
             return response.json()
 
     except HTTPStatusError as exc:
@@ -64,31 +120,52 @@ async def _post(path: str, payload: dict, params: Optional[Dict[str, Any]] = Non
             return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
-            return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
+            return {
+                "error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}",
+                "message": str(exc),
+            }
     except httpx.HTTPError as exc:  # Catches other network errors
         return {"error": "Network error", "message": str(exc)}
 
 
-async def _get(path: str, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
+async def _get(
+    path: str, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None
+) -> dict:
     if DEMO_MODE:
         if path == "/datasets":
             return DEMO_RESPONSES["/datasets"]
         elif path == "/health":
             return DEMO_RESPONSES["/health"]
-        elif path.startswith("/datasets/") and "/tensors/" in path: # For get_tensor_details
-            return {**DEMO_RESPONSES["generic_tensor"], "id": path.split("/")[-1], "path_called": path}
-        elif path.startswith("/tensor_descriptors/"): # For get_tensor_descriptor
-            return {**DEMO_RESPONSES["generic_tensor"], "id": path.split("/")[-1], "type": "descriptor", "path_called": path}
+        elif (
+            path.startswith("/datasets/") and "/tensors/" in path
+        ):  # For get_tensor_details
+            return {
+                **DEMO_RESPONSES["generic_tensor"],
+                "id": path.split("/")[-1],
+                "path_called": path,
+            }
+        elif path.startswith("/tensor_descriptors/"):  # For get_tensor_descriptor
+            return {
+                **DEMO_RESPONSES["generic_tensor"],
+                "id": path.split("/")[-1],
+                "type": "descriptor",
+                "path_called": path,
+            }
         # Fallback for unhandled demo paths in GET
-        return {"message": f"Demo mode: No specific mock for GET {path}", "data": DEMO_RESPONSES["default_tool_demo"]}
+        return {
+            "message": f"Demo mode: No specific mock for GET {path}",
+            "data": DEMO_RESPONSES["default_tool_demo"],
+        }
     try:
         headers = {}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{API_BASE_URL}{path}", params=params, headers=headers)
-            response.raise_for_status() # Will raise HTTPStatusError for 4xx/5xx
+            response = await client.get(
+                f"{API_BASE_URL}{path}", params=params, headers=headers
+            )
+            response.raise_for_status()  # Will raise HTTPStatusError for 4xx/5xx
             return response.json()
 
     except HTTPStatusError as exc:
@@ -98,23 +175,37 @@ async def _get(path: str, params: Optional[Dict[str, Any]] = None, api_key: Opti
             return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
-            return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
+            return {
+                "error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}",
+                "message": str(exc),
+            }
     except httpx.HTTPError as exc:  # Catches other network errors
         return {"error": "Network error", "message": str(exc)}
 
 
-async def _put(path: str, payload: dict, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
+async def _put(
+    path: str,
+    payload: dict,
+    params: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
+) -> dict:
     if DEMO_MODE:
         # Generic PUT demo response
-        return {"message": f"Demo mode: No specific mock for PUT {path}", "payload_received": payload, "data": DEMO_RESPONSES["default_tool_demo"]}
+        return {
+            "message": f"Demo mode: No specific mock for PUT {path}",
+            "payload_received": payload,
+            "data": DEMO_RESPONSES["default_tool_demo"],
+        }
     try:
         headers = {}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.put(f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers)
-            response.raise_for_status() # Will raise HTTPStatusError for 4xx/5xx
+            response = await client.put(
+                f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
+            )
+            response.raise_for_status()  # Will raise HTTPStatusError for 4xx/5xx
             return response.json()
 
     except HTTPStatusError as exc:
@@ -124,7 +215,10 @@ async def _put(path: str, payload: dict, params: Optional[Dict[str, Any]] = None
             return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
-            return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
+            return {
+                "error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}",
+                "message": str(exc),
+            }
     except httpx.HTTPError as exc:  # Catches other network errors
         return {"error": "Network error", "message": str(exc)}
 
@@ -132,7 +226,10 @@ async def _put(path: str, payload: dict, params: Optional[Dict[str, Any]] = None
 async def _delete(path: str, api_key: Optional[str] = None) -> dict:
     if DEMO_MODE:
         # Generic DELETE demo response
-        return {"message": f"Demo mode: No specific mock for DELETE {path}", "data": DEMO_RESPONSES["default_tool_demo"]}
+        return {
+            "message": f"Demo mode: No specific mock for DELETE {path}",
+            "data": DEMO_RESPONSES["default_tool_demo"],
+        }
     try:
         headers = {}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
@@ -140,7 +237,7 @@ async def _delete(path: str, api_key: Optional[str] = None) -> dict:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
             response = await client.delete(f"{API_BASE_URL}{path}", headers=headers)
-            response.raise_for_status() # Will raise HTTPStatusError for 4xx/5xx
+            response.raise_for_status()  # Will raise HTTPStatusError for 4xx/5xx
             return response.json()
 
     except HTTPStatusError as exc:
@@ -150,23 +247,37 @@ async def _delete(path: str, api_key: Optional[str] = None) -> dict:
             return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
-            return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
+            return {
+                "error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}",
+                "message": str(exc),
+            }
     except httpx.HTTPError as exc:  # Catches other network errors
         return {"error": "Network error", "message": str(exc)}
 
 
-async def _patch(path: str, payload: dict, params: Optional[Dict[str, Any]] = None, api_key: Optional[str] = None) -> dict:
+async def _patch(
+    path: str,
+    payload: dict,
+    params: Optional[Dict[str, Any]] = None,
+    api_key: Optional[str] = None,
+) -> dict:
     if DEMO_MODE:
         # Generic PATCH demo response
-        return {"message": f"Demo mode: No specific mock for PATCH {path}", "payload_received": payload, "data": DEMO_RESPONSES["default_tool_demo"]}
+        return {
+            "message": f"Demo mode: No specific mock for PATCH {path}",
+            "payload_received": payload,
+            "data": DEMO_RESPONSES["default_tool_demo"],
+        }
     try:
         headers = {}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
         async with httpx.AsyncClient() as client:
-            response = await client.patch(f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers)
-            response.raise_for_status() # Will raise HTTPStatusError for 4xx/5xx
+            response = await client.patch(
+                f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
+            )
+            response.raise_for_status()  # Will raise HTTPStatusError for 4xx/5xx
             return response.json()
 
     except HTTPStatusError as exc:
@@ -176,7 +287,10 @@ async def _patch(path: str, payload: dict, params: Optional[Dict[str, Any]] = No
             return {"error": "Access forbidden"}
         else:
             # Handle other HTTP errors
-            return {"error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}", "message": str(exc)}
+            return {
+                "error": f"HTTP error: {exc.response.status_code} {exc.response.reason_phrase}",
+                "message": str(exc),
+            }
     except httpx.HTTPError as exc:  # Catches other network errors
         return {"error": "Network error", "message": str(exc)}
 
@@ -193,7 +307,9 @@ async def ask_about_topic(topic: str) -> str:
 
 
 @server.prompt()
-async def summarize_text(text: str = Field(description="Text to summarize"), max_length: int = 100) -> str:
+async def summarize_text(
+    text: str = Field(description="Text to summarize"), max_length: int = 100
+) -> str:
     return f"Summarize the following in {max_length} words:\n\n{text}"
 
 
@@ -231,14 +347,14 @@ async def save_tensor(
         "metadata": metadata,
     }
     result = await _post(f"/datasets/{dataset_name}/ingest", payload, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("save_tensor", result)
 
 
 @server.tool()
 async def get_tensor(dataset_name: str, record_id: str) -> TextContent:
     """Retrieve a tensor by record ID."""
     result = await _get(f"/datasets/{dataset_name}/tensors/{record_id}")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_tensor", result)
 
 
 @server.tool()
@@ -247,37 +363,43 @@ async def execute_nql_query(query: str, api_key: Optional[str] = None) -> TextCo
     Requires API key if not in demo mode.
     """
     result = await _post("/query", {"query": query}, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("execute_nql_query", result)
 
 
 # --- Dataset Management Tools ---
+
 
 @server.tool(name="tensorus_list_datasets")
 async def tensorus_list_datasets() -> TextContent:
     """List all available datasets."""
     result = await _get("/datasets")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_list_datasets", result)
 
 
 @server.tool(name="tensorus_create_dataset")
-async def tensorus_create_dataset(dataset_name: str, api_key: Optional[str] = None) -> TextContent:
+async def tensorus_create_dataset(
+    dataset_name: str, api_key: Optional[str] = None
+) -> TextContent:
     """Create a new dataset.
     Requires API key if not in demo mode.
     """
     result = await _post("/datasets/create", {"name": dataset_name}, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_create_dataset", result)
 
 
 @server.tool(name="tensorus_delete_dataset")
-async def tensorus_delete_dataset(dataset_name: str, api_key: Optional[str] = None) -> TextContent:
+async def tensorus_delete_dataset(
+    dataset_name: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete an existing dataset.
     Requires API key if not in demo mode.
     """
     result = await _delete(f"/datasets/{dataset_name}", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_delete_dataset", result)
 
 
 # --- Tensor Management Tools ---
+
 
 @server.tool(name="tensorus_ingest_tensor")
 async def tensorus_ingest_tensor(
@@ -298,23 +420,27 @@ async def tensorus_ingest_tensor(
         "metadata": metadata,
     }
     result = await _post(f"/datasets/{dataset_name}/ingest", payload, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_ingest_tensor", result)
 
 
 @server.tool(name="tensorus_get_tensor_details")
 async def tensorus_get_tensor_details(dataset_name: str, record_id: str) -> TextContent:
     """Retrieve tensor data and metadata."""
     result = await _get(f"/datasets/{dataset_name}/tensors/{record_id}")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_get_tensor_details", result)
 
 
 @server.tool(name="tensorus_delete_tensor")
-async def tensorus_delete_tensor(dataset_name: str, record_id: str, api_key: Optional[str] = None) -> TextContent:
+async def tensorus_delete_tensor(
+    dataset_name: str, record_id: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete a tensor from a dataset.
     Requires API key if not in demo mode.
     """
-    result = await _delete(f"/datasets/{dataset_name}/tensors/{record_id}", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _delete(
+        f"/datasets/{dataset_name}/tensors/{record_id}", api_key=api_key
+    )
+    return _wrap_backend_response("tensorus_delete_tensor", result)
 
 
 @server.tool(name="tensorus_update_tensor_metadata")
@@ -328,57 +454,73 @@ async def tensorus_update_tensor_metadata(
     Requires API key if not in demo mode.
     """
     payload = {"new_metadata": new_metadata}
-    result = await _put(f"/datasets/{dataset_name}/tensors/{record_id}/metadata", payload, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _put(
+        f"/datasets/{dataset_name}/tensors/{record_id}/metadata",
+        payload,
+        api_key=api_key,
+    )
+    return _wrap_backend_response("tensorus_update_tensor_metadata", result)
 
 
 # --- Tensor Operation Tools ---
 
+
 @server.tool(name="tensorus_apply_unary_operation")
-async def tensorus_apply_unary_operation(operation: str, request_payload: dict, api_key: Optional[str] = None) -> TextContent:
+async def tensorus_apply_unary_operation(
+    operation: str, request_payload: dict, api_key: Optional[str] = None
+) -> TextContent:
     """Apply a unary TensorOps operation (e.g., log, reshape).
     Requires API key if not in demo mode.
     """
     result = await _post(f"/ops/{operation}", request_payload, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_apply_unary_operation", result)
 
 
 @server.tool(name="tensorus_apply_binary_operation")
-async def tensorus_apply_binary_operation(operation: str, request_payload: dict, api_key: Optional[str] = None) -> TextContent:
+async def tensorus_apply_binary_operation(
+    operation: str, request_payload: dict, api_key: Optional[str] = None
+) -> TextContent:
     """Apply a binary TensorOps operation (e.g., add, subtract).
     Requires API key if not in demo mode.
     """
     result = await _post(f"/ops/{operation}", request_payload, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_apply_binary_operation", result)
 
 
 @server.tool(name="tensorus_apply_list_operation")
-async def tensorus_apply_list_operation(operation: str, request_payload: dict, api_key: Optional[str] = None) -> TextContent:
+async def tensorus_apply_list_operation(
+    operation: str, request_payload: dict, api_key: Optional[str] = None
+) -> TextContent:
     """Apply a TensorOps list operation such as concatenate or stack.
     Requires API key if not in demo mode.
     """
     result = await _post(f"/ops/{operation}", request_payload, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_apply_list_operation", result)
 
 
 @server.tool(name="tensorus_apply_einsum")
-async def tensorus_apply_einsum(request_payload: dict, api_key: Optional[str] = None) -> TextContent:
+async def tensorus_apply_einsum(
+    request_payload: dict, api_key: Optional[str] = None
+) -> TextContent:
     """Apply an einsum operation.
     Requires API key if not in demo mode.
     """
     result = await _post("/ops/einsum", request_payload, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("tensorus_apply_einsum", result)
 
 
 # --- Tensor Descriptor Tools ---
 
+
 @server.tool()
-async def create_tensor_descriptor(descriptor_data: Dict, api_key: Optional[str] = None) -> TextContent:
+async def create_tensor_descriptor(
+    descriptor_data: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Create a new tensor descriptor.
     Requires API key if not in demo mode.
     """
     result = await _post("/tensor_descriptors/", descriptor_data, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("create_tensor_descriptor", result)
 
 
 @server.tool()
@@ -398,16 +540,18 @@ async def list_tensor_descriptors(
     usage_used_by_app: Optional[str] = None,
     name: Optional[str] = None,
     description: Optional[str] = None,
-    min_dimensions: Optional[int] = None
+    min_dimensions: Optional[int] = None,
 ) -> TextContent:
     """List tensor descriptors with extensive optional filters."""
     params: Dict[str, Any] = {}
     if owner is not None:
         params["owner"] = owner
     if data_type is not None:
-        params["data_type"] = data_type # API uses data_type
+        params["data_type"] = data_type  # API uses data_type
     if tags_contain is not None:
-        params["tags_contain"] = tags_contain # API uses tags_contain (FastAPI handles comma-separated string to List)
+        params["tags_contain"] = (
+            tags_contain  # API uses tags_contain (FastAPI handles comma-separated string to List)
+        )
     if lineage_version is not None:
         params["lineage.version"] = lineage_version
     if lineage_source_type is not None:
@@ -436,248 +580,339 @@ async def list_tensor_descriptors(
         params["min_dimensions"] = min_dimensions
 
     result = await _get("/tensor_descriptors/", params=params)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("list_tensor_descriptors", result)
 
 
 @server.tool()
 async def get_tensor_descriptor(tensor_id: str) -> TextContent:
     """Get a tensor descriptor by its ID."""
     result = await _get(f"/tensor_descriptors/{tensor_id}")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_tensor_descriptor", result)
 
 
 @server.tool()
-async def update_tensor_descriptor(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
+async def update_tensor_descriptor(
+    tensor_id: str, updates: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Update a tensor descriptor by its ID.
     Requires API key if not in demo mode.
     """
     result = await _put(f"/tensor_descriptors/{tensor_id}", updates, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("update_tensor_descriptor", result)
 
 
 @server.tool()
-async def delete_tensor_descriptor(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
+async def delete_tensor_descriptor(
+    tensor_id: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete a tensor descriptor by its ID.
     Requires API key if not in demo mode.
     """
     result = await _delete(f"/tensor_descriptors/{tensor_id}", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("delete_tensor_descriptor", result)
 
 
 # --- Semantic Metadata Tools ---
 
+
 @server.tool()
-async def create_semantic_metadata_for_tensor(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
+async def create_semantic_metadata_for_tensor(
+    tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Create semantic metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _post(f"/tensor_descriptors/{tensor_id}/semantic/", metadata_in, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        f"/tensor_descriptors/{tensor_id}/semantic/", metadata_in, api_key=api_key
+    )
+    return _wrap_backend_response("create_semantic_metadata_for_tensor", result)
 
 
 @server.tool()
 async def get_all_semantic_metadata_for_tensor(tensor_id: str) -> TextContent:
     """Get all semantic metadata for a given tensor descriptor."""
     result = await _get(f"/tensor_descriptors/{tensor_id}/semantic/")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_all_semantic_metadata_for_tensor", result)
 
 
 @server.tool()
-async def update_named_semantic_metadata_for_tensor(tensor_id: str, current_name: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
+async def update_named_semantic_metadata_for_tensor(
+    tensor_id: str, current_name: str, updates: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Update a named piece of semantic metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _put(f"/tensor_descriptors/{tensor_id}/semantic/{current_name}", updates, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _put(
+        f"/tensor_descriptors/{tensor_id}/semantic/{current_name}",
+        updates,
+        api_key=api_key,
+    )
+    return _wrap_backend_response("update_named_semantic_metadata_for_tensor", result)
 
 
 @server.tool()
-async def delete_named_semantic_metadata_for_tensor(tensor_id: str, name: str, api_key: Optional[str] = None) -> TextContent:
+async def delete_named_semantic_metadata_for_tensor(
+    tensor_id: str, name: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete a named piece of semantic metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/semantic/{name}", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _delete(
+        f"/tensor_descriptors/{tensor_id}/semantic/{name}", api_key=api_key
+    )
+    return _wrap_backend_response("delete_named_semantic_metadata_for_tensor", result)
 
 
 # --- Extended Metadata Tools ---
 
+
 # --- Lineage Metadata Tools ---
 @server.tool()
-async def upsert_lineage_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
+async def upsert_lineage_metadata(
+    tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Upsert lineage metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _post(f"/tensor_descriptors/{tensor_id}/lineage/", metadata_in, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        f"/tensor_descriptors/{tensor_id}/lineage/", metadata_in, api_key=api_key
+    )
+    return _wrap_backend_response("upsert_lineage_metadata", result)
+
 
 @server.tool()
 async def get_lineage_metadata(tensor_id: str) -> TextContent:
     """Get lineage metadata for a given tensor descriptor."""
     result = await _get(f"/tensor_descriptors/{tensor_id}/lineage/")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_lineage_metadata", result)
+
 
 @server.tool()
-async def patch_lineage_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
+async def patch_lineage_metadata(
+    tensor_id: str, updates: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Patch lineage metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/lineage/", updates, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _patch(
+        f"/tensor_descriptors/{tensor_id}/lineage/", updates, api_key=api_key
+    )
+    return _wrap_backend_response("patch_lineage_metadata", result)
+
 
 @server.tool()
-async def delete_lineage_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
+async def delete_lineage_metadata(
+    tensor_id: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete lineage metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
     result = await _delete(f"/tensor_descriptors/{tensor_id}/lineage/", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("delete_lineage_metadata", result)
+
 
 # --- Computational Metadata Tools ---
 @server.tool()
-async def upsert_computational_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
+async def upsert_computational_metadata(
+    tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Upsert computational metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _post(f"/tensor_descriptors/{tensor_id}/computational/", metadata_in, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        f"/tensor_descriptors/{tensor_id}/computational/", metadata_in, api_key=api_key
+    )
+    return _wrap_backend_response("upsert_computational_metadata", result)
+
 
 @server.tool()
 async def get_computational_metadata(tensor_id: str) -> TextContent:
     """Get computational metadata for a given tensor descriptor."""
     result = await _get(f"/tensor_descriptors/{tensor_id}/computational/")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_computational_metadata", result)
+
 
 @server.tool()
-async def patch_computational_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
+async def patch_computational_metadata(
+    tensor_id: str, updates: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Patch computational metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/computational/", updates, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _patch(
+        f"/tensor_descriptors/{tensor_id}/computational/", updates, api_key=api_key
+    )
+    return _wrap_backend_response("patch_computational_metadata", result)
+
 
 @server.tool()
-async def delete_computational_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
+async def delete_computational_metadata(
+    tensor_id: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete computational metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/computational/", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _delete(
+        f"/tensor_descriptors/{tensor_id}/computational/", api_key=api_key
+    )
+    return _wrap_backend_response("delete_computational_metadata", result)
+
 
 # --- Quality Metadata Tools ---
 @server.tool()
-async def upsert_quality_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
+async def upsert_quality_metadata(
+    tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Upsert quality metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _post(f"/tensor_descriptors/{tensor_id}/quality/", metadata_in, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        f"/tensor_descriptors/{tensor_id}/quality/", metadata_in, api_key=api_key
+    )
+    return _wrap_backend_response("upsert_quality_metadata", result)
+
 
 @server.tool()
 async def get_quality_metadata(tensor_id: str) -> TextContent:
     """Get quality metadata for a given tensor descriptor."""
     result = await _get(f"/tensor_descriptors/{tensor_id}/quality/")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_quality_metadata", result)
+
 
 @server.tool()
-async def patch_quality_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
+async def patch_quality_metadata(
+    tensor_id: str, updates: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Patch quality metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/quality/", updates, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _patch(
+        f"/tensor_descriptors/{tensor_id}/quality/", updates, api_key=api_key
+    )
+    return _wrap_backend_response("patch_quality_metadata", result)
+
 
 @server.tool()
-async def delete_quality_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
+async def delete_quality_metadata(
+    tensor_id: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete quality metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
     result = await _delete(f"/tensor_descriptors/{tensor_id}/quality/", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("delete_quality_metadata", result)
+
 
 # --- Relational Metadata Tools ---
 @server.tool()
-async def upsert_relational_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
+async def upsert_relational_metadata(
+    tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Upsert relational metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _post(f"/tensor_descriptors/{tensor_id}/relational/", metadata_in, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        f"/tensor_descriptors/{tensor_id}/relational/", metadata_in, api_key=api_key
+    )
+    return _wrap_backend_response("upsert_relational_metadata", result)
+
 
 @server.tool()
 async def get_relational_metadata(tensor_id: str) -> TextContent:
     """Get relational metadata for a given tensor descriptor."""
     result = await _get(f"/tensor_descriptors/{tensor_id}/relational/")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_relational_metadata", result)
+
 
 @server.tool()
-async def patch_relational_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
+async def patch_relational_metadata(
+    tensor_id: str, updates: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Patch relational metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/relational/", updates, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _patch(
+        f"/tensor_descriptors/{tensor_id}/relational/", updates, api_key=api_key
+    )
+    return _wrap_backend_response("patch_relational_metadata", result)
+
 
 @server.tool()
-async def delete_relational_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
+async def delete_relational_metadata(
+    tensor_id: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete relational metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _delete(f"/tensor_descriptors/{tensor_id}/relational/", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _delete(
+        f"/tensor_descriptors/{tensor_id}/relational/", api_key=api_key
+    )
+    return _wrap_backend_response("delete_relational_metadata", result)
+
 
 # --- Usage Metadata Tools ---
 @server.tool()
-async def upsert_usage_metadata(tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None) -> TextContent:
+async def upsert_usage_metadata(
+    tensor_id: str, metadata_in: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Upsert usage metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _post(f"/tensor_descriptors/{tensor_id}/usage/", metadata_in, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        f"/tensor_descriptors/{tensor_id}/usage/", metadata_in, api_key=api_key
+    )
+    return _wrap_backend_response("upsert_usage_metadata", result)
+
 
 @server.tool()
 async def get_usage_metadata(tensor_id: str) -> TextContent:
     """Get usage metadata for a given tensor descriptor."""
     result = await _get(f"/tensor_descriptors/{tensor_id}/usage/")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_usage_metadata", result)
+
 
 @server.tool()
-async def patch_usage_metadata(tensor_id: str, updates: Dict, api_key: Optional[str] = None) -> TextContent:
+async def patch_usage_metadata(
+    tensor_id: str, updates: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Patch usage metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
-    result = await _patch(f"/tensor_descriptors/{tensor_id}/usage/", updates, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _patch(
+        f"/tensor_descriptors/{tensor_id}/usage/", updates, api_key=api_key
+    )
+    return _wrap_backend_response("patch_usage_metadata", result)
+
 
 @server.tool()
-async def delete_usage_metadata(tensor_id: str, api_key: Optional[str] = None) -> TextContent:
+async def delete_usage_metadata(
+    tensor_id: str, api_key: Optional[str] = None
+) -> TextContent:
     """Delete usage metadata for a given tensor descriptor.
     Requires API key if not in demo mode.
     """
     result = await _delete(f"/tensor_descriptors/{tensor_id}/usage/", api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("delete_usage_metadata", result)
 
 
 # --- Search and Aggregation Tools ---
 
+
 @server.tool()
 async def search_tensors(
-    text_query: str,
-    fields_to_search: Optional[str] = None  # Comma-separated string
+    text_query: str, fields_to_search: Optional[str] = None  # Comma-separated string
 ) -> TextContent:
     """Search for tensors based on a text query, optionally specifying fields to search."""
     params = {"text_query": text_query}
     if fields_to_search:
         params["fields_to_search"] = fields_to_search
     result = await _get("/search/tensors/", params=params)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("search_tensors", result)
 
 
 @server.tool()
 async def aggregate_tensors(
-    group_by_field: str,
-    agg_function: str,
-    agg_field: Optional[str] = None
+    group_by_field: str, agg_function: str, agg_field: Optional[str] = None
 ) -> TextContent:
     """Aggregate tensor metadata based on a grouping field and aggregation function."""
     params = {
@@ -687,49 +922,58 @@ async def aggregate_tensors(
     if agg_field:
         params["agg_field"] = agg_field
     result = await _get("/aggregate/tensors/", params=params)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("aggregate_tensors", result)
 
 
 # --- Versioning and Lineage Tools ---
 
+
 @server.tool()
-async def create_tensor_version(tensor_id: str, version_request: Dict, api_key: Optional[str] = None) -> TextContent:
+async def create_tensor_version(
+    tensor_id: str, version_request: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Create a new version for a given tensor.
     Requires API key if not in demo mode.
     """
-    result = await _post(f"/tensors/{tensor_id}/versions", version_request, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        f"/tensors/{tensor_id}/versions", version_request, api_key=api_key
+    )
+    return _wrap_backend_response("create_tensor_version", result)
 
 
 @server.tool()
 async def list_tensor_versions(tensor_id: str) -> TextContent:
     """List all versions for a given tensor."""
     result = await _get(f"/tensors/{tensor_id}/versions")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("list_tensor_versions", result)
 
 
 @server.tool()
-async def create_lineage_relationship(relationship_request: Dict, api_key: Optional[str] = None) -> TextContent:
+async def create_lineage_relationship(
+    relationship_request: Dict, api_key: Optional[str] = None
+) -> TextContent:
     """Create a lineage relationship between tensors.
     Requires API key if not in demo mode.
     """
     # relationship_request should contain source_tensor_id, target_tensor_id, relationship_type, etc.
-    result = await _post("/lineage/relationships/", relationship_request, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        "/lineage/relationships/", relationship_request, api_key=api_key
+    )
+    return _wrap_backend_response("create_lineage_relationship", result)
 
 
 @server.tool()
 async def get_parent_tensors(tensor_id: str) -> TextContent:
     """Get the parent tensors for a given tensor in the lineage."""
     result = await _get(f"/tensors/{tensor_id}/lineage/parents")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_parent_tensors", result)
 
 
 @server.tool()
 async def get_child_tensors(tensor_id: str) -> TextContent:
     """Get the child tensors for a given tensor in the lineage."""
     result = await _get(f"/tensors/{tensor_id}/lineage/children")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("get_child_tensors", result)
 
 
 @server.tool()
@@ -741,11 +985,15 @@ async def mcp_server_status() -> TextContent:
         status_info["message"] = "Server is operating in demo mode with mock data."
     else:
         status_info["mode"] = "live"
-        status_info["message"] = "Server is operating in live mode, connecting to the backend API."
+        status_info["message"] = (
+            "Server is operating in live mode, connecting to the backend API."
+        )
         if GLOBAL_API_KEY:
             status_info["api_key_status"] = "Global API key is configured."
         else:
-            status_info["api_key_status"] = "No global API key configured. Tools requiring authentication will need 'api_key' parameter."
+            status_info["api_key_status"] = (
+                "No global API key configured. Tools requiring authentication will need 'api_key' parameter."
+            )
     return TextContent(type="text", text=json.dumps(status_info))
 
 
@@ -757,11 +1005,23 @@ async def backend_connectivity_test() -> TextContent:
     """
     if DEMO_MODE:
         # Use the pre-defined mock response for /health
-        response_data = DEMO_RESPONSES.get("/health", {"status": "healthy", "demo_mode": True, "message": "Backend is mocked in demo mode."})
-        return TextContent(type="text", text=json.dumps({
-            "status": "Backend connectivity test skipped in demo mode.",
-            "backend_response": response_data
-        }))
+        response_data = DEMO_RESPONSES.get(
+            "/health",
+            {
+                "status": "healthy",
+                "demo_mode": True,
+                "message": "Backend is mocked in demo mode.",
+            },
+        )
+        return TextContent(
+            type="text",
+            text=json.dumps(
+                {
+                    "status": "Backend connectivity test skipped in demo mode.",
+                    "backend_response": response_data,
+                }
+            ),
+        )
     else:
         # Attempt to call the actual /health endpoint
         # The _get function will handle API key logic and error formatting
@@ -769,15 +1029,25 @@ async def backend_connectivity_test() -> TextContent:
 
         # Check if the health_result indicates an error itself
         if "error" in health_result:
-            return TextContent(type="text", text=json.dumps({
-                "status": "Backend connectivity test failed or API key issue.",
-                "details": health_result
-            }))
+            return TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "status": "Backend connectivity test failed or API key issue.",
+                        "details": health_result,
+                    }
+                ),
+            )
         else:
-            return TextContent(type="text", text=json.dumps({
-                "status": "Backend connectivity test successful.",
-                "backend_response": health_result
-            }))
+            return TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "status": "Backend connectivity test successful.",
+                        "backend_response": health_result,
+                    }
+                ),
+            )
 
 
 @server.resource("resource://datasets", name="datasets", description="List of datasets")
@@ -789,6 +1059,7 @@ async def datasets_resource() -> str:
 
 # --- Import/Export Tools ---
 
+
 @server.tool()
 async def export_tensor_metadata(tensor_ids_str: Optional[str] = None) -> TextContent:
     """Export tensor metadata for specified tensor IDs or all tensors if IDs are not provided."""
@@ -796,7 +1067,7 @@ async def export_tensor_metadata(tensor_ids_str: Optional[str] = None) -> TextCo
     if tensor_ids_str:
         params["tensor_ids"] = tensor_ids_str
     result = await _get("/tensors/export", params=params)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("export_tensor_metadata", result)
 
 
 @server.tool()
@@ -809,32 +1080,35 @@ async def import_tensor_metadata(
     Requires API key if not in demo mode.
     """
     params = {"conflict_strategy": conflict_strategy}
-    result = await _post("/tensors/import", payload=import_data_payload, params=params, api_key=api_key)
-    return TextContent(type="text", text=json.dumps(result))
+    result = await _post(
+        "/tensors/import", payload=import_data_payload, params=params, api_key=api_key
+    )
+    return _wrap_backend_response("import_tensor_metadata", result)
 
 
 # --- Management Tools ---
+
 
 @server.tool()
 async def management_health_check() -> TextContent:
     """Perform a health check on the Tensorus service."""
     result = await _get("/health")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("management_health_check", result)
 
 
 @server.tool()
 async def management_get_metrics() -> TextContent:
     """Retrieve operational metrics from the Tensorus service."""
     result = await _get("/metrics")
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("management_get_metrics", result)
 
 
 # --- Analytics Tools ---
 
+
 @server.tool()
 async def analytics_get_co_occurring_tags(
-    min_co_occurrence: Optional[int] = 2,
-    limit: Optional[int] = 10
+    min_co_occurrence: Optional[int] = 2, limit: Optional[int] = 10
 ) -> TextContent:
     """Get co-occurring tags based on minimum co-occurrence and limit."""
     params = {}
@@ -843,13 +1117,12 @@ async def analytics_get_co_occurring_tags(
     if limit is not None:
         params["limit"] = limit
     result = await _get("/analytics/co_occurring_tags", params=params)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("analytics_get_co_occurring_tags", result)
 
 
 @server.tool()
 async def analytics_get_stale_tensors(
-    threshold_days: Optional[int] = 90,
-    limit: Optional[int] = 100
+    threshold_days: Optional[int] = 90, limit: Optional[int] = 100
 ) -> TextContent:
     """Get stale tensors based on a threshold of days and limit."""
     params = {}
@@ -858,14 +1131,14 @@ async def analytics_get_stale_tensors(
     if limit is not None:
         params["limit"] = limit
     result = await _get("/analytics/stale_tensors", params=params)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("analytics_get_stale_tensors", result)
 
 
 @server.tool()
 async def analytics_get_complex_tensors(
     min_parent_count: Optional[int] = None,
     min_transformation_steps: Optional[int] = None,
-    limit: Optional[int] = 100
+    limit: Optional[int] = 100,
 ) -> TextContent:
     """Get complex tensors based on minimum parent count, transformation steps, and limit."""
     params = {}
@@ -876,7 +1149,7 @@ async def analytics_get_complex_tensors(
     if limit is not None:
         params["limit"] = limit
     result = await _get("/analytics/complex_tensors", params=params)
-    return TextContent(type="text", text=json.dumps(result))
+    return _wrap_backend_response("analytics_get_complex_tensors", result)
 
 
 def main() -> None:
@@ -897,12 +1170,18 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=7860, help="Server port")
     parser.add_argument("--path", default="/mcp", help="Base path for Streamable HTTP")
     parser.add_argument(
-        "--api-url", default=API_BASE_URL, help="Base URL of the running FastAPI backend"
+        "--api-url",
+        default=API_BASE_URL,
+        help="Base URL of the running FastAPI backend",
     )
-    parser.add_argument("--mcp-api-key", default=None, help="Global API key for the MCP server to use for backend requests")
+    parser.add_argument(
+        "--mcp-api-key",
+        default=None,
+        help="Global API key for the MCP server to use for backend requests",
+    )
     parser.add_argument(
         "--demo-mode",
-        action="store_true", # Sets to True if flag is present
+        action="store_true",  # Sets to True if flag is present
         help="Enable demo mode to use mock data instead of real API calls.",
     )
     args = parser.parse_args()
@@ -910,7 +1189,7 @@ def main() -> None:
     API_BASE_URL = args.api_url.rstrip("/")
     GLOBAL_API_KEY = args.mcp_api_key
 
-    global DEMO_MODE # Ensure you're assigning to the global
+    global DEMO_MODE  # Ensure you're assigning to the global
     DEMO_MODE = args.demo_mode
     if DEMO_MODE:
         print("Tensorus FastMCP Server is running in DEMO MODE.")
