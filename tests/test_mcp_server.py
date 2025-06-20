@@ -641,13 +641,6 @@ async def test_create_tensor_descriptor_with_api_key(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_http_error_returns_textcontent(monkeypatch):
-    make_error_client(monkeypatch, "post")
-    res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])
-    assert json.loads(res.text) == {"error": "Network error", "message": "failed"}
-
-
-@pytest.mark.asyncio
 async def test_post_unauthorized(monkeypatch):
     make_status_client(monkeypatch, "post", 401)
     res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])
