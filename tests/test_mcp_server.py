@@ -88,6 +88,42 @@ def make_error_client(monkeypatch, method): # This function also needs to handle
     monkeypatch.setattr(mcp_server.httpx, "AsyncClient", ErrorAsyncClient)
 
 
+def make_status_client(monkeypatch, method, status_code):
+    class StatusAsyncClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            pass
+
+        async def _raise(self, u, json=None, params=None, headers=None):
+            request = httpx.Request(method.upper(), u)
+            response = httpx.Response(status_code, request=request)
+            raise httpx.HTTPStatusError("err", request=request, response=response)
+
+        async def post(self, u, json=None, params=None, headers=None):
+            assert method == "post"
+            await self._raise(u, json, params, headers)
+
+        async def get(self, u, params=None, headers=None):
+            assert method == "get"
+            await self._raise(u, None, params, headers)
+
+        async def put(self, u, json=None, params=None, headers=None):
+            assert method == "put"
+            await self._raise(u, json, params, headers)
+
+        async def patch(self, u, json=None, params=None, headers=None):
+            assert method == "patch"
+            await self._raise(u, json, params, headers)
+
+        async def delete(self, u, params=None, headers=None):
+            assert method == "delete"
+            await self._raise(u, None, params, headers)
+
+    monkeypatch.setattr(mcp_server.httpx, "AsyncClient", StatusAsyncClient)
+
+
 @pytest.mark.asyncio
 async def test_save_tensor_with_api_key(monkeypatch):
     test_api_key = "key123"
@@ -430,7 +466,7 @@ async def test_http_error_returns_textcontent(monkeypatch): # Assumes no key nee
     # or ensure global key is set, depending on when the error is raised.
     # For now, assuming error can happen even with empty headers for simplicity of this test.
     res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1]) # No key passed
-    assert json.loads(res.text) == {"error": "failed"}
+    assert json.loads(res.text) == {"error": "Network error", "message": "failed"}
 
 
 # --- Tensor Descriptor Tools Tests ---
@@ -456,7 +492,21 @@ async def test_create_tensor_descriptor_with_api_key(monkeypatch):
 async def test_http_error_returns_textcontent(monkeypatch):
     make_error_client(monkeypatch, "post")
     res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])
-    assert json.loads(res.text) == {"error": "failed"}
+    assert json.loads(res.text) == {"error": "Network error", "message": "failed"}
+
+
+@pytest.mark.asyncio
+async def test_post_unauthorized(monkeypatch):
+    make_status_client(monkeypatch, "post", 401)
+    res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])
+    assert json.loads(res.text) == {"error": "API key required"}
+
+
+@pytest.mark.asyncio
+async def test_delete_forbidden(monkeypatch):
+    make_status_client(monkeypatch, "delete", 403)
+    res = await mcp_server.tensorus_delete_dataset.fn("ds1")
+    assert json.loads(res.text) == {"error": "Access forbidden"}
 
 
 # --- Tensor Descriptor Tools Tests ---
