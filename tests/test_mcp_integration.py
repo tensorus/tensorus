@@ -139,10 +139,10 @@ async def test_list_datasets_integration(mcp_servers):
     _, mcp_url = mcp_servers
 
     async with TensorusMCPClient.from_http(url=mcp_url) as client:
-        datasets_response = await client.list_datasets()
-        assert isinstance(datasets_response, DatasetListResponse), f"Expected DatasetListResponse, got {type(datasets_response)}"
-        assert 'count_ds' in datasets_response.datasets
-        print(f"test_list_datasets_integration: Successfully asserted dataset list: {datasets_response.datasets}")
+        datasets_list = await client.list_datasets()
+        assert isinstance(datasets_list, list), f"Expected list, got {type(datasets_list)}"
+        assert 'count_ds' in datasets_list
+        print(f"test_list_datasets_integration: Successfully asserted dataset list: {datasets_list}")
 
 @pytest.mark.asyncio
 async def test_create_and_delete_dataset_integration(mcp_servers):
@@ -157,10 +157,10 @@ async def test_create_and_delete_dataset_integration(mcp_servers):
         print(f"Dataset '{dataset_name}' creation reported success: {create_response.success}")
 
         # Verify dataset is listed
-        list_response_after_create = await client.list_datasets()
-        assert isinstance(list_response_after_create, DatasetListResponse)
-        assert dataset_name in list_response_after_create.datasets
-        print(f"Dataset '{dataset_name}' found in list: {list_response_after_create.datasets}")
+        datasets_list_after_create = await client.list_datasets()
+        assert isinstance(datasets_list_after_create, list)
+        assert dataset_name in datasets_list_after_create
+        print(f"Dataset '{dataset_name}' found in list: {datasets_list_after_create}")
 
         # Delete dataset
         delete_response = await client.delete_dataset(dataset_name)

@@ -111,19 +111,19 @@ class TensorusMCPClient:
             result = await self._client.call_tool(name, args or {})
         except FastMCPError as e:
             error_str = str(e).lower()
-            log_message = f"Tool call failed for tool '{name}' with args {args or {{}}}: {e}"
+            log_message = f"Tool call failed for tool '{name}' with args {args or {}}: {e}"
             if "unauthorized" in error_str or "forbidden" in error_str or "authentication" in error_str:
                 log_message += " (Hint: This might be related to missing or incorrect API keys. Check server and tool requirements.)"
             logger.error(log_message)
-            raise MCPResponseError(f"Tool call failed for tool '{name}' with args {args or {{}}}: {e}") from e
+            raise MCPResponseError(f"Tool call failed for tool '{name}' with args {args or {}}: {e}") from e
 
         if not result:
-            logger.warning(f"Tool call for '{name}' with args {args or {{}}} returned no result.")
+            logger.warning(f"Tool call for '{name}' with args {args or {}} returned no result.")
             return None
 
         content = result[0]
         if not isinstance(content, TextContent):
-            err_msg = f"Unexpected content type: {type(content)} for tool '{name}' with args {args or {{}}}. Expected TextContent. Received: {str(content)[:200]}"
+            err_msg = f"Unexpected content type: {type(content)} for tool '{name}' with args {args or {}}. Expected TextContent. Received: {str(content)[:200]}"
             logger.error(err_msg)
             raise MCPResponseError(err_msg)
 
@@ -133,8 +133,8 @@ class TensorusMCPClient:
             data = json.loads(raw_response_text)
         except json.JSONDecodeError as e:
             response_snippet = raw_response_text[:200] + ('...' if len(raw_response_text) > 200 else '')
-            logger.error(f"Failed to decode JSON response for tool '{name}' with args {args or {{}}}. Raw response snippet: '{response_snippet}'. Error: {e}")
-            raise MCPResponseError(f"Failed to decode JSON response for tool '{name}' with args {args or {{}}}. Raw response snippet: '{response_snippet}'.") from e
+            logger.error(f"Failed to decode JSON response for tool '{name}' with args {args or {}}. Raw response snippet: '{response_snippet}'. Error: {e}")
+            raise MCPResponseError(f"Failed to decode JSON response for tool '{name}' with args {args or {}}. Raw response snippet: '{response_snippet}'.") from e
 
         if response_model:
             primary_validation_error = None
@@ -187,7 +187,7 @@ class TensorusMCPClient:
                 response_snippet = raw_response_text[:500] + ('...' if len(raw_response_text) > 500 else '')
                 # Log the detailed error including the type of validation error and affected fields if available from Pydantic's error.
                 error_log_message = (
-                    f"Response validation failed for tool '{name}' with args {args or {{}}}. "
+                    f"Response validation failed for tool '{name}' with args {args or {}}. "
                     f"Error: {primary_validation_error}. "
                     f"Raw response snippet: '{response_snippet}'"
                 )
@@ -195,7 +195,7 @@ class TensorusMCPClient:
 
                 # The error raised to the caller should be informative. str(primary_validation_error) is often user-friendly.
                 raise MCPResponseError(
-                    f"Failed to parse response for tool '{name}' with args {args or {{}}}. "
+                    f"Failed to parse response for tool '{name}' with args {args or {}}. "
                     f"Validation Error: {str(primary_validation_error)}. "
                     f"Raw response snippet: '{response_snippet}'"
                 ) from primary_validation_error

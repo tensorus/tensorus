@@ -608,7 +608,8 @@ async def test_http_error_returns_textcontent(
     # or ensure global key is set, depending on when the error is raised.
     # For now, assuming error can happen even with empty headers for simplicity of this test.
     res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])  # No key passed
-    assert json.loads(res.text) == {"error": "Network error", "message": "failed"}
+    expected_text = 'Backend service is unreachable. Response: {"error": "Network error", "message": "failed"}'
+    assert res.text == expected_text
 
 
 # --- Tensor Descriptor Tools Tests ---
@@ -647,14 +648,18 @@ async def test_create_tensor_descriptor_with_api_key(monkeypatch):
 async def test_post_unauthorized(monkeypatch):
     make_status_client(monkeypatch, "post", 401)
     res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])
-    assert json.loads(res.text) == {"error": "API key required"}
+    # Extract JSON from wrapped response text
+    json_part = res.text.split("Response: ", 1)[1]
+    assert json.loads(json_part) == {"error": "API key required"}
 
 
 @pytest.mark.asyncio
 async def test_delete_forbidden(monkeypatch):
     make_status_client(monkeypatch, "delete", 403)
     res = await mcp_server.tensorus_delete_dataset.fn("ds1")
-    assert json.loads(res.text) == {"error": "Access forbidden"}
+    # Extract JSON from wrapped response text
+    json_part = res.text.split("Response: ", 1)[1]
+    assert json.loads(json_part) == {"error": "Access forbidden"}
 
 
 # --- Tensor Descriptor Tools Tests ---

@@ -87,8 +87,13 @@ else:
     server = DummyServer()
 
 
-def _wrap_backend_response(action: str, result: Dict[str, Any]) -> TextContent:
+def _wrap_backend_response(action: str, result: Any) -> TextContent:
     """Return a TextContent message with guidance for API key or network errors."""
+    # Handle both dictionary and list responses
+    if not isinstance(result, dict):
+        # For non-dict responses (like lists from analytics endpoints), return as-is
+        return TextContent(type="text", text=json.dumps(result))
+    
     status = result.get("status")
     if isinstance(result.get("detail"), dict) and "status" in result["detail"]:
         status = result["detail"]["status"]
@@ -171,6 +176,11 @@ async def _get(
                 "id": path.split("/")[-1],
                 "path_called": path,
             }
+        elif path == "/tensor_descriptors/":  # For list_tensor_descriptors
+            return [
+                {"id": "tensor_desc_001", "name": "demo_tensor_1", "data_type": "float32"},
+                {"id": "tensor_desc_002", "name": "demo_tensor_2", "data_type": "int64"},
+            ]
         elif path.startswith("/tensor_descriptors/"):  # For get_tensor_descriptor
             return {
                 **DEMO_RESPONSES["generic_tensor"],
@@ -178,6 +188,24 @@ async def _get(
                 "type": "descriptor",
                 "path_called": path,
             }
+        elif path.startswith("/tensors/") and path.endswith("/versions"):  # For list_tensor_versions
+            # Return a list of demo versions
+            return [
+                {"version_id": "v_demo_001", "version_tag": "v1.0", "created_at": "2024-01-01T00:00:00Z"},
+                {"version_id": "v_demo_002", "version_tag": "v1.1", "created_at": "2024-01-02T00:00:00Z"},
+            ]
+        elif path.startswith("/tensors/") and "/lineage/parents" in path:  # For get_parent_tensors
+            # Return a list of demo parent tensors
+            return [
+                {"tensor_id": "parent_001", "relationship_type": "derived_from"},
+                {"tensor_id": "parent_002", "relationship_type": "transformed_from"},
+            ]
+        elif path.startswith("/tensors/") and "/lineage/children" in path:  # For get_child_tensors
+            # Return a list of demo child tensors
+            return [
+                {"tensor_id": "child_001", "relationship_type": "derived_to"},
+                {"tensor_id": "child_002", "relationship_type": "transformed_to"},
+            ]
         # Fallback for unhandled demo paths in GET
         return {
             "message": f"Demo mode: No specific mock for GET {path}",
