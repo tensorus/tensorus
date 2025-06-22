@@ -13,9 +13,12 @@ from tensorus.mcp_client import (
     CreateDatasetResponse,
     DeleteDatasetResponse,
     IngestTensorResponse,
+    MCP_AVAILABLE,
     TensorDetailsResponse,
     DeleteTensorResponse
 )
+
+pytestmark = pytest.mark.skipif(not MCP_AVAILABLE, reason="MCP dependencies (fastmcp, mcp) not available")
 
 @pytest_asyncio.fixture(scope="session")
 async def mcp_servers():

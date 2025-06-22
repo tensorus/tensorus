@@ -20,11 +20,12 @@ from tensorus.config import settings
 
 import httpx
 from httpx import HTTPStatusError
-from fastmcp import FastMCP
 
 try:
+    from fastmcp import FastMCP
     from fastmcp.prompts.prompt import PromptMessage, Message, TextContent
-except ImportError:  # pragma: no cover - support older fastmcp versions
+    MCP_AVAILABLE = True
+except ImportError:  # pragma: no cover - support older fastmcp versions or missing deps
     from dataclasses import dataclass
 
     @dataclass
@@ -33,6 +34,8 @@ except ImportError:  # pragma: no cover - support older fastmcp versions
         text: str
 
     PromptMessage = Message = Any  # type: ignore
+    FastMCP = None
+    MCP_AVAILABLE = False
 
 API_BASE_URL = "https://tensorus-core.hf.space"
 GLOBAL_API_KEY: Optional[str] = None
@@ -61,7 +64,27 @@ DEMO_RESPONSES: Dict[str, Any] = {
     },
 }
 
-server = FastMCP(name="Tensorus FastMCP")
+if MCP_AVAILABLE:
+    server = FastMCP(name="Tensorus FastMCP")
+else:
+    # Create a dummy server object with no-op decorators when MCP is not available
+    class DummyServer:
+        def tool(self, *args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+        
+        def prompt(self, *args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+            
+        def resource(self, *args, **kwargs):
+            def decorator(func):
+                return func
+            return decorator
+    
+    server = DummyServer()
 
 
 def _wrap_backend_response(action: str, result: Dict[str, Any]) -> TextContent:

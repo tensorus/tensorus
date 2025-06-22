@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+from typing import Optional, Union, List
 from pydantic import field_validator
 
 class Settings(BaseSettings):
@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: Optional[str] = None
     POSTGRES_DSN: Optional[str] = None
 
-    VALID_API_KEYS: list[str] | str = []
+    VALID_API_KEYS: Union[List[str], str] = []
     API_KEY_HEADER_NAME: str = "X-API-KEY"
     AUDIT_LOG_PATH: str = "tensorus_audit.log"
 

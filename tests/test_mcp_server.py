@@ -4,7 +4,10 @@ import httpx
 from typing import Optional  # Added for type hinting
 
 from tensorus import mcp_server
+from tensorus.mcp_server import MCP_AVAILABLE
 from tensorus.config import settings  # Added import
+
+pytestmark = pytest.mark.skipif(not MCP_AVAILABLE, reason="MCP dependencies (fastmcp, mcp) not available")
 
 
 class DummyResponse:

@@ -8,12 +8,20 @@ from typing import Any, AsyncIterator, List, Optional, Sequence, Type, TypeVar, 
 
 from pydantic import BaseModel
 from pydantic_core import ValidationError
-from fastmcp.client import Client as FastMCPClient
-from fastmcp.exceptions import FastMCPError
-from fastmcp.client.transports import StreamableHttpTransport
 
-# Import the TextContent type that the server is actually using
-from mcp.types import TextContent
+try:
+    from fastmcp.client import Client as FastMCPClient
+    from fastmcp.exceptions import FastMCPError
+    from fastmcp.client.transports import StreamableHttpTransport
+    from mcp.types import TextContent
+    MCP_AVAILABLE = True
+except ImportError:
+    # Create dummy classes for when MCP dependencies are not available
+    FastMCPClient = None
+    FastMCPError = Exception
+    StreamableHttpTransport = None
+    TextContent = None
+    MCP_AVAILABLE = False
 
 # Type variable for Pydantic models
 T = TypeVar('T', bound=BaseModel)
@@ -59,6 +67,8 @@ class TensorusMCPClient:
     DEFAULT_MCP_URL = DEFAULT_MCP_URL
 
     def __init__(self, transport: Any) -> None:
+        if not MCP_AVAILABLE:
+            raise ImportError("MCP dependencies (fastmcp, mcp) are not available. Install with: pip install fastmcp mcp")
         self._client = FastMCPClient(transport)
 
     @staticmethod
@@ -71,6 +81,8 @@ class TensorusMCPClient:
             token: Optional bearer token for accessing a private HuggingFace
                 Space or other authenticated deployment.
         """
+        if not MCP_AVAILABLE:
+            raise ImportError("MCP dependencies (fastmcp, mcp) are not available. Install with: pip install fastmcp mcp")
         final_url = url.rstrip("/") + "/"
         headers = {"Authorization": f"Bearer {token}"} if token else None
         transport = StreamableHttpTransport(url=final_url, headers=headers)

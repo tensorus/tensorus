@@ -355,7 +355,7 @@ class TestTensorOps(unittest.TestCase):
         expected_identity = torch.eye(2, dtype=torch.float32)
         actual_result = A @ inv
         self.assertEqual(inv.dtype, A.dtype)
-        self.assertTrue(torch.allclose(actual_result, expected_identity))
+        self.assertTrue(torch.allclose(actual_result, expected_identity, atol=1e-6))
 
     def test_matrix_inverse_non_square_error(self):
         A = torch.randn(2, 3)

@@ -9,8 +9,14 @@ try:
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.output_parsers import PydanticOutputParser
     from langchain_core.messages import SystemMessage, HumanMessage
+    LANGCHAIN_AVAILABLE = True
 except Exception as e:  # pragma: no cover - library may be missing in test env
     ChatGoogleGenerativeAI = None
+    ChatPromptTemplate = None
+    PydanticOutputParser = None
+    SystemMessage = None
+    HumanMessage = None
+    LANGCHAIN_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +38,8 @@ class LLMParser:
 
     def __init__(self, model_name: Optional[str] = None):
         model_name = model_name or os.getenv("NQL_LLM_MODEL", "gemini-2.0-flash")
-        if ChatGoogleGenerativeAI is None:
-            raise ImportError("langchain-google-genai is required for LLM parsing")
+        if not LANGCHAIN_AVAILABLE:
+            raise ImportError("langchain-google-genai and langchain-core are required for LLM parsing")
         self.model = ChatGoogleGenerativeAI(model=model_name, temperature=0)
         self.output_parser = PydanticOutputParser(pydantic_object=NQLQuery)
         self.prompt = ChatPromptTemplate.from_messages(

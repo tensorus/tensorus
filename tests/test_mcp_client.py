@@ -4,8 +4,11 @@ import pytest
 from tensorus import mcp_client
 from tensorus.mcp_client import (
     TensorusMCPClient, TextContent, MCPResponseError, FastMCPError,
-    DatasetListResponse, IngestTensorResponse, TensorDetailsResponse, SemanticMetadataResponse
+    DatasetListResponse, IngestTensorResponse, TensorDetailsResponse, SemanticMetadataResponse,
+    MCP_AVAILABLE
 )
+
+pytestmark = pytest.mark.skipif(not MCP_AVAILABLE, reason="MCP dependencies (fastmcp, mcp) not available")
 
 
 class DummyFastClient:
