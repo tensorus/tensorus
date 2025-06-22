@@ -5,6 +5,11 @@ This module will contain various tensor decomposition algorithms
 like CP, Tucker, TT, TR, etc.
 """
 
+if __package__ in (None, ""):
+    import os, sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "tensorus"
+
 import torch
 import tensorly as tl
 from typing import List, Tuple, Union, Optional, Dict
