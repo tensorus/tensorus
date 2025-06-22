@@ -1,3 +1,8 @@
+if __package__ in (None, ""):
+    import os, sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "tensorus"
+
 import torch
 import pandas as pd
 import numpy as np

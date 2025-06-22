@@ -5,6 +5,11 @@ backend.  Tools mirror the ones documented in the README under "Available
 Tools" and return results as :class:`TextContent` objects.
 """
 
+if __package__ in (None, ""):
+    import os, sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "tensorus"
+
 import argparse
 import json
 from typing import Any, Optional, Sequence, Dict

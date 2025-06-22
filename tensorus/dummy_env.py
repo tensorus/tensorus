@@ -6,6 +6,11 @@ Action: Move left (-1), Stay (0), Move right (+1) (Discrete actions)
 Goal: Reach position 0
 Reward: -abs(position), +10 if at goal
 """
+
+if __package__ in (None, ""):
+    import os, sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "tensorus"
 from typing import Tuple, Dict
 import torch
 import random

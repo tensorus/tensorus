@@ -16,6 +16,11 @@ Future Enhancements:
 - Use dedicated hyperparameter optimization libraries (Optuna, Ray Tune).
 """
 
+if __package__ in (None, ""):
+    import os, sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "tensorus"
+
 import torch
 import torch.nn as nn
 import torch.optim as optim

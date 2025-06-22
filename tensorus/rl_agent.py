@@ -12,6 +12,11 @@ Note on Experience Storage:
 - This approach balances tensor-native storage with manageable metadata, but sampling
   requires retrieving linked state tensors, which might be slow depending on storage backend.
 """
+
+if __package__ in (None, ""):
+    import os, sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    __package__ = "tensorus"
 from typing import Any
 import torch
 import torch.nn as nn
