@@ -32,8 +32,6 @@ from .llm_parser import LLMParser, NQLQuery, FilterClause, QueryCondition
 
 from .tensor_storage import TensorStorage, DatasetNotFoundError
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class NQLAgent:

@@ -28,9 +28,6 @@ _TYPE_MAP = {
     "dict": dict,
 }
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 class TensorStorage:
     """
     Manages datasets stored as collections of tensors in memory.

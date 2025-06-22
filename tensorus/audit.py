@@ -3,27 +3,20 @@ from typing import Optional, Dict, Any
 import sys
 from tensorus.config import settings
 
-# Configure basic logger
-# In a real app, this might be more complex (e.g., JSON logging, log rotation, external service)
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-LOG_DEFAULT_HANDLERS = [logging.StreamHandler(sys.stdout)] # Log to stdout by default
 
-# Attempt to create a log file handler.
-# This is a simple file logger; in production, consider more robust solutions.
+audit_logger = logging.getLogger("tensorus.audit")
+audit_logger.setLevel(logging.INFO)
+
 try:
     file_handler = logging.FileHandler(settings.AUDIT_LOG_PATH)
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-    LOG_DEFAULT_HANDLERS.append(file_handler)
+    audit_logger.addHandler(file_handler)
 except IOError:
-    # Handle cases where file cannot be opened (e.g. permissions)
     print(
         f"Warning: Could not open {settings.AUDIT_LOG_PATH} for writing. Audit logs will go to stdout only.",
         file=sys.stderr,
     )
-
-
-logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, handlers=LOG_DEFAULT_HANDLERS)
-audit_logger = logging.getLogger("tensorus.audit")
 
 
 def log_audit_event(

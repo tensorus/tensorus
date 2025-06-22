@@ -22,9 +22,6 @@ import tensorly as tl
 # CPTensor is a namedtuple, can be used for type hinting if specific
 # from tensorly.cp_tensor import CPTensor
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 class TensorOps:
     """
     A static library class providing robust tensor operations.

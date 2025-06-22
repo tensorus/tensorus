@@ -26,8 +26,6 @@ from typing import Tuple, Optional, Dict, Any
 from .tensor_storage import TensorStorage
 from .dummy_env import DummyEnv # Import our dummy environment
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 

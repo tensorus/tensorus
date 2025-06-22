@@ -12,9 +12,6 @@ from .storage_abc import MetadataStorage
 from .schemas_iodata import TensorusExportData, TensorusExportEntry
 import copy
 
-# Configure module level logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # In-memory storage using dictionaries

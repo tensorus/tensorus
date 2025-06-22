@@ -14,9 +14,6 @@ from .schemas import (
 )
 import copy # Ensure copy is imported, as it was added to InMemoryStorage and might be useful here too.
 
-# Configure module level logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 __all__ = ["PostgresMetadataStorage"]
