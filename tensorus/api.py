@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, model_validator
 
 # Routers containing the metadata-related endpoints
 from tensorus.api.endpoints import (
@@ -461,11 +461,14 @@ class TensorInputVal(BaseModel):
     tensor_ref: Optional[TensorRef] = None
     scalar_value: Optional[Union[float, int]] = None
 
-    @root_validator(pre=True)
-    def check_one_input_provided(cls, values):
-        if sum(v is not None for v in values.values()) != 1:
-            raise ValueError("Exactly one of 'tensor_ref' or 'scalar_value' must be provided.")
-        return values
+    @model_validator(mode="before")
+    def check_one_input_provided(cls, data):
+        if isinstance(data, dict):
+            if sum(v is not None for v in data.values()) != 1:
+                raise ValueError(
+                    "Exactly one of 'tensor_ref' or 'scalar_value' must be provided."
+                )
+        return data
 
 class OpsBaseRequest(BaseModel):
     output_dataset_name: Optional[str] = Field(None, description="Optional name for a new dataset to store the output tensor. If None, a default or existing dataset might be used by the operation.")
@@ -1784,7 +1787,7 @@ async def _get_input_val(input_val: TensorInputVal, storage: TensorStorage) -> U
     elif input_val.scalar_value is not None: # Pydantic validator ensures one is present
         return input_val.scalar_value
     else:
-        # This case should ideally be prevented by Pydantic's root_validator on TensorInputVal
+        # This case should ideally be prevented by Pydantic's model_validator on TensorInputVal
         logger.error("Invalid TensorInputVal: neither tensor_ref nor scalar_value is present.")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail="Internal error: Invalid input value structure.")
