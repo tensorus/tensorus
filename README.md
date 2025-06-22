@@ -357,6 +357,22 @@ TENSORUS_X_FRAME_OPTIONS="ALLOW-FROM https://example.com"
 TENSORUS_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://cdn.example.com"
 ```
 
+### Preparing the Test Environment
+
+The tests expect all dependencies from both `requirements.txt` and
+`requirements-test.txt` to be installed. A simple setup script is provided
+to handle this automatically:
+
+```bash
+./setup.sh
+```
+
+Run this after creating and activating a Python virtual environment. The script
+installs the Tensorus runtime requirements and the additional packages needed
+for `pytest`. Once completed, executing `pytest` from the repository root will
+automatically discover and run the entire suite—no manual package discovery is
+required.
+
 ### Test Suite Dependencies
 
 The Python tests rely on packages from both `requirements.txt` and
