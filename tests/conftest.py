@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+import logging
 
 # ----- Pre-test dependency check -----
 missing = []
@@ -25,6 +26,9 @@ from tensorus.api import app
 from tensorus.metadata import storage_instance as metadata_storage_instance
 # Import the mock tensor connector instance that the API uses
 from tensorus.storage.connectors import mock_tensor_connector_instance
+
+# Silence verbose debug/info logs from MockTensorStorageConnector during tests
+logging.getLogger("tensorus.storage.connectors").setLevel(logging.CRITICAL)
 
 @pytest.fixture(scope="function") # "function" scope ensures this runs before each test function
 def client():
