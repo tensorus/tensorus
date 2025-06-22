@@ -2,18 +2,18 @@ import pytest
 import os
 from typing import List
 
-from tensorus.config import SettingsV1, settings as global_settings
+from tensorus.config import Settings, settings as global_settings
 from tensorus.metadata import get_configured_storage_instance, InMemoryStorage, PostgresMetadataStorage, ConfigurationError
 from tensorus.metadata.storage_abc import MetadataStorage
 
-# --- Test SettingsV1 Loading ---
+# --- Test Settings Loading ---
 
 def test_settings_default_values():
-    # Test without any env vars set (relies on defaults in SettingsV1)
+    # Test without any env vars set (relies on defaults in Settings)
     # This test is tricky because settings are loaded globally at import time.
     # We need to ensure a clean environment or test specific fields not typically overridden by CI.
     # For now, let's assume a default state or test fields that are less likely to be in CI env.
-    s = SettingsV1() # Creates a new instance, re-evaluating defaults if env vars are not set for these specific fields
+    s = Settings()  # Creates a new instance, re-evaluating defaults if env vars are not set for these specific fields
     assert s.STORAGE_BACKEND == "in_memory" # Default
     assert s.API_KEY_HEADER_NAME == "X-API-KEY" # Default
     assert s.VALID_API_KEYS == [] # Default (before manual parsing from env)
@@ -26,9 +26,8 @@ def test_settings_from_env(monkeypatch):
     monkeypatch.setenv("TENSORUS_POSTGRES_HOST", "testhost")
     monkeypatch.setenv("TENSORUS_POSTGRES_PORT", "1234")
 
-    # Create a new SettingsV1 instance to load these monkeypatched env vars
-    # Pydantic v1 BaseSettings loads from env at initialization.
-    s = SettingsV1()
+    # Create a new Settings instance to load these monkeypatched env vars
+    s = Settings()
 
     assert s.STORAGE_BACKEND == "postgres_test"
     assert s.API_KEY_HEADER_NAME == "X-CUSTOM-API-KEY"
@@ -45,13 +44,13 @@ def test_valid_api_keys_parsing_empty_env(monkeypatch):
     # To test this properly, we might need to re-run that logic or use a new settings instance.
 
     # Create a new instance to test its initialization behavior
-    s = SettingsV1()
+    s = Settings()
 
     assert s.VALID_API_KEYS == []
 
 def test_valid_api_keys_json_list_in_env(monkeypatch):
     monkeypatch.setenv("TENSORUS_VALID_API_KEYS", '["json_key1", "json_key2"]')
-    s = SettingsV1()
+    s = Settings()
     assert s.VALID_API_KEYS == ["json_key1", "json_key2"]
 
 
@@ -72,8 +71,8 @@ def reset_global_settings_after_test(monkeypatch):
     os.environ.clear()
     os.environ.update(original_env)
     # Attempt to restore global_settings to a semblance of its original state
-    # This is hard because `settings = SettingsV1()` in config.py runs only once.
-    # A better way would be a settings fixture that provides a fresh SettingsV1 instance.
+    # This is hard because `settings = Settings()` in config.py runs only once.
+    # A better way would be a settings fixture that provides a fresh Settings instance.
     global_settings.VALID_API_KEYS = original_valid_keys
     # Update the global settings list to reflect the restored environment
     raw_keys = os.getenv("TENSORUS_VALID_API_KEYS")
