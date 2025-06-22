@@ -21,7 +21,6 @@ from tensorus.config import settings
 import httpx
 from httpx import HTTPStatusError
 from fastmcp import FastMCP
-from httpx import HTTPStatusError  # Ensure this is kept from previous change
 
 try:
     from fastmcp.prompts.prompt import PromptMessage, Message, TextContent
