@@ -28,8 +28,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed" # Collapse sidebar as nav is now at top
 )
 
-# --- Configure Logging (Optional but good practice) ---
-logging.basicConfig(level=logging.INFO)
+# --- Configure Logging ---
 logger = logging.getLogger(__name__)
 
 # --- Integrated Tensor Utilities (Preserved) ---

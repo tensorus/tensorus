@@ -32,12 +32,6 @@ from tensorus.api.endpoints import (
 )
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
-# Configure structured logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()]
-)
 logger = logging.getLogger(__name__)
 
 # Custom exceptions

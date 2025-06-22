@@ -31,8 +31,6 @@ import collections # Added import
 from typing import Dict, Callable, Optional, Tuple, List, Any
 from .tensor_storage import TensorStorage # Import our storage module
 
-# Configure basic logging (can be customized further)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 

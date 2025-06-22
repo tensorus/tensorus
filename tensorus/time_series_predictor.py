@@ -8,9 +8,6 @@ from typing import List, Dict, Any, Optional, Tuple
 import logging
 import time # For timestamp in metadata if needed
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s')
-
 def load_time_series_from_tensorus(
     storage: TensorStorage,
     dataset_name: str,
