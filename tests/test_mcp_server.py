@@ -49,7 +49,11 @@ def make_mock_client(
                 assert params is None or params == {}
             else:
                 assert params == expected_params
-            assert headers == expected_headers  # Added assertion
+            # Handle None vs {} comparison for headers
+            if expected_headers is None:
+                assert headers is None or headers == {}
+            else:
+                assert headers == expected_headers
             return DummyResponse(response)
 
         async def get(self, u, params=None, headers=None):  # Added headers param
@@ -60,7 +64,11 @@ def make_mock_client(
                 assert params is None or params == {}
             else:
                 assert params == expected_params
-            assert headers == expected_headers  # Added assertion
+            # Handle None vs {} comparison for headers
+            if expected_headers is None:
+                assert headers is None or headers == {}
+            else:
+                assert headers == expected_headers
             return DummyResponse(response)
 
         async def put(
@@ -74,7 +82,11 @@ def make_mock_client(
                 assert params is None or params == {}
             else:
                 assert params == expected_params
-            assert headers == expected_headers  # Added assertion
+            # Handle None vs {} comparison for headers
+            if expected_headers is None:
+                assert headers is None or headers == {}
+            else:
+                assert headers == expected_headers
             return DummyResponse(response)
 
         async def patch(
@@ -88,7 +100,11 @@ def make_mock_client(
                 assert params is None or params == {}
             else:
                 assert params == expected_params
-            assert headers == expected_headers  # Added assertion
+            # Handle None vs {} comparison for headers
+            if expected_headers is None:
+                assert headers is None or headers == {}
+            else:
+                assert headers == expected_headers
             return DummyResponse(response)
 
         async def delete(self, u, params=None, headers=None):  # Added headers param
@@ -99,7 +115,11 @@ def make_mock_client(
                 assert params is None or params == {}
             else:
                 assert params == expected_params
-            assert headers == expected_headers  # Added assertion
+            # Handle None vs {} comparison for headers
+            if expected_headers is None:
+                assert headers is None or headers == {}
+            else:
+                assert headers == expected_headers
             return DummyResponse(response)
 
     monkeypatch.setattr(mcp_server.httpx, "AsyncClient", MockAsyncClient)
