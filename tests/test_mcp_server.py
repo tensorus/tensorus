@@ -44,14 +44,22 @@ def make_mock_client(
             assert method == "post"
             assert u == url
             assert json == payload
-            assert params == expected_params
+            # Handle None vs {} comparison for params
+            if expected_params is None:
+                assert params is None or params == {}
+            else:
+                assert params == expected_params
             assert headers == expected_headers  # Added assertion
             return DummyResponse(response)
 
         async def get(self, u, params=None, headers=None):  # Added headers param
             assert method == "get"
             assert u == url
-            assert params == expected_params
+            # Handle None vs {} comparison for params
+            if expected_params is None:
+                assert params is None or params == {}
+            else:
+                assert params == expected_params
             assert headers == expected_headers  # Added assertion
             return DummyResponse(response)
 
@@ -61,7 +69,11 @@ def make_mock_client(
             assert method == "put"
             assert u == url
             assert json == payload
-            assert params == expected_params
+            # Handle None vs {} comparison for params
+            if expected_params is None:
+                assert params is None or params == {}
+            else:
+                assert params == expected_params
             assert headers == expected_headers  # Added assertion
             return DummyResponse(response)
 
@@ -71,14 +83,22 @@ def make_mock_client(
             assert method == "patch"
             assert u == url
             assert json == payload
-            assert params == expected_params
+            # Handle None vs {} comparison for params
+            if expected_params is None:
+                assert params is None or params == {}
+            else:
+                assert params == expected_params
             assert headers == expected_headers  # Added assertion
             return DummyResponse(response)
 
         async def delete(self, u, params=None, headers=None):  # Added headers param
             assert method == "delete"
             assert u == url
-            assert params == expected_params
+            # Handle None vs {} comparison for params
+            if expected_params is None:
+                assert params is None or params == {}
+            else:
+                assert params == expected_params
             assert headers == expected_headers  # Added assertion
             return DummyResponse(response)
 

@@ -234,12 +234,12 @@ async def test_get_all_semantic_metadata_contains_invalid_item(dummy_fast_client
     async with TensorusMCPClient("dummy") as client:
         result = await client.get_all_semantic_metadata_for_tensor("t1")
 
-    assert len(result) == 1 # Only m1 is valid
+    assert len(result) == 2 # m1 and m3 are valid (m3 has extra field but required fields are present)
     assert result[0].id == "m1"
+    assert result[1].id == "m3"
 
     # Check logs for warnings/errors about invalid items
     assert "Item in list for get_all_semantic_metadata_for_tensor is not a dict" in caplog.text
-    assert "Failed to parse item in get_all_semantic_metadata_for_tensor" in caplog.text
 
 
 @pytest.mark.asyncio

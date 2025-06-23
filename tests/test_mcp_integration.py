@@ -170,9 +170,9 @@ async def test_create_and_delete_dataset_integration(mcp_servers):
 
         # Verify dataset is no longer listed
         list_response_after_delete = await client.list_datasets()
-        assert isinstance(list_response_after_delete, DatasetListResponse)
-        assert dataset_name not in list_response_after_delete.datasets
-        print(f"Dataset '{dataset_name}' not found in list after deletion: {list_response_after_delete.datasets}")
+        assert isinstance(list_response_after_delete, list)
+        assert dataset_name not in list_response_after_delete
+        print(f"Dataset '{dataset_name}' not found in list after deletion: {list_response_after_delete}")
 
 @pytest.mark.asyncio
 async def test_ingest_and_get_tensor_integration(mcp_servers):
