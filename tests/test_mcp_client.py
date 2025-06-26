@@ -17,6 +17,10 @@ class DummyFastClient:
         self.mock_tool_responses = {}
         # Default response for tools not specifically mocked
         self.default_response_data = {"ok": True, "message": "Default dummy response"}
+        self.tools_list = []
+
+    def set_tool_list(self, tools):
+        self.tools_list = tools
 
     def set_mock_response(self, tool_name: str, response_config: dict):
         """Helper to set mock response for a specific tool."""
@@ -25,6 +29,10 @@ class DummyFastClient:
     def clear_mock_responses(self):
         self.mock_tool_responses = {}
         self.calls = []
+
+    async def list_tools(self):
+        self.calls.append(("list_tools", {}))
+        return self.tools_list
 
     async def __aenter__(self):
         return self
@@ -174,6 +182,26 @@ async def test_additional_methods(dummy_fast_client):
         "export_tensor_metadata",
         "analytics_get_complex_tensors",
     ]
+
+# --- New tests for list_tools ---
+
+@pytest.mark.asyncio
+async def test_list_tools_via_client_method(dummy_fast_client):
+    dummy_fast_client.set_tool_list([{"name": "tool_a"}, {"name": "tool_b"}])
+    async with TensorusMCPClient("dummy") as client:
+        result = await client.list_tools()
+    assert result == ["tool_a", "tool_b"]
+    assert dummy_fast_client.calls[-1] == ("list_tools", {})
+
+
+@pytest.mark.asyncio
+async def test_list_tools_fallback_to_call_json(dummy_fast_client, monkeypatch):
+    dummy_fast_client.set_mock_response("list_tools", {"response_data": {"tools": [{"name": "t1"}]}})
+    monkeypatch.setattr(dummy_fast_client, "list_tools", None)
+    async with TensorusMCPClient("dummy") as client:
+        result = await client.list_tools()
+    assert result == ["t1"]
+    assert dummy_fast_client.calls[-1][0] == "list_tools"
 
 # --- New tests for list_datasets ---
 @pytest.mark.asyncio
