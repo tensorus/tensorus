@@ -7,7 +7,9 @@ from tensorus import mcp_server
 from tensorus.mcp_server import MCP_AVAILABLE
 from tensorus.config import settings  # Added import
 
-pytestmark = pytest.mark.skipif(not MCP_AVAILABLE, reason="MCP dependencies (fastmcp, mcp) not available")
+pytestmark = pytest.mark.skipif(
+    not MCP_AVAILABLE, reason="MCP dependencies (fastmcp, mcp) not available"
+)
 
 
 class DummyResponse:
@@ -30,8 +32,12 @@ def make_mock_client(
     *,
     expected_params=None,
     expected_headers: Optional[dict] = None,
-):  # Added expected_headers
+    expected_timeout: float = mcp_server.HTTP_TIMEOUT,
+):  # Added expected_headers and timeout
     class MockAsyncClient:
+        def __init__(self, *, timeout=None, **kwargs):
+            assert timeout == expected_timeout
+
         async def __aenter__(self):
             return self
 
@@ -126,9 +132,12 @@ def make_mock_client(
 
 
 def make_error_client(
-    monkeypatch, method
+    monkeypatch, method, expected_timeout: float = mcp_server.HTTP_TIMEOUT
 ):  # This function also needs to handle headers if we want to test errors with headers
     class ErrorAsyncClient:
+        def __init__(self, *, timeout=None, **kwargs):
+            assert timeout == expected_timeout
+
         async def __aenter__(self):
             return self
 
@@ -160,6 +169,9 @@ def make_error_client(
 
 def make_status_client(monkeypatch, method, status_code):
     class StatusAsyncClient:
+        def __init__(self, *, timeout=None, **kwargs):
+            assert timeout == mcp_server.HTTP_TIMEOUT
+
         async def __aenter__(self):
             return self
 
@@ -650,6 +662,29 @@ async def test_http_error_returns_textcontent(
     res = await mcp_server.save_tensor.fn("ds1", [1], "int32", [1])  # No key passed
     expected_text = 'Backend service is unreachable. Response: {"error": "Network error", "message": "failed"}'
     assert res.text == expected_text
+
+
+@pytest.mark.asyncio
+async def test_custom_http_timeout(monkeypatch):
+    custom = 5.0
+    original = mcp_server.HTTP_TIMEOUT
+    mcp_server.HTTP_TIMEOUT = custom
+    try:
+        response = {"status": "ok"}
+        url = f"{mcp_server.API_BASE_URL}/health"
+        make_mock_client(
+            monkeypatch,
+            "get",
+            url,
+            None,
+            response,
+            expected_headers={},
+            expected_timeout=custom,
+        )
+        res = await mcp_server.management_health_check.fn()
+        assert json.loads(res.text) == response
+    finally:
+        mcp_server.HTTP_TIMEOUT = original
 
 
 # --- Tensor Descriptor Tools Tests ---

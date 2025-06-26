@@ -7,8 +7,11 @@ Tools" and return results as :class:`TextContent` objects.
 
 if __package__ in (None, ""):
     import os, sys
+
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     __package__ = "tensorus"
+else:
+    import os
 
 import argparse
 import json
@@ -24,6 +27,7 @@ from httpx import HTTPStatusError
 try:
     from fastmcp import FastMCP
     from fastmcp.prompts.prompt import PromptMessage, Message, TextContent
+
     MCP_AVAILABLE = True
 except ImportError:  # pragma: no cover - support older fastmcp versions or missing deps
     from dataclasses import dataclass
@@ -40,6 +44,7 @@ except ImportError:  # pragma: no cover - support older fastmcp versions or miss
 API_BASE_URL = "https://tensorus-core.hf.space"
 GLOBAL_API_KEY: Optional[str] = None
 DEMO_MODE: bool = False
+HTTP_TIMEOUT: float = float(os.environ.get("TENSORUS_HTTP_TIMEOUT", 10))
 DEMO_RESPONSES: Dict[str, Any] = {
     "/datasets": {
         "data": [
@@ -72,18 +77,21 @@ else:
         def tool(self, *args, **kwargs):
             def decorator(func):
                 return func
+
             return decorator
-        
+
         def prompt(self, *args, **kwargs):
             def decorator(func):
                 return func
+
             return decorator
-            
+
         def resource(self, *args, **kwargs):
             def decorator(func):
                 return func
+
             return decorator
-    
+
     server = DummyServer()
 
 
@@ -93,7 +101,7 @@ def _wrap_backend_response(action: str, result: Any) -> TextContent:
     if not isinstance(result, dict):
         # For non-dict responses (like lists from analytics endpoints), return as-is
         return TextContent(type="text", text=json.dumps(result))
-    
+
     status = result.get("status")
     if isinstance(result.get("detail"), dict) and "status" in result["detail"]:
         status = result["detail"]["status"]
@@ -138,7 +146,7 @@ async def _post(
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.post(
                 f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
             )
@@ -178,8 +186,16 @@ async def _get(
             }
         elif path == "/tensor_descriptors/":  # For list_tensor_descriptors
             return [
-                {"id": "tensor_desc_001", "name": "demo_tensor_1", "data_type": "float32"},
-                {"id": "tensor_desc_002", "name": "demo_tensor_2", "data_type": "int64"},
+                {
+                    "id": "tensor_desc_001",
+                    "name": "demo_tensor_1",
+                    "data_type": "float32",
+                },
+                {
+                    "id": "tensor_desc_002",
+                    "name": "demo_tensor_2",
+                    "data_type": "int64",
+                },
             ]
         elif path.startswith("/tensor_descriptors/"):  # For get_tensor_descriptor
             return {
@@ -188,19 +204,33 @@ async def _get(
                 "type": "descriptor",
                 "path_called": path,
             }
-        elif path.startswith("/tensors/") and path.endswith("/versions"):  # For list_tensor_versions
+        elif path.startswith("/tensors/") and path.endswith(
+            "/versions"
+        ):  # For list_tensor_versions
             # Return a list of demo versions
             return [
-                {"version_id": "v_demo_001", "version_tag": "v1.0", "created_at": "2024-01-01T00:00:00Z"},
-                {"version_id": "v_demo_002", "version_tag": "v1.1", "created_at": "2024-01-02T00:00:00Z"},
+                {
+                    "version_id": "v_demo_001",
+                    "version_tag": "v1.0",
+                    "created_at": "2024-01-01T00:00:00Z",
+                },
+                {
+                    "version_id": "v_demo_002",
+                    "version_tag": "v1.1",
+                    "created_at": "2024-01-02T00:00:00Z",
+                },
             ]
-        elif path.startswith("/tensors/") and "/lineage/parents" in path:  # For get_parent_tensors
+        elif (
+            path.startswith("/tensors/") and "/lineage/parents" in path
+        ):  # For get_parent_tensors
             # Return a list of demo parent tensors
             return [
                 {"tensor_id": "parent_001", "relationship_type": "derived_from"},
                 {"tensor_id": "parent_002", "relationship_type": "transformed_from"},
             ]
-        elif path.startswith("/tensors/") and "/lineage/children" in path:  # For get_child_tensors
+        elif (
+            path.startswith("/tensors/") and "/lineage/children" in path
+        ):  # For get_child_tensors
             # Return a list of demo child tensors
             return [
                 {"tensor_id": "child_001", "relationship_type": "derived_to"},
@@ -216,7 +246,7 @@ async def _get(
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.get(
                 f"{API_BASE_URL}{path}", params=params, headers=headers
             )
@@ -256,7 +286,7 @@ async def _put(
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.put(
                 f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
             )
@@ -290,7 +320,7 @@ async def _delete(path: str, api_key: Optional[str] = None) -> dict:
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.delete(f"{API_BASE_URL}{path}", headers=headers)
             response.raise_for_status()  # Will raise HTTPStatusError for 4xx/5xx
             return response.json()
@@ -328,7 +358,7 @@ async def _patch(
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
             headers[settings.API_KEY_HEADER_NAME] = actual_api_key
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.patch(
                 f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
             )
@@ -1063,7 +1093,10 @@ async def backend_ping() -> TextContent:
     """Ping the backend `/health` endpoint and forward the response."""
     if DEMO_MODE:
         return TextContent(
-            type="text", text=json.dumps(DEMO_RESPONSES.get("/health", {"status": "healthy", "demo_mode": True}))
+            type="text",
+            text=json.dumps(
+                DEMO_RESPONSES.get("/health", {"status": "healthy", "demo_mode": True})
+            ),
         )
     result = await _get("/health")
     return TextContent(type="text", text=json.dumps(result))
@@ -1225,7 +1258,7 @@ async def analytics_get_complex_tensors(
 
 
 def main() -> None:
-    global API_BASE_URL, GLOBAL_API_KEY
+    global API_BASE_URL, GLOBAL_API_KEY, HTTP_TIMEOUT
 
     parser = argparse.ArgumentParser(
         description="Run the Tensorus FastMCP server exposing dataset and tensor tools"
@@ -1256,10 +1289,17 @@ def main() -> None:
         action="store_true",  # Sets to True if flag is present
         help="Enable demo mode to use mock data instead of real API calls.",
     )
+    parser.add_argument(
+        "--http-timeout",
+        type=float,
+        default=HTTP_TIMEOUT,
+        help="Timeout for backend HTTP requests in seconds",
+    )
     args = parser.parse_args()
 
     API_BASE_URL = args.api_url.rstrip("/")
     GLOBAL_API_KEY = args.mcp_api_key
+    HTTP_TIMEOUT = args.http_timeout
 
     global DEMO_MODE  # Ensure you're assigning to the global
     DEMO_MODE = args.demo_mode
