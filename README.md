@@ -248,10 +248,12 @@ Tensorus provides a lightweight Python implementation of the Model Context Proto
 
 **Starting the MCP Server:**
 
-1. Install dependencies (includes `fastmcp`):
+1. Install dependencies. The MCP server requires the `fastmcp` package:
    ```bash
+   pip install fastmcp
    pip install -r requirements.txt
    ```
+   Running `./setup.sh` will install `fastmcp` and all other dependencies automatically.
 2. Ensure the FastAPI backend is running.
 3. Start the server from the repository root:
    ```bash
