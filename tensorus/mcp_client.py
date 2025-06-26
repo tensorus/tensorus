@@ -233,6 +233,34 @@ class TensorusMCPClient:
             logger.error(f"Prompt call failed: {prompt_name} args={args} error={e}")
             raise MCPResponseError(str(e))
 
+    async def list_tools(self) -> list[str]:
+        """Return the names of available tools on the MCP server."""
+        if callable(getattr(self._client, "list_tools", None)):
+            try:
+                tools = await self._client.list_tools()
+                names = []
+                for tool in tools:
+                    if hasattr(tool, "name"):
+                        names.append(tool.name)
+                    elif isinstance(tool, dict) and "name" in tool:
+                        names.append(tool["name"])
+                    else:
+                        names.append(str(tool))
+                return names
+            except Exception as e:  # pragma: no cover - rare
+                logger.warning(
+                    f"list_tools via client method failed with {e}; falling back to JSON call"
+                )
+
+        data = await self._call_json("list_tools")
+        if isinstance(data, list):
+            return [d.get("name", d) if isinstance(d, dict) else d for d in data]
+        if isinstance(data, dict):
+            tools = data.get("tools") or data.get("data")
+            if isinstance(tools, list):
+                return [t.get("name", t) if isinstance(t, dict) else t for t in tools]
+        return []
+
     # --- Dataset management ---
     async def list_datasets(self) -> list[str]:
         response_data = await self._call_json(

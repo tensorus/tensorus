@@ -18,6 +18,14 @@ Below is a summary of all available methods.  See the
 [API Guide](api_guide.md) and [API Endpoints](../README.md#api-endpoints) in the
 README for details on the REST endpoints each method calls.
 
+## Server Introspection
+
+- `list_tools()` – retrieve the list of tool names available from the MCP
+  server.
+  ```python
+  tool_names = await client.list_tools()
+  ```
+
 ## Dataset Management
 
 - `list_datasets()` – list existing datasets.
