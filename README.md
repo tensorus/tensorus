@@ -260,6 +260,8 @@ Tensorus provides a lightweight Python implementation of the Model Context Proto
    python -m tensorus.mcp_server
    ```
    Add `--transport streamable-http` for a web endpoint. SSE transport is deprecated.
+   The server assumes the backend is reachable at `https://tensorus-core.hf.space`.
+   Set `--api-url` or the environment variable `TENSORUS_API_BASE_URL` to use a different URL (the CLI option takes precedence).
    If you plan to run the MCP server tests in `tests/test_mcp_server.py` and `tests/test_mcp_client.py`, run `./setup.sh` beforehand to install all required packages.
 
 For a quick test of the server you can connect to the publicly hosted instance:
