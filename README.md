@@ -743,17 +743,12 @@ For a complete list of client methods and example calls see
 
 ## Completed Features
 
-*   **Tensor Storage:** Efficiently stores and retrieves PyTorch tensors with associated metadata, including in-memory and optional file-based persistence. Supports dataset creation, tensor ingestion, querying, sampling, and metadata updates.
-*   **Natural Query Language (NQL):** Provides a basic regex-based natural language interface for querying tensor data, supporting retrieval and simple filtering.
-*   **Agent Framework:** Includes several operational agents:
-    *   **Data Ingestion Agent:** Monitors local directories for CSV and image files, preprocesses them, and ingests them into TensorStorage.
-    *   **RL Agent:** Implements a DQN agent that learns from experiences (stored in TensorStorage) in a dummy environment.
-    *   **AutoML Agent:** Performs random search hyperparameter optimization for a dummy MLP model, storing trial results in TensorStorage.
-*   **API-Driven:** A comprehensive FastAPI backend offers RESTful endpoints for dataset management, NQL querying, tensor operations, and agent control (live for Ingestion Agent, simulated for RL/AutoML).
-*   **Streamlit UI:** A multi-page user interface for dashboard overview, agent control, NQL interaction, data exploration, and API interaction.
-*   **Tensor Operations:** A library of robust tensor operations (arithmetic, matrix ops, reductions, reshaping, etc.) accessible via the API.
-*   **Model Context Protocol (MCP) Server:** A Python server built with `fastmcp` exposes Tensorus capabilities (storage and operations) via the Model Context Protocol.
-*   **Extensible Design:** The project is structured with modular components, facilitating future extensions.
+The current codebase implements all of the items listed in
+[Key Features](#key-features). Tensorus already provides efficient tensor
+storage with optional file persistence, a natural query language, a flexible
+agent framework, a RESTful API, a Streamlit UI, robust tensor operations and an
+MCP server for tool-based integration. The modular architecture makes future
+extensions straightforward.
 
 ## Future Implementation
 
