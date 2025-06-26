@@ -41,7 +41,9 @@ except ImportError:  # pragma: no cover - support older fastmcp versions or miss
     FastMCP = None
     MCP_AVAILABLE = False
 
-API_BASE_URL = "https://tensorus-core.hf.space"
+API_BASE_URL_ENV_VAR = "TENSORUS_API_BASE_URL"
+API_BASE_URL_DEFAULT = "https://tensorus-core.hf.space"
+API_BASE_URL = os.environ.get(API_BASE_URL_ENV_VAR, API_BASE_URL_DEFAULT)
 GLOBAL_API_KEY: Optional[str] = None
 DEMO_MODE: bool = False
 HTTP_TIMEOUT: float = float(os.environ.get("TENSORUS_HTTP_TIMEOUT", 10))
@@ -1276,7 +1278,7 @@ def main() -> None:
     parser.add_argument("--path", default="/mcp", help="Base path for Streamable HTTP")
     parser.add_argument(
         "--api-url",
-        default=API_BASE_URL,
+        default=None,
         help="Base URL of the running FastAPI backend",
     )
     parser.add_argument(
@@ -1297,7 +1299,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    API_BASE_URL = args.api_url.rstrip("/")
+    env_api_url = os.environ.get(API_BASE_URL_ENV_VAR)
+    if args.api_url:
+        API_BASE_URL = args.api_url.rstrip("/")
+    elif env_api_url:
+        API_BASE_URL = env_api_url.rstrip("/")
+    else:
+        API_BASE_URL = API_BASE_URL_DEFAULT
     GLOBAL_API_KEY = args.mcp_api_key
     HTTP_TIMEOUT = args.http_timeout
 

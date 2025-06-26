@@ -1,4 +1,5 @@
 import json
+import sys
 import pytest
 import httpx
 from typing import Optional  # Added for type hinting
@@ -685,6 +686,35 @@ async def test_custom_http_timeout(monkeypatch):
         assert json.loads(res.text) == response
     finally:
         mcp_server.HTTP_TIMEOUT = original
+
+
+def test_api_base_url_from_env(monkeypatch):
+    env_url = "http://env.example"
+    original = mcp_server.API_BASE_URL
+    monkeypatch.setenv("TENSORUS_API_BASE_URL", env_url)
+    monkeypatch.setattr(mcp_server.server, "run", lambda *a, **k: None)
+    monkeypatch.setattr(sys, "argv", ["mcp_server.py"])
+    try:
+        mcp_server.main()
+        assert mcp_server.API_BASE_URL == env_url
+    finally:
+        mcp_server.API_BASE_URL = original
+        monkeypatch.delenv("TENSORUS_API_BASE_URL", raising=False)
+
+
+def test_cli_overrides_env(monkeypatch):
+    env_url = "http://env.example"
+    cli_url = "http://cli.example"
+    original = mcp_server.API_BASE_URL
+    monkeypatch.setenv("TENSORUS_API_BASE_URL", env_url)
+    monkeypatch.setattr(mcp_server.server, "run", lambda *a, **k: None)
+    monkeypatch.setattr(sys, "argv", ["mcp_server.py", "--api-url", cli_url])
+    try:
+        mcp_server.main()
+        assert mcp_server.API_BASE_URL == cli_url
+    finally:
+        mcp_server.API_BASE_URL = original
+        monkeypatch.delenv("TENSORUS_API_BASE_URL", raising=False)
 
 
 # --- Tensor Descriptor Tools Tests ---
