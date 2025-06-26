@@ -252,25 +252,31 @@ class TensorusMCPClient:
         """Sync wrapper for list_datasets"""
         return asyncio.run(self.list_datasets())
 
-    async def create_dataset(self, dataset_name: str) -> CreateDatasetResponse:
+    async def create_dataset(self, dataset_name: str, api_key: Optional[str] = None) -> CreateDatasetResponse:
+        payload = {"dataset_name": dataset_name}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_create_dataset",
-            {"dataset_name": dataset_name},
+            payload,
             response_model=CreateDatasetResponse
         )
 
-    def create_dataset_sync(self, dataset_name: str) -> CreateDatasetResponse:
-        return asyncio.run(self.create_dataset(dataset_name))
+    def create_dataset_sync(self, dataset_name: str, api_key: Optional[str] = None) -> CreateDatasetResponse:
+        return asyncio.run(self.create_dataset(dataset_name, api_key=api_key))
 
-    async def delete_dataset(self, dataset_name: str) -> DeleteDatasetResponse:
+    async def delete_dataset(self, dataset_name: str, api_key: Optional[str] = None) -> DeleteDatasetResponse:
+        payload = {"dataset_name": dataset_name}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_delete_dataset",
-            {"dataset_name": dataset_name},
+            payload,
             response_model=DeleteDatasetResponse
         )
 
-    def delete_dataset_sync(self, dataset_name: str) -> DeleteDatasetResponse:
-        return asyncio.run(self.delete_dataset(dataset_name))
+    def delete_dataset_sync(self, dataset_name: str, api_key: Optional[str] = None) -> DeleteDatasetResponse:
+        return asyncio.run(self.delete_dataset(dataset_name, api_key=api_key))
 
     # --- Tensor management ---
     async def ingest_tensor(
@@ -280,6 +286,7 @@ class TensorusMCPClient:
         tensor_dtype: str,
         tensor_data: Any,
         metadata: Optional[dict] = None,
+        api_key: Optional[str] = None,
     ) -> IngestTensorResponse:
         payload = {
             "dataset_name": dataset_name,
@@ -288,23 +295,31 @@ class TensorusMCPClient:
             "tensor_data": tensor_data,
             "metadata": metadata,
         }
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_ingest_tensor",
             payload,
             response_model=IngestTensorResponse
         )
 
-    async def get_tensor_details(self, dataset_name: str, record_id: str) -> TensorDetailsResponse:
+    async def get_tensor_details(self, dataset_name: str, record_id: str, api_key: Optional[str] = None) -> TensorDetailsResponse:
+        payload = {"dataset_name": dataset_name, "record_id": record_id}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_get_tensor_details",
-            {"dataset_name": dataset_name, "record_id": record_id},
+            payload,
             response_model=TensorDetailsResponse
         )
 
-    async def delete_tensor(self, dataset_name: str, record_id: str) -> DeleteTensorResponse:
+    async def delete_tensor(self, dataset_name: str, record_id: str, api_key: Optional[str] = None) -> DeleteTensorResponse:
+        payload = {"dataset_name": dataset_name, "record_id": record_id}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_delete_tensor",
-            {"dataset_name": dataset_name, "record_id": record_id},
+            payload,
             response_model=DeleteTensorResponse
         )
 
@@ -312,37 +327,63 @@ class TensorusMCPClient:
         self,
         dataset_name: str,
         record_id: str,
-        new_metadata: dict
+        new_metadata: dict,
+        api_key: Optional[str] = None
     ) -> UpdateMetadataResponse:
+        payload = {
+            "dataset_name": dataset_name,
+            "record_id": record_id,
+            "new_metadata": new_metadata,
+        }
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_update_tensor_metadata",
-            {"dataset_name": dataset_name, "record_id": record_id, "new_metadata": new_metadata},
+            payload,
             response_model=UpdateMetadataResponse
         )
 
     # --- Tensor operations ---
-    async def apply_unary_operation(self, operation: str, payload: dict) -> OperationResponse:
+    async def apply_unary_operation(
+        self, operation: str, payload: dict, api_key: Optional[str] = None
+    ) -> OperationResponse:
+        op_payload = {"operation": operation, **payload}
+        if api_key is not None:
+            op_payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_apply_unary_operation",
-            {"operation": operation, **payload},
+            op_payload,
             response_model=OperationResponse
         )
 
-    async def apply_binary_operation(self, operation: str, payload: dict) -> OperationResponse:
+    async def apply_binary_operation(
+        self, operation: str, payload: dict, api_key: Optional[str] = None
+    ) -> OperationResponse:
+        op_payload = {"operation": operation, **payload}
+        if api_key is not None:
+            op_payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_apply_binary_operation",
-            {"operation": operation, **payload},
+            op_payload,
             response_model=OperationResponse
         )
 
-    async def apply_list_operation(self, operation: str, payload: dict) -> OperationResponse:
+    async def apply_list_operation(
+        self, operation: str, payload: dict, api_key: Optional[str] = None
+    ) -> OperationResponse:
+        op_payload = {"operation": operation, **payload}
+        if api_key is not None:
+            op_payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_apply_list_operation",
-            {"operation": operation, **payload},
+            op_payload,
             response_model=OperationResponse
         )
 
-    async def apply_einsum(self, payload: dict) -> OperationResponse:
+    async def apply_einsum(self, payload: dict, api_key: Optional[str] = None) -> OperationResponse:
+        if api_key is not None:
+            payload = dict(payload)
+            payload["api_key"] = api_key
         return await self._call_json(
             "tensorus_apply_einsum",
             payload,
@@ -351,11 +392,14 @@ class TensorusMCPClient:
 
     # --- Tensor descriptor CRUD ---
     async def create_tensor_descriptor(
-        self, descriptor_data: dict
+        self, descriptor_data: dict, api_key: Optional[str] = None
     ) -> TensorDescriptorResponse:
+        payload = {"descriptor_data": descriptor_data}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "create_tensor_descriptor",
-            {"descriptor_data": descriptor_data},
+            payload,
             response_model=TensorDescriptorResponse,
         )
 
@@ -416,26 +460,35 @@ class TensorusMCPClient:
             "list_tensor_descriptors", params
         )
 
-    async def get_tensor_descriptor(self, tensor_id: str) -> TensorDescriptorResponse:
+    async def get_tensor_descriptor(self, tensor_id: str, api_key: Optional[str] = None) -> TensorDescriptorResponse:
+        payload = {"tensor_id": tensor_id}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "get_tensor_descriptor",
-            {"tensor_id": tensor_id},
+            payload,
             response_model=TensorDescriptorResponse,
         )
 
     async def update_tensor_descriptor(
-        self, tensor_id: str, updates: dict
+        self, tensor_id: str, updates: dict, api_key: Optional[str] = None
     ) -> TensorDescriptorResponse:
+        payload = {"tensor_id": tensor_id, "updates": updates}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "update_tensor_descriptor",
-            {"tensor_id": tensor_id, "updates": updates},
+            payload,
             response_model=TensorDescriptorResponse,
         )
 
-    async def delete_tensor_descriptor(self, tensor_id: str) -> MessageResponse:
+    async def delete_tensor_descriptor(self, tensor_id: str, api_key: Optional[str] = None) -> MessageResponse:
+        payload = {"tensor_id": tensor_id}
+        if api_key is not None:
+            payload["api_key"] = api_key
         return await self._call_json(
             "delete_tensor_descriptor",
-            {"tensor_id": tensor_id},
+            payload,
             response_model=MessageResponse,
         )
 

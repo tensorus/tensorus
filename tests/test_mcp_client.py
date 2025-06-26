@@ -113,6 +113,13 @@ async def test_create_dataset(dummy_fast_client):
     assert result.success is True
     assert result.message == "Dataset ds1 created"
 
+@pytest.mark.asyncio
+async def test_create_dataset_with_api_key(dummy_fast_client):
+    async with TensorusMCPClient("dummy") as client:
+        result = await client.create_dataset("ds1", api_key="KEY")
+    assert dummy_fast_client.calls[-1] == ("tensorus_create_dataset", {"dataset_name": "ds1", "api_key": "KEY"})
+    assert result.success is True
+
 
 @pytest.mark.asyncio
 async def test_ingest_tensor(dummy_fast_client):
@@ -124,6 +131,13 @@ async def test_ingest_tensor(dummy_fast_client):
     assert dummy_fast_client.calls[0][0] == "tensorus_ingest_tensor"
     assert res.id == "tensor_id_123"
     assert res.status == "ingested"
+
+@pytest.mark.asyncio
+async def test_ingest_tensor_with_api_key(dummy_fast_client):
+    async with TensorusMCPClient("dummy") as client:
+        res = await client.ingest_tensor("ds", [1,2], "float32", [1,2], {"x":1}, api_key="KEY")
+    assert dummy_fast_client.calls[-1][1]["api_key"] == "KEY"
+    assert res.id == "tensor_id_123"
 
 
 @pytest.mark.asyncio
