@@ -144,10 +144,11 @@ async def _post(
             "data": DEMO_RESPONSES["default_tool_demo"],
         }
     try:
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
-            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
+            # Use Bearer token authentication (industry standard)
+            headers["Authorization"] = f"Bearer {actual_api_key}"
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.post(
                 f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
@@ -244,10 +245,11 @@ async def _get(
             "data": DEMO_RESPONSES["default_tool_demo"],
         }
     try:
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
-            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
+            # Use Bearer token authentication (industry standard)
+            headers["Authorization"] = f"Bearer {actual_api_key}"
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.get(
                 f"{API_BASE_URL}{path}", params=params, headers=headers
@@ -284,10 +286,11 @@ async def _put(
             "data": DEMO_RESPONSES["default_tool_demo"],
         }
     try:
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
-            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
+            # Use Bearer token authentication (industry standard)
+            headers["Authorization"] = f"Bearer {actual_api_key}"
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.put(
                 f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers
@@ -318,10 +321,11 @@ async def _delete(path: str, api_key: Optional[str] = None) -> dict:
             "data": DEMO_RESPONSES["default_tool_demo"],
         }
     try:
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
-            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
+            # Use Bearer token authentication (industry standard)
+            headers["Authorization"] = f"Bearer {actual_api_key}"
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.delete(f"{API_BASE_URL}{path}", headers=headers)
             response.raise_for_status()  # Will raise HTTPStatusError for 4xx/5xx
@@ -356,10 +360,11 @@ async def _patch(
             "data": DEMO_RESPONSES["default_tool_demo"],
         }
     try:
-        headers = {}
+        headers = {"Content-Type": "application/json"}
         actual_api_key = api_key if api_key is not None else GLOBAL_API_KEY
         if actual_api_key:
-            headers[settings.API_KEY_HEADER_NAME] = actual_api_key
+            # Use Bearer token authentication (industry standard)
+            headers["Authorization"] = f"Bearer {actual_api_key}"
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             response = await client.patch(
                 f"{API_BASE_URL}{path}", json=payload, params=params, headers=headers

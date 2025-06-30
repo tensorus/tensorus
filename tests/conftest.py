@@ -30,26 +30,81 @@ from tensorus.storage.connectors import mock_tensor_connector_instance
 # Silence verbose debug/info logs from MockTensorStorageConnector during tests
 logging.getLogger("tensorus.storage.connectors").setLevel(logging.CRITICAL)
 
-@pytest.fixture(scope="function") # "function" scope ensures this runs before each test function
+# Test API keys for authentication testing
+TEST_API_KEY = "tsr_test_key_12345678901234567890123456789012345678"
+INVALID_API_KEY = "tsr_invalid_key_invalid_invalid_invalid_invalid"
+
+@pytest.fixture(scope="function") 
 def client():
     """
     Provides a FastAPI TestClient instance for API testing.
     Clears all in-memory data stores before yielding the client
     to ensure test isolation.
     """
+    # Setup test authentication
+    import os
+    os.environ["TENSORUS_AUTH_ENABLED"] = "true"
+    os.environ["TENSORUS_API_KEYS"] = TEST_API_KEY
+    
     # Clear metadata storage
     metadata_storage_instance.clear_all_data()
 
-    # Clear mock tensor storage (assuming it has a similar clear method)
-    # The MockTensorStorageConnector needs a clear method. Let's add one.
-    # If MockTensorStorageConnector._mock_db and _mock_details_db are directly accessible,
-    # they could be cleared here. For encapsulation, a method is better.
-    # --- This was done in the previous step, now we can use it ---
+    # Clear mock tensor storage
     mock_tensor_connector_instance.clear_all_data()
 
     # Yield the test client for the test to use
     with TestClient(app) as c:
         yield c
+    
+    # Cleanup environment
+    os.environ.pop("TENSORUS_AUTH_ENABLED", None)
+    os.environ.pop("TENSORUS_API_KEYS", None)
+
+
+@pytest.fixture
+def auth_headers():
+    """Provide valid authentication headers for testing."""
+    return {"Authorization": f"Bearer {TEST_API_KEY}"}
+
+
+@pytest.fixture  
+def invalid_auth_headers():
+    """Provide invalid authentication headers for testing."""
+    return {"Authorization": f"Bearer {INVALID_API_KEY}"}
+
+
+@pytest.fixture
+def legacy_auth_headers():
+    """Provide legacy authentication headers for backward compatibility testing."""
+    return {"X-API-KEY": TEST_API_KEY}
+
+
+@pytest.fixture
+def authenticated_client(client, auth_headers):
+    """Provide a client with authentication headers pre-configured."""
+    client.headers.update(auth_headers)
+    return client
+
+
+@pytest.fixture
+def unauthenticated_client():
+    """
+    Provides a FastAPI TestClient instance without authentication enabled
+    for testing public endpoints or auth-disabled scenarios.
+    """
+    # Setup with auth disabled
+    import os
+    os.environ["TENSORUS_AUTH_ENABLED"] = "false"
+    
+    # Clear storage
+    metadata_storage_instance.clear_all_data()
+    mock_tensor_connector_instance.clear_all_data()
+
+    with TestClient(app) as c:
+        yield c
+    
+    # Cleanup
+    os.environ.pop("TENSORUS_AUTH_ENABLED", None)
 
     # Optional: Clean up after test if necessary, though function scope
     # and clearing at the start usually suffices.

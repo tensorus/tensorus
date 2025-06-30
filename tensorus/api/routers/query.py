@@ -5,6 +5,7 @@ from ..utils import tensor_to_list
 from ...nql_agent import NQLAgent
 from ...tensor_storage import TensorStorage
 from ...api import NQLQueryRequest, NQLResponse, get_nql_agent
+from ..security import verify_api_key
 
 router = APIRouter()
 
@@ -12,6 +13,7 @@ router = APIRouter()
 async def query_route(
     request: NQLQueryRequest,
     nql_agent: NQLAgent = Depends(get_nql_agent),
+    api_key: str = Depends(verify_api_key)
 ):
     """Execute an NQL query and convert tensors to list for JSON responses."""
     try:

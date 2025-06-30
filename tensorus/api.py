@@ -32,6 +32,9 @@ from tensorus.api.endpoints import (
 )
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+# Import security functions
+from tensorus.api.security import verify_api_key
+
 logger = logging.getLogger(__name__)
 
 # Custom exceptions
@@ -634,7 +637,11 @@ async def get_nql_agent() -> NQLAgent:
 
 # --- Dataset Management Endpoints ---
 @app.post("/datasets/create", response_model=ApiResponse, status_code=status.HTTP_201_CREATED, tags=["Datasets"])
-async def create_dataset(req: DatasetCreateRequest, storage: TensorStorage = Depends(get_tensor_storage)):
+async def create_dataset(
+    req: DatasetCreateRequest, 
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
+):
     """
     Creates a new, empty dataset with the specified unique name.
 
@@ -663,7 +670,8 @@ async def create_dataset(req: DatasetCreateRequest, storage: TensorStorage = Dep
 async def ingest_tensor(
     name: str = Path(..., description="The name of the target dataset for ingestion."),
     tensor_input: TensorInput = Body(..., description="The tensor data and metadata to ingest."),
-    storage: TensorStorage = Depends(get_tensor_storage)
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Ingests a single tensor (provided in JSON format) into the specified dataset.
@@ -704,7 +712,8 @@ async def ingest_tensor(
 @app.get("/datasets/{name}/fetch", response_model=ApiResponse, tags=["Data Retrieval"])
 async def fetch_dataset(
     name: str = Path(..., description="The name of the dataset to fetch records from."),
-    storage: TensorStorage = Depends(get_tensor_storage)
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Retrieves all records (including tensor data and metadata) from a specified dataset.
@@ -775,7 +784,8 @@ async def fetch_dataset_records(
     name: str = Path(..., description="The name of the dataset."),
     offset: int = Query(0, ge=0, description="Starting offset of records."),
     limit: int = Query(100, ge=1, description="Maximum number of records to return."),
-    storage: TensorStorage = Depends(get_tensor_storage)
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """Retrieve records from a dataset using pagination."""
     try:
@@ -795,7 +805,10 @@ async def fetch_dataset_records(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal error retrieving records.")
 
 @app.get("/datasets", response_model=ApiResponse, tags=["Datasets"])
-async def list_datasets(storage: TensorStorage = Depends(get_tensor_storage)):
+async def list_datasets(
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
+):
     """
     Lists the names of all available datasets managed by the TensorStorage.
 
@@ -831,6 +844,7 @@ async def list_datasets(storage: TensorStorage = Depends(get_tensor_storage)):
 async def count_dataset(
     name: str = Path(..., description="The name of the dataset."),
     storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """Return the number of records in the specified dataset."""
     try:
@@ -847,7 +861,8 @@ async def count_dataset(
 async def get_tensor_by_id_api(
     dataset_name: str = Path(..., description="The name of the dataset."),
     record_id: str = Path(..., description="The unique ID of the tensor record."),
-    storage: TensorStorage = Depends(get_tensor_storage)
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """Retrieve a tensor by ``record_id`` from ``dataset_name``.
 
@@ -896,7 +911,8 @@ async def get_tensor_by_id_api(
 @app.delete("/datasets/{dataset_name}", response_model=ApiResponse, tags=["Datasets"])
 async def delete_dataset_api(
     dataset_name: str = Path(..., description="The name of the dataset to delete."),
-    storage: TensorStorage = Depends(get_tensor_storage)
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Deletes an entire dataset and all its associated tensor records.
@@ -919,7 +935,8 @@ async def delete_dataset_api(
 async def delete_tensor_api(
     dataset_name: str = Path(..., description="The name of the dataset."),
     record_id: str = Path(..., description="The unique ID of the tensor record to delete."),
-    storage: TensorStorage = Depends(get_tensor_storage)
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Deletes a specific tensor record by its ID from the specified dataset.
@@ -946,7 +963,8 @@ async def update_tensor_metadata_api(
     dataset_name: str = Path(..., description="The name of the dataset."),
     record_id: str = Path(..., description="The unique ID of the tensor record to update."),
     update_request: UpdateMetadataRequest = Body(...),
-    storage: TensorStorage = Depends(get_tensor_storage)
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key)
 ):
     """
     Updates the metadata for a specific tensor record.
