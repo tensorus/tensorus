@@ -3,6 +3,7 @@ import pytest
 pytest.importorskip("torch")
 import torch
 
+pytest.importorskip("langchain_core")
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
 from tensorus.nql_agent import NQLAgent

@@ -7,6 +7,7 @@ import time  # For simulating timestamps
 import math  # For simulating metrics
 import asyncio  # For async operations
 import os
+from contextlib import asynccontextmanager
 
 import torch
 from fastapi import (
@@ -109,6 +110,26 @@ async def add_security_headers(request: Request, call_next):
 
     return response
 
+# --- Lifespan Context Manager ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup
+    app.state.metrics_task = asyncio.create_task(_metrics_simulation_loop())
+    logger.info("Background metrics simulation task started")
+    
+    yield
+    
+    # Shutdown
+    task = getattr(app.state, "metrics_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    logger.info("Background metrics simulation task stopped")
+
 # --- FastAPI App Instance ---
 app = FastAPI(
     title="Tensorus API",
@@ -120,6 +141,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
     # contact={
     #     "name": "API Support",
     #     "url": "http://example.com/support",
@@ -313,22 +335,6 @@ async def _metrics_simulation_loop() -> None:
         await asyncio.sleep(5)
 
 
-@app.on_event("startup")
-async def _start_simulation_task() -> None:
-    """Launch background metric simulation when the app starts."""
-    app.state.metrics_task = asyncio.create_task(_metrics_simulation_loop())
-
-
-@app.on_event("shutdown")
-async def _stop_simulation_task() -> None:
-    """Cancel background metric simulation on shutdown."""
-    task = getattr(app.state, "metrics_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:  # pragma: no cover
-            pass
 
 
 # --- Helper Functions (Tensor Conversion) ---
@@ -416,16 +422,16 @@ def tensor_to_list(tensor: torch.Tensor) -> Tuple[List[int], str, Union[List[Any
 
 # --- Pydantic Models ---
 class DatasetCreateRequest(BaseModel):
-    name: str = Field(..., description="Unique name for the new dataset.", example="my_image_dataset")
+    name: str = Field(..., description="Unique name for the new dataset.", json_schema_extra={"example": "my_image_dataset"})
 
 class TensorInput(BaseModel):
-    shape: List[int] = Field(..., description="Shape of the tensor (e.g., [height, width, channels]).", example=[2, 3])
-    dtype: str = Field(..., description="Data type (e.g., 'float32', 'int64', 'bool').", example="float32")
-    data: Union[List[Any], int, float] = Field(..., description="Tensor data as a nested list for multi-dim tensors, or a single number for scalars.", example=[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional key-value metadata.", example={"source": "api_ingest", "timestamp": 1678886400})
+    shape: List[int] = Field(..., description="Shape of the tensor (e.g., [height, width, channels]).", json_schema_extra={"example": [2, 3]})
+    dtype: str = Field(..., description="Data type (e.g., 'float32', 'int64', 'bool').", json_schema_extra={"example": "float32"})
+    data: Union[List[Any], int, float] = Field(..., description="Tensor data as a nested list for multi-dim tensors, or a single number for scalars.", json_schema_extra={"example": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]})
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional key-value metadata.", json_schema_extra={"example": {"source": "api_ingest", "timestamp": 1678886400}})
 
 class NQLQueryRequest(BaseModel):
-    query: str = Field(..., description="Natural language query string.", example="find image tensors from 'my_image_dataset' where metadata.source = 'web_scrape'")
+    query: str = Field(..., description="Natural language query string.", json_schema_extra={"example": "find image tensors from 'my_image_dataset' where metadata.source = 'web_scrape'"})
 
 class TensorOutput(BaseModel):
     record_id: str = Field(..., description="Unique record ID assigned during ingestion.")
@@ -529,7 +535,7 @@ class OpsTensorListRequestParams(BaseModel):
     dim: int = Field(0, description="Dimension along which to concatenate or stack.")
 
 class OpsTensorListRequest(OpsBaseRequest): # For concatenate, stack
-    input_tensors: List[TensorRef] = Field(..., min_items=1, description="List of input tensors to concatenate or stack.")
+    input_tensors: List[TensorRef] = Field(..., min_length=1, description="List of input tensors to concatenate or stack.")
     params: OpsTensorListRequestParams
 
 # Einsum Operation Request Model
@@ -537,7 +543,7 @@ class OpsEinsumRequestParams(BaseModel):
     equation: str = Field(..., description="Einstein summation equation string (e.g., 'ij,jk->ik').")
 
 class OpsEinsumRequest(OpsBaseRequest):
-    input_tensors: List[TensorRef] = Field(..., min_items=1, description="List of input tensors for Einsum.")
+    input_tensors: List[TensorRef] = Field(..., min_length=1, description="List of input tensors for Einsum.")
     params: OpsEinsumRequestParams
 
 # Generic Operation Result Response Model
