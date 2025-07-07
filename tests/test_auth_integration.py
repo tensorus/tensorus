@@ -164,8 +164,9 @@ class TestConfigurationManagement:
         """Test support for multiple API keys."""
         import os
         # Setup multiple keys
-        key1 = "tsr_key1_12345678901234567890123456789012345678"
-        key2 = "tsr_key2_87654321098765432109876543210987654321"
+        # Use valid API key formats (tsr_ prefix + 48 characters)
+        key1 = "tsr_key1_" + "1" * 43
+        key2 = "tsr_key2_" + "2" * 43
         
         os.environ["TENSORUS_API_KEYS"] = f"{key1},{key2}"
 
