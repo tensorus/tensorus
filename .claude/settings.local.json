@@ -12,7 +12,8 @@
       "Bash(find:*)",
       "Bash(python -m pytest tests/ -v --tb=short)",
       "Bash(python:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }
