@@ -21,6 +21,16 @@ def clear_storage():
     yield
     storage.datasets.clear()
 
+# Import the test API key for authentication
+from tests.conftest import TEST_API_KEY
+AUTH_HEADERS = {"Authorization": f"Bearer {TEST_API_KEY}"}
+
+# Ensure the global settings used by this module's `app` instance are configured with TEST_API_KEY
+from tensorus.config import settings as global_settings
+global_settings.API_KEYS = TEST_API_KEY
+global_settings.AUTH_ENABLED = True # Ensure auth is also enabled
+
+
 @pytest.fixture
 def client():
     with TestClient(app) as c:
@@ -28,17 +38,26 @@ def client():
 
 def _ingest(client, dataset, value):
     payload = {"shape": [1], "dtype": "float32", "data": [float(value)], "metadata": {"v": value}}
-    return client.post(f"/datasets/{dataset}/ingest", json=payload)
+    # Add AUTH_HEADERS
+    ingest_resp = client.post(f"/datasets/{dataset}/ingest", json=payload, headers=AUTH_HEADERS)
+    assert ingest_resp.status_code == 201, f"Failed to ingest into {dataset}: {ingest_resp.text}"
+    return ingest_resp
 
 
 def test_count_endpoint(client):
     ds = "count_ds"
-    assert client.post("/datasets/create", json={"name": ds}).status_code == 201
+    # Add AUTH_HEADERS
+    create_resp = client.post("/datasets/create", json={"name": ds}, headers=AUTH_HEADERS)
+    assert create_resp.status_code == 201, f"Failed to create dataset {ds}: {create_resp.text}"
+
     _ingest(client, ds, 1)
     _ingest(client, ds, 2)
-    resp = client.get(f"/datasets/{ds}/count")
+
+    # Add AUTH_HEADERS
+    resp = client.get(f"/datasets/{ds}/count", headers=AUTH_HEADERS)
     assert resp.status_code == 200
     assert resp.json()["data"]["count"] == 2
 
-    resp_missing = client.get("/datasets/missing_ds/count")
+    # Add AUTH_HEADERS, similar reasoning to test_dataset_api.py for 404
+    resp_missing = client.get("/datasets/missing_ds/count", headers=AUTH_HEADERS)
     assert resp_missing.status_code == 404

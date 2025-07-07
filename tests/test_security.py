@@ -88,18 +88,22 @@ def test_verify_api_key_missing_key(test_app_client: TestClient, monkeypatch):
 def test_verify_api_key_no_keys_configured(test_app_client: TestClient, monkeypatch):
     # If VALID_API_KEYS is empty, no key is valid.
     header_name = "X-TEST-API-KEY"
-    monkeypatch.setattr(global_settings, 'VALID_API_KEYS', []) # No keys configured
+    monkeypatch.setattr(global_settings, 'VALID_API_KEYS', [])
     monkeypatch.setattr(global_settings, 'API_KEY_HEADER_NAME', header_name)
     monkeypatch.setattr(api_key_header_auth, 'name', header_name)
 
+    # Also ensure API_KEYS (string) is empty for this part of the test.
+    # This guarantees settings.valid_api_keys property returns an empty list.
+    monkeypatch.setattr(global_settings, 'API_KEYS', "")
+
     headers = {header_name: "anykey"} # Send some key
     response = test_app_client.get("/protected", headers=headers)
-    # When VALID_API_KEYS is empty, the system should return 401 for invalid key
-    # because the key format is checked first before the empty keys check
-    assert response.status_code == 401  # Invalid key
-    assert response.json() == {"detail": "Invalid API key"} # Because "anykey" is invalid format
+    # If no keys are configured AT ALL, verify_api_key raises 503 immediately.
+    assert response.status_code == 503  # Changed from 401
+    assert response.json() == {"detail": "API authentication not configured"} # Changed
 
     # Test missing key when no keys are configured
+    # Settings API_KEYS and VALID_API_KEYS are still empty from above.
     response_missing = test_app_client.get("/protected")
     assert response_missing.status_code == 503  # Service unavailable when no keys configured
     assert response_missing.json() == {"detail": "API authentication not configured"}

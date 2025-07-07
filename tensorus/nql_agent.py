@@ -107,6 +107,12 @@ class NQLAgent:
              re.IGNORECASE
         )
 
+        # Pattern for listing datasets
+        self.pattern_list_datasets = re.compile(
+            r"^(?:list|show)\s+datasets?$",
+            re.IGNORECASE
+        )
+
         logger.info("NQLAgent initialized with basic regex patterns.")
 
     def _schema_snapshot(self) -> Dict[str, Any]:
@@ -220,6 +226,38 @@ class NQLAgent:
         logger.info(f"Processing NQL query: '{query}'")
 
         # Try matching patterns in order of specificity/complexity
+
+        # --- 0. List Datasets Pattern ---
+        match = self.pattern_list_datasets.match(query)
+        if match:
+            logger.debug("Matched LIST DATASETS pattern")
+            try:
+                dataset_names = self.tensor_storage.list_datasets()
+                # Format results so they contain a 'tensor' and 'metadata' field,
+                # where 'tensor' is a dummy and 'metadata' contains the dataset name.
+                formatted_results = []
+                for name in dataset_names:
+                    dummy_tensor = torch.tensor([]) # Empty tensor, shape [0], dtype typically float32 by default
+                    actual_dtype_str = str(dummy_tensor.dtype).replace('torch.','')
+                    formatted_results.append({
+                        "tensor": dummy_tensor,
+                        "metadata": {
+                            "record_id": name, # Use dataset name as record_id for TensorOutput
+                            "dataset_name": name, # Actual dataset name
+                            "type": "dataset_entry", # Custom type to indicate this isn't a real tensor record
+                            "shape": list(dummy_tensor.shape), # Shape of the dummy tensor
+                            "dtype": actual_dtype_str # Dtype of the dummy tensor
+                        }
+                    })
+                return {
+                    "success": True,
+                    "message": f"Found {len(dataset_names)} datasets.",
+                    "count": len(dataset_names),
+                    "results": formatted_results
+                }
+            except Exception as e:
+                logger.error(f"Error during LIST DATASETS query: {e}", exc_info=True)
+                return {"success": False, "message": f"An unexpected error occurred while listing datasets: {e}", "count": None, "results": None}
 
         # --- 1. Count Pattern ---
         match = self.pattern_count.match(query)

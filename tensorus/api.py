@@ -1023,7 +1023,8 @@ async def explorer_get_tensor_metadata(
 @app.post("/query", response_model=NQLResponse, tags=["Querying"])
 async def execute_nql_query(
     request: NQLQueryRequest,
-    nql_agent_svc: NQLAgent = Depends(get_nql_agent)
+    nql_agent_svc: NQLAgent = Depends(get_nql_agent),
+    api_key: str = Depends(verify_api_key)  # Added authentication dependency
 ):
     """
     Executes a Natural Query Language (NQL) query against the stored tensor data.
