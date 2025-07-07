@@ -6,6 +6,7 @@ all protected endpoints, ensuring security and backward compatibility.
 """
 
 import pytest
+import uuid # Moved import uuid to the top
 from fastapi.testclient import TestClient
 from tests.conftest import TEST_API_KEY, INVALID_API_KEY
 
@@ -87,10 +88,16 @@ class TestEndpointProtection:
     ])
     def test_dataset_endpoints_work_with_auth(self, authenticated_client, endpoint, method, data):
         """Test that dataset endpoints work with proper authentication."""
+        current_data = data
+        if endpoint == "/datasets/create" and method == "post":
+            # Ensure unique dataset name for creation to avoid 409 Conflict
+            unique_name = f"test_dataset_{uuid.uuid4().hex[:8]}"
+            current_data = {"name": unique_name}
+
         if method == "get":
             response = authenticated_client.get(endpoint)
         elif method == "post":
-            response = authenticated_client.post(endpoint, json=data)
+            response = authenticated_client.post(endpoint, json=current_data)
         
         assert response.status_code in [200, 201]
 
@@ -161,6 +168,11 @@ class TestConfigurationManagement:
         key2 = "tsr_key2_87654321098765432109876543210987654321"
         
         os.environ["TENSORUS_API_KEYS"] = f"{key1},{key2}"
+
+        # Force settings to re-evaluate based on the new environment variable
+        from tensorus.config import settings
+        settings.API_KEYS = os.environ["TENSORUS_API_KEYS"]
+        # The settings.valid_api_keys property will use the updated settings.API_KEYS
         
         # Test both keys work
         headers1 = {"Authorization": f"Bearer {key1}"}

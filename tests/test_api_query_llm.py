@@ -18,8 +18,17 @@ from tensorus.tensor_storage import TensorStorage
 from tensorus.llm_parser import LLMParser, NQLQuery
 
 
+from tests.conftest import TEST_API_KEY # For auth headers and settings
+from tensorus.config import settings as global_settings # To patch settings
+
 @pytest.fixture
 def client_with_llm(monkeypatch):
+    # Ensure global settings for the app instance have API keys configured
+    original_api_keys = global_settings.API_KEYS
+    original_auth_enabled = global_settings.AUTH_ENABLED
+    global_settings.API_KEYS = TEST_API_KEY
+    global_settings.AUTH_ENABLED = True
+
     with patch("tensorus.nql_agent.LLMParser") as MockParser:
         MockParser.return_value.parse.return_value = NQLQuery(dataset="test_ds")
         storage = TensorStorage(storage_path=None)
@@ -30,10 +39,16 @@ def client_with_llm(monkeypatch):
         if hasattr(api.get_nql_agent, "_instance"):
             monkeypatch.setattr(api.get_nql_agent, "_instance", agent, raising=False)
         with TestClient(api.app) as client:
+            client.headers = {"Authorization": f"Bearer {TEST_API_KEY}"} # Add auth headers
             yield client
+
+    # Restore original settings
+    global_settings.API_KEYS = original_api_keys
+    global_settings.AUTH_ENABLED = original_auth_enabled
 
 
 def test_query_endpoint_with_llm_rewrite(client_with_llm):
+    # Client already has auth headers from the fixture
     resp = client_with_llm.post("/query", json={"query": "nonsense"})
     assert resp.status_code == 200
     data = resp.json()
