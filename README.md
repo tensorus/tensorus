@@ -31,7 +31,7 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
     separate package. See [Tensorus Models](https://github.com/tensorus/models).
 *   **Metadata System:** Rich Pydantic schemas and storage backends for semantic, lineage, computational, quality, relational, and usage metadata.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
-*   **Model Context Protocol (MCP) Server:** Provides a standardized interface for AI agents and LLMs to interact with Tensorus capabilities—including dataset management, tensor storage, and operations—using the Model Context Protocol. (See [MCP Server Details](#mcp-server-details) below).
+*   **Model Context Protocol (MCP) Integration:** Available as a separate package at [tensorus/mcp](https://github.com/tensorus/mcp) for AI agents and LLMs that need standardized protocol access to Tensorus capabilities.
 
 ## Project Structure
 
@@ -52,7 +52,6 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
     *   *(Other Python files within `tensorus/` are part of the core library.)*
 *   `requirements.txt`: Lists the project's Python dependencies for development and local execution.
 *   `pyproject.toml`: Project metadata, dependencies for distribution, and build system configuration (e.g., for PyPI).
-*   `tensorus/mcp_server.py`: Python implementation of the Model Context Protocol (MCP) server using `fastmcp`.
 *   `README.md`: This file.
 *   `LICENSE`: Project license file.
 *   `.gitignore`: Specifies intentionally untracked files that Git should ignore.
@@ -67,20 +66,7 @@ You can try Tensorus online via Huggingface Spaces:
 
 ## Demos
 
-A quick interactive example is provided in
-[`demo/mcp_client_demo.ipynb`](demo/mcp_client_demo.ipynb).
-It shows how to connect with `TensorusMCPClient`, create a dataset,
-ingest a tensor, and run a basic query.
-
-Another demo is the small Streamlit app
-[`demo/mcp_client_app.py`](demo/mcp_client_app.py). Launch it with:
-
-```bash
-streamlit run demo/mcp_client_app.py
-```
-
-When deploying on HuggingFace Spaces you can use
-`demo/mcp_client_requirements.txt` as the `requirements.txt` file.
+For Model Context Protocol integration examples and demos, see the separate [Tensorus MCP repository](https://github.com/tensorus/mcp).
 
 ## Tensorus Execution Cycle
 
@@ -95,7 +81,6 @@ graph TD
     %% API Gateway Layer
     subgraph API_Layer ["Backend Services"]
         API[FastAPI Backend]
-        MCP["MCP Server (FastMCP Python)"]
     end
 
     %% Core Storage with Method Interface
@@ -130,9 +115,8 @@ graph TD
         TOps[TensorOps Library]
     end
 
-    %% Primary UI & MCP Flow
+    %% Primary UI Flow
     UI -->|HTTP Requests| API
-    MCP -->|MCP Calls| API
 
     %% API Orchestration
     API -->|Command Dispatch| IA
@@ -242,62 +226,10 @@ graph TD
 
     *   Access the UI in your browser at the URL provided by Streamlit (usually `http://localhost:8501`).
 
-### Running the MCP Server
+### Model Context Protocol Integration
 
-Tensorus provides a lightweight Python implementation of the Model Context Protocol server using `fastmcp`. It exposes the FastAPI endpoints as tools so you can run an MCP server without Node.js.
+For AI agents and LLMs that need standardized protocol access to Tensorus capabilities, see the separate [Tensorus MCP package](https://github.com/tensorus/mcp) which provides a complete MCP server implementation.
 
-**Starting the MCP Server:**
-
-1. Install dependencies. The MCP server requires the `fastmcp` package:
-   ```bash
-   pip install fastmcp
-   pip install -r requirements.txt
-   ```
-   Running `./setup.sh` will install `fastmcp` and all other dependencies automatically.
-2. Ensure the FastAPI backend is running.
-3. Start the server from the repository root:
-   ```bash
-   python -m tensorus.mcp_server
-   ```
-   Add `--transport streamable-http` for a web endpoint. SSE transport is deprecated.
-   The server assumes the backend is reachable at `https://tensorus-core.hf.space`.
-   Set `--api-url` or the environment variable `TENSORUS_API_BASE_URL` to use a different URL (the CLI option takes precedence).
-   If you plan to run the MCP server tests in `tests/test_mcp_server.py` and `tests/test_mcp_client.py`, run `./setup.sh` beforehand to install all required packages.
-
-For a quick test of the server you can connect to the publicly hosted instance:
-
-```python
-from tensorus.mcp_client import TensorusMCPClient
-async with TensorusMCPClient.from_http("https://tensorus-mcp.hf.space/mcp/") as client:
-    print(await client.list_datasets())
-```
-
-Generic HTTP requests won't work because the server expects the MCP protocol
-with `Accept: text/event-stream`.
-
-## Demo Mode
-
-For demonstration or testing purposes, the server can be run in demo mode. In this mode, it uses pre-configured mock data for tool responses and does not connect to the live backend API, nor does it require an API key.
-
-To start the server in demo mode, use the `--demo-mode` flag:
-
-```bash
-python tensorus/mcp_server.py --demo-mode
-```
-
-## API Key Management
-
-When not running in demo mode, many tools that interact with the Tensorus backend API require authentication via an API key.
-
-There are two ways to provide an API key:
-
-1.  **Global API Key**: Set a global API key when starting the MCP server using the `--mcp-api-key` argument. This key will be used by default for all tool calls.
-    ```bash
-    python tensorus/mcp_server.py --mcp-api-key YOUR_API_KEY_HERE
-    ```
-2.  **Per-Tool API Key**: Some tools allow you to pass an `api_key` parameter directly in the tool invocation. This can override the global key or provide a key if no global one is set.
-
-Consult the specific tool's description (e.g., via the tool list in Claude Desktop or by inspecting its docstring) to see if it requires an API key. The server will return an error message if an API key is needed but not provided.
 
 ### Running the Agents (Examples)
 
@@ -381,7 +313,7 @@ required.
 
 The Python tests rely on packages from both `requirements.txt` and
 `requirements-test.txt`. The latter includes `httpx` and other packages
-used by the MCP client tests. **Always run `./setup.sh` before executing
+used by the test suite. **Always run `./setup.sh` before executing
 `pytest` to install these requirements**:
 
 ```bash
@@ -398,7 +330,7 @@ Tensorus includes Python unit tests. To set up the environment and run them:
     ./setup.sh
     ```
 
-    This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support). It also pulls in `fastmcp` and other dependencies required by `tests/test_mcp_server.py` and `tests/test_mcp_client.py`.
+    This script installs packages from `requirements.txt` and `requirements-test.txt` (which pins `fastapi>=0.110` for Pydantic v2 support).
 
 2. Run the Python test suite:
 
@@ -406,12 +338,7 @@ Tensorus includes Python unit tests. To set up the environment and run them:
     pytest
     ```
 
-    To specifically verify the Model Context Protocol components, run the MCP
-    server and client tests:
-
-    ```bash
-    pytest tests/test_mcp_server.py tests/test_mcp_client.py
-    ```
+    All tests should pass without errors when dependencies are properly installed.
 
 
 ## Using Tensorus
@@ -644,115 +571,14 @@ available in TensorLy and related libraries.
 Examples of how to call these methods are provided in
 [`tensorus/tensor_decompositions.py`](tensorus/tensor_decompositions.py).
 
-## MCP Server Details
-
-The Tensorus Model Context Protocol (MCP) Server allows external AI agents, LLM-based applications, and other MCP-compatible clients to interact with Tensorus functionalities in a standardized way. It acts as a bridge, translating MCP requests into calls to the Tensorus Python API.
-
-### Overview
-
-*   **Protocol:** Implements the [Model Context Protocol](https://modelcontextprotocol.io/introduction).
-*   **Language:** Python, using the `fastmcp` library.
-*   **Communication:** Typically uses stdio for communication with a single client.
-*   **Interface:** Exposes Tensorus capabilities as a set of "tools" that an MCP client can list and call.
-
-### Available Tools
-
-The MCP server provides tools for various Tensorus functionalities. Below is an overview. For detailed input schemas and descriptions, an MCP client can call the standard `tools/list` method on the server, or you can inspect the tool definitions in `tensorus/mcp_server.py`.
-
-*   **Dataset Management:**
-    *   `tensorus_list_datasets`: Lists all available datasets.
-    *   `tensorus_create_dataset`: Creates a new dataset.
-    *   `tensorus_delete_dataset`: Deletes an existing dataset.
-*   **Tensor Management:**
-    *   `tensorus_ingest_tensor`: Ingests a new tensor (with data provided as JSON) into a dataset.
-    *   `tensorus_get_tensor_details`: Retrieves the data and metadata for a specific tensor.
-    *   `tensorus_delete_tensor`: Deletes a specific tensor from a dataset.
-    *   `tensorus_update_tensor_metadata`: Updates the metadata of a specific tensor.
-*   **Tensor Operations:** These tools allow applying operations from the `TensorOps` library to tensors stored in Tensorus.
-    *   `tensorus_apply_unary_operation`: Applies operations like `log`, `reshape`, `transpose`, `permute`, `sum`, `mean`, `min`, `max`.
-    *   `tensorus_apply_binary_operation`: Applies operations like `add`, `subtract`, `multiply`, `divide`, `power`, `matmul`, `dot`.
-    *   `tensorus_apply_list_operation`: Applies operations like `concatenate` and `stack` that take a list of input tensors.
-    *   `tensorus_apply_einsum`: Applies Einstein summation.
-
-*Note on Tensor Operations via MCP:* Input tensors are referenced by their `dataset_name` and `record_id`. The result is typically stored as a new tensor, and the MCP tool returns details of this new result tensor (like its `record_id`).
-
-### Diagnostic Tools
-
-These tools help you check the status of the MCP server and its connection to the backend.
-
-*   **`mcp_server_status()`**:
-    *   Description: Checks the MCP server's current operational status, mode (live or demo), and API key configuration.
-    *   Usage: Call this tool to get a JSON response with server status details.
-
-*   **`connection_test()`**:
-    *   Description: Lightweight connectivity check that simply returns `{"status": "ok"}`.
-    *   Usage: Call this tool to confirm the MCP server is reachable.
-
-*   **`backend_ping()`**:
-    *   Description: Calls the backend API's `/health` endpoint and returns the result (or demo data when in demo mode).
-    *   Usage: Use this when you want the raw response from the backend health check.
-
-*   **`backend_connectivity_test()`**:
-    *   Description: Tests connectivity to the backend API's `/health` endpoint. In demo mode, it returns a mock success response. In live mode, it attempts a real connection and reports the outcome.
-    *   Usage: Call this tool to verify if the server can communicate with the backend.
-
-### Example Client Interaction (Conceptual)
-
-```javascript
-// Conceptual MCP client-side JavaScript
-// Assuming 'client' is an initialized MCP client connected to the Tensorus MCP Server
-
-async function example() {
-  // List available tools
-  const { tools } = await client.request({ method: 'tools/list' }, {});
-  console.log("Available Tensorus Tools:", tools.map(t => t.name)); // Log only names for brevity
-
-  // Create a new dataset
-  const createResponse = await client.request({ method: 'tools/call' }, {
-    name: 'tensorus_create_dataset',
-    arguments: { dataset_name: 'my_mcp_dataset' }
-  });
-  console.log(JSON.parse(createResponse.content[0].text).message);
-
-  // Ingest a tensor
-  const ingestResponse = await client.request({ method: 'tools/call' }, {
-    name: 'tensorus_ingest_tensor',
-    arguments: {
-      dataset_name: 'my_mcp_dataset',
-      tensor_shape: [2, 2],
-      tensor_dtype: 'float32',
-      tensor_data: [[1.0, 2.0], [3.0, 4.0]],
-      metadata: { source: 'mcp_client_example' }
-    }
-  });
-  // Assuming the Python API returns { success, message, data: { record_id, ... } }
-  // And MCP server stringifies this whole object in the text content
-  const ingestData = JSON.parse(ingestResponse.content[0].text);
-  console.log("Ingest success:", ingestData.success, "Record ID:", ingestData.data.record_id);
-}
-```
-
-You can also interact with the server using the included Python helper:
-
-```python
-from tensorus.mcp_client import TensorusMCPClient
-
-async def example_py():
-    async with TensorusMCPClient.from_http() as client:
-        tools = await client.list_datasets()
-        print(tools)
-```
-For a complete list of client methods and example calls see
-[`docs/mcp_client.md`](docs/mcp_client.md).
 
 ## Completed Features
 
 The current codebase implements all of the items listed in
 [Key Features](#key-features). Tensorus already provides efficient tensor
 storage with optional file persistence, a natural query language, a flexible
-agent framework, a RESTful API, a Streamlit UI, robust tensor operations and an
-MCP server for tool-based integration. The modular architecture makes future
-extensions straightforward.
+agent framework, a RESTful API, a Streamlit UI, and robust tensor operations. 
+The modular architecture makes future extensions straightforward.
 
 ## Future Implementation
 
