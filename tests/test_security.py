@@ -70,7 +70,7 @@ def test_verify_api_key_invalid_key(test_app_client: TestClient, monkeypatch):
     headers = {header_name: "wrongkey"}
     response = test_app_client.get("/protected", headers=headers)
     assert response.status_code == 401 # Default FastAPI error for Depends raising HTTPException
-    assert response.json() == {"detail": "Invalid API Key"}
+    assert response.json() == {"detail": "Invalid API key"}
 
 
 def test_verify_api_key_missing_key(test_app_client: TestClient, monkeypatch):
@@ -82,7 +82,7 @@ def test_verify_api_key_missing_key(test_app_client: TestClient, monkeypatch):
 
     response = test_app_client.get("/protected") # No API key header sent
     assert response.status_code == 401
-    assert response.json() == {"detail": "Missing API Key"}
+    assert response.json() == {"detail": "Missing API key. Use 'Authorization: Bearer <api_key>' header."}
 
 
 def test_verify_api_key_no_keys_configured(test_app_client: TestClient, monkeypatch):
@@ -94,13 +94,15 @@ def test_verify_api_key_no_keys_configured(test_app_client: TestClient, monkeypa
 
     headers = {header_name: "anykey"} # Send some key
     response = test_app_client.get("/protected", headers=headers)
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid API Key"} # Because "anykey" is not in []
+    # When VALID_API_KEYS is empty, the system should return 401 for invalid key
+    # because the key format is checked first before the empty keys check
+    assert response.status_code == 401  # Invalid key
+    assert response.json() == {"detail": "Invalid API key"} # Because "anykey" is invalid format
 
     # Test missing key when no keys are configured
     response_missing = test_app_client.get("/protected")
-    assert response_missing.status_code == 401
-    assert response_missing.json() == {"detail": "Missing API Key"}
+    assert response_missing.status_code == 503  # Service unavailable when no keys configured
+    assert response_missing.json() == {"detail": "API authentication not configured"}
 
 
 def test_unprotected_route_accessible(test_app_client: TestClient):

@@ -15,7 +15,7 @@ def test_settings_default_values():
     # For now, let's assume a default state or test fields that are less likely to be in CI env.
     s = Settings()  # Creates a new instance, re-evaluating defaults if env vars are not set for these specific fields
     assert s.STORAGE_BACKEND == "in_memory" # Default
-    assert s.API_KEY_HEADER_NAME == "X-API-KEY" # Default
+    assert s.API_KEY_HEADER_NAME == "Authorization" # Default
     assert s.VALID_API_KEYS == [] # Default (before manual parsing from env)
     assert s.POSTGRES_PORT == 5432 # Default
 

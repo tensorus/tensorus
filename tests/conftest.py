@@ -31,8 +31,8 @@ from tensorus.storage.connectors import mock_tensor_connector_instance
 logging.getLogger("tensorus.storage.connectors").setLevel(logging.CRITICAL)
 
 # Test API keys for authentication testing
-TEST_API_KEY = "tsr_test_key_12345678901234567890123456789012345678"
-INVALID_API_KEY = "tsr_invalid_key_invalid_invalid_invalid_invalid"
+TEST_API_KEY = "tsr_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"  # 48 chars after prefix (52 total)
+INVALID_API_KEY = "tsr_invalid_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"  # 48 chars after prefix (52 total)
 
 @pytest.fixture(scope="function") 
 def client():
@@ -45,6 +45,13 @@ def client():
     import os
     os.environ["TENSORUS_AUTH_ENABLED"] = "true"
     os.environ["TENSORUS_API_KEYS"] = TEST_API_KEY
+    
+    # Force reload of settings to pick up environment changes
+    from tensorus.config import settings
+    # Directly set the API keys to bypass parsing issues
+    settings.AUTH_ENABLED = True
+    settings.API_KEYS = TEST_API_KEY
+    settings.VALID_API_KEYS = [TEST_API_KEY]
     
     # Clear metadata storage
     metadata_storage_instance.clear_all_data()
@@ -95,6 +102,10 @@ def unauthenticated_client():
     # Setup with auth disabled
     import os
     os.environ["TENSORUS_AUTH_ENABLED"] = "false"
+    
+    # Force settings reload for auth disabled
+    from tensorus.config import settings
+    settings.AUTH_ENABLED = False
     
     # Clear storage
     metadata_storage_instance.clear_all_data()

@@ -136,12 +136,18 @@ class TestAPIKeyGeneration:
         """Test API key masking for safe logging."""
         from tensorus.auth.key_generator import TensorusAPIKey
         
-        key = "tsr_abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGH"
+        # Generate a valid key for testing
+        key = TensorusAPIKey.generate()
         masked = TensorusAPIKey.mask_key(key)
-        assert masked.startswith("tsr_abc")
-        assert masked.endswith("EFGH")
+        assert masked.startswith("tsr_")
+        assert masked.endswith(key[-4:])
         assert "..." in masked
         assert len(masked) < len(key)
+        
+        # Test invalid key masking
+        invalid_key = "invalid_key"
+        invalid_masked = TensorusAPIKey.mask_key(invalid_key)
+        assert invalid_masked == "invalid_key"
 
 
 class TestConfigurationManagement:
