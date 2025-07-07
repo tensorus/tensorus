@@ -37,7 +37,7 @@ jobs:
           echo "Step 1: Setting up models/tensorus from core/tensorus"
           rm -rf models/tensorus
           mkdir -p models/tensorus
-          cp -r core/tensorus models/tensorus
+
           # Copy contents of core/tensorus (files and directories) into models/tensorus/
           # This ensures models/tensorus/__init__.py, models/tensorus/tensor_storage.py etc. are correctly placed.
           cp -r core/tensorus/* models/tensorus/
