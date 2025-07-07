@@ -16,7 +16,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: |
-          run: ./setup.sh
+        run: ./setup.sh
       - name: Run tests
         run: pytest -v
