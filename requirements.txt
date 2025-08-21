@@ -40,6 +40,10 @@ plotly>=5.10.0
 pytest>=7.0.0
 httpx>=0.28.1 # For FastAPI TestClient
 
+# --- Cloud Storage Connectors ---
+# For optional S3 persistence of tensor datasets
+boto3>=1.28.0
+
 # --- Data Analysis & Modeling ---
 # Optional: For plotting example in rl_agent.py
 matplotlib>=3.5.0

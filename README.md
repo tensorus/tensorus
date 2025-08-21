@@ -215,6 +215,14 @@ graph TD
     *   Access the API documentation at `http://localhost:7860/docs` or `http://localhost:7860/redoc`.
     *   All dataset and agent endpoints are available once the server is running.
 
+    To use S3 for tensor dataset persistence instead of local disk, set:
+
+    ```bash
+    export TENSORUS_TENSOR_STORAGE_PATH="s3://your-bucket/optional/prefix"
+    # Ensure AWS credentials are available (env vars, profile, or instance role)
+    uvicorn tensorus.api:app --host 0.0.0.0 --port 7860
+    ```
+
 ### Running the Streamlit UI
 
 1.  In a separate terminal (with the virtual environment activated), navigate to the project root.

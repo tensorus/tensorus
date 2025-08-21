@@ -11,6 +11,14 @@ import uuid
 import random # Added for sampling
 import os
 from pathlib import Path
+from io import BytesIO
+
+try:
+    import boto3  # Optional dependency for S3 support
+    from botocore.exceptions import ClientError
+except Exception:  # pragma: no cover - boto3 is optional at runtime
+    boto3 = None
+    ClientError = Exception
 
 # Public exceptions for dataset/tensor lookups
 class DatasetNotFoundError(ValueError):
@@ -54,18 +62,63 @@ class TensorStorage:
         """
         self.datasets: Dict[str, Dict[str, List[Any]]] = {}
         self.storage_path: Optional[Path] = None
+        self._use_s3: bool = False
+        self._s3_bucket: Optional[str] = None
+        self._s3_prefix: str = ""
+        self._s3_client = None
 
         if storage_path:
-            self.storage_path = Path(storage_path)
-            try:
-                self.storage_path.mkdir(parents=True, exist_ok=True) # Create directory if it doesn't exist
-                logging.info(f"TensorStorage initialized with persistence directory: {self.storage_path}")
-                self._load_all_datasets_from_disk() # Attempt to load existing datasets from disk
-            except OSError as e: # Handle errors like permission issues
-                logging.error(f"Error creating storage directory {self.storage_path}: {e}. Falling back to in-memory only mode.")
-                self.storage_path = None # Fallback to in-memory if directory creation fails
+            # Support S3 URI form: s3://bucket/prefix (prefix optional)
+            if isinstance(storage_path, str) and storage_path.lower().startswith("s3://"):
+                self._configure_s3_backend(storage_path)
+                if self._use_s3:
+                    logging.info(
+                        f"TensorStorage initialized with S3 backend: bucket='{self._s3_bucket}', prefix='{self._s3_prefix}'"
+                    )
+                    self._load_all_datasets_from_disk()  # Loads from S3 in this mode
+                else:
+                    logging.info("TensorStorage initialized (In-Memory only mode).")
+            else:
+                self.storage_path = Path(storage_path)
+                try:
+                    self.storage_path.mkdir(parents=True, exist_ok=True) # Create directory if it doesn't exist
+                    logging.info(f"TensorStorage initialized with persistence directory: {self.storage_path}")
+                    self._load_all_datasets_from_disk() # Attempt to load existing datasets from disk
+                except OSError as e: # Handle errors like permission issues
+                    logging.error(f"Error creating storage directory {self.storage_path}: {e}. Falling back to in-memory only mode.")
+                    self.storage_path = None # Fallback to in-memory if directory creation fails
         else:
             logging.info("TensorStorage initialized (In-Memory only mode).")
+
+    # --- S3 Helpers ---
+    def _configure_s3_backend(self, uri: str) -> None:
+        """Parse S3 URI and initialize client if boto3 is available."""
+        if boto3 is None:
+            logging.error("boto3 is not installed. Cannot use S3 backend. Falling back to in-memory mode.")
+            self._use_s3 = False
+            return
+        # Strip scheme and split bucket/prefix
+        s3_path = uri[5:]  # remove 's3://'
+        parts = s3_path.split('/', 1)
+        bucket = parts[0].strip()
+        prefix = parts[1].strip('/') + '/' if len(parts) > 1 and parts[1] else ""
+        if not bucket:
+            logging.error("Invalid S3 URI: bucket missing. Falling back to in-memory mode.")
+            self._use_s3 = False
+            return
+        try:
+            self._s3_client = boto3.client("s3")
+            # Optionally verify access by a lightweight call
+            # self._s3_client.list_buckets()
+            self._s3_bucket = bucket
+            self._s3_prefix = prefix
+            self._use_s3 = True
+        except Exception as e:  # pragma: no cover - environment dependent
+            logging.error(f"Failed to initialize S3 client: {e}. Falling back to in-memory mode.")
+            self._use_s3 = False
+
+    def _s3_key_for_dataset(self, dataset_name: str) -> str:
+        return f"{self._s3_prefix}{dataset_name}.pt"
 
     def _save_dataset(self, dataset_name: str) -> None:
         """
@@ -79,25 +132,33 @@ class TensorStorage:
         Args:
             dataset_name (str): The name of the dataset to save.
         """
-        if not self.storage_path or dataset_name not in self.datasets:
+        if (not self.storage_path and not self._use_s3) or dataset_name not in self.datasets:
             # Do nothing if persistence is not enabled or dataset doesn't exist (e.g., during deletion)
             return
+        # Prepare data for saving
+        data_to_save = {
+            "tensors": [t.clone().cpu() for t in self.datasets[dataset_name]["tensors"]],
+            "metadata": self.datasets[dataset_name]["metadata"],
+            "schema": self.datasets[dataset_name].get("schema")
+        }
 
-        file_path = self.storage_path / f"{dataset_name}.pt"
         try:
-            # Prepare data for saving:
-            # - Tensors are cloned and moved to CPU to avoid issues with saving GPU tensors
-            #   or tensors that might be part of an active computation graph.
-            # - Metadata (dicts, lists) is typically already CPU-based and serializable.
-            data_to_save = {
-                "tensors": [t.clone().cpu() for t in self.datasets[dataset_name]["tensors"]],
-                "metadata": self.datasets[dataset_name]["metadata"],
-                "schema": self.datasets[dataset_name].get("schema")
-            }
-            torch.save(data_to_save, file_path)
-            logging.info(f"Dataset '{dataset_name}' saved successfully to {file_path}")
+            if self._use_s3:
+                key = self._s3_key_for_dataset(dataset_name)
+                buffer = BytesIO()
+                torch.save(data_to_save, buffer)
+                buffer.seek(0)
+                self._s3_client.put_object(Bucket=self._s3_bucket, Key=key, Body=buffer.getvalue())
+                logging.info(f"Dataset '{dataset_name}' saved successfully to s3://{self._s3_bucket}/{key}")
+            else:
+                file_path = self.storage_path / f"{dataset_name}.pt"  # type: ignore[union-attr]
+                torch.save(data_to_save, file_path)
+                logging.info(f"Dataset '{dataset_name}' saved successfully to {file_path}")
         except Exception as e: # Catch a broad range of exceptions during file I/O or serialization
-            logging.error(f"Error saving dataset '{dataset_name}' to {file_path}: {e}")
+            if self._use_s3:
+                logging.error(f"Error saving dataset '{dataset_name}' to S3: {e}")
+            else:
+                logging.error(f"Error saving dataset '{dataset_name}' to {file_path}: {e}")
 
     def _load_all_datasets_from_disk(self) -> None:
         """
@@ -107,26 +168,52 @@ class TensorStorage:
         It scans the `storage_path` for files ending with '.pt', attempts to load
         them, and populates the in-memory `self.datasets` dictionary.
         """
-        if not self.storage_path:
+        if not self.storage_path and not self._use_s3:
             return
-
-        logging.info(f"Scanning for existing datasets in {self.storage_path}...")
-        for file_path in self.storage_path.glob("*.pt"): # Iterate over .pt files
-            dataset_name = file_path.stem # Extract dataset name from filename (e.g., "my_data.pt" -> "my_data")
+        if self._use_s3:
+            logging.info(f"Scanning for existing datasets in s3://{self._s3_bucket}/{self._s3_prefix}...")
             try:
-                loaded_data = torch.load(file_path)
-                # Basic validation of the loaded data structure
-                if isinstance(loaded_data, dict) and "tensors" in loaded_data and "metadata" in loaded_data:
-                    self.datasets[dataset_name] = {
-                        "tensors": loaded_data["tensors"],
-                        "metadata": loaded_data["metadata"],
-                        "schema": loaded_data.get("schema")
-                    }
-                    logging.info(f"Dataset '{dataset_name}' loaded successfully from {file_path}")
-                else:
-                    logging.warning(f"File {file_path} does not appear to be a valid dataset file (missing keys or wrong format). Skipping.")
-            except Exception as e: # Catch errors during file loading or deserialization
-                logging.error(f"Error loading dataset from {file_path}: {e}. The file might be corrupted or not a PyTorch file.")
+                paginator = self._s3_client.get_paginator("list_objects_v2")
+                for page in paginator.paginate(Bucket=self._s3_bucket, Prefix=self._s3_prefix):
+                    for obj in page.get("Contents", []) or []:
+                        key: str = obj.get("Key", "")
+                        if key.endswith(".pt"):
+                            dataset_name = Path(key).stem
+                            try:
+                                resp = self._s3_client.get_object(Bucket=self._s3_bucket, Key=key)
+                                body = resp["Body"].read()
+                                buffer = BytesIO(body)
+                                loaded_data = torch.load(buffer, map_location="cpu")
+                                if isinstance(loaded_data, dict) and "tensors" in loaded_data and "metadata" in loaded_data:
+                                    self.datasets[dataset_name] = {
+                                        "tensors": loaded_data["tensors"],
+                                        "metadata": loaded_data["metadata"],
+                                        "schema": loaded_data.get("schema")
+                                    }
+                                    logging.info(f"Dataset '{dataset_name}' loaded successfully from s3://{self._s3_bucket}/{key}")
+                                else:
+                                    logging.warning(f"Object s3://{self._s3_bucket}/{key} is not a valid dataset file. Skipping.")
+                            except Exception as e:  # pragma: no cover - environment dependent
+                                logging.error(f"Error loading dataset from s3://{self._s3_bucket}/{key}: {e}")
+            except Exception as e:  # pragma: no cover - environment dependent
+                logging.error(f"Failed to list S3 objects: {e}")
+        else:
+            logging.info(f"Scanning for existing datasets in {self.storage_path}...")
+            for file_path in self.storage_path.glob("*.pt"): # type: ignore[union-attr]
+                dataset_name = file_path.stem
+                try:
+                    loaded_data = torch.load(file_path)
+                    if isinstance(loaded_data, dict) and "tensors" in loaded_data and "metadata" in loaded_data:
+                        self.datasets[dataset_name] = {
+                            "tensors": loaded_data["tensors"],
+                            "metadata": loaded_data["metadata"],
+                            "schema": loaded_data.get("schema")
+                        }
+                        logging.info(f"Dataset '{dataset_name}' loaded successfully from {file_path}")
+                    else:
+                        logging.warning(f"File {file_path} does not appear to be a valid dataset file (missing keys or wrong format). Skipping.")
+                except Exception as e:
+                    logging.error(f"Error loading dataset from {file_path}: {e}. The file might be corrupted or not a PyTorch file.")
 
     def list_datasets(self) -> List[str]:
         """
@@ -143,8 +230,14 @@ class TensorStorage:
         """Check whether a dataset exists either in memory or on disk."""
         if name in self.datasets:
             return True
+        if self._use_s3:
+            try:
+                self._s3_client.head_object(Bucket=self._s3_bucket, Key=self._s3_key_for_dataset(name))
+                return True
+            except ClientError:
+                return False
         if self.storage_path:
-            file_path = self.storage_path / f"{name}.pt"
+            file_path = self.storage_path / f"{name}.pt"  # type: ignore[union-attr]
             return file_path.exists()
         return False
 
@@ -166,8 +259,22 @@ class TensorStorage:
         if dataset_name in self.datasets:
             return len(self.datasets[dataset_name]["metadata"])
 
+        if self._use_s3:
+            try:
+                key = self._s3_key_for_dataset(dataset_name)
+                resp = self._s3_client.get_object(Bucket=self._s3_bucket, Key=key)
+                body = resp["Body"].read()
+                buffer = BytesIO(body)
+                data = torch.load(buffer, map_location="cpu")
+                if isinstance(data, dict) and "metadata" in data:
+                    return len(data["metadata"])
+            except Exception as e:
+                logging.error(f"Error loading dataset '{dataset_name}' from S3 for count: {e}")
+            logging.error(f"Dataset '{dataset_name}' not found for count on S3.")
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' not found.")
+
         if self.storage_path:
-            file_path = self.storage_path / f"{dataset_name}.pt"
+            file_path = self.storage_path / f"{dataset_name}.pt"  # type: ignore[union-attr]
             if file_path.exists():
                 try:
                     data = torch.load(file_path, map_location="cpu")
@@ -520,8 +627,15 @@ class TensorStorage:
         """
         if name in self.datasets:
             # If persistence is enabled, attempt to delete the dataset file
-            if self.storage_path:
-                file_path = self.storage_path / f"{name}.pt"
+            if self._use_s3:
+                key = self._s3_key_for_dataset(name)
+                try:
+                    self._s3_client.delete_object(Bucket=self._s3_bucket, Key=key)
+                    logging.info(f"Dataset object s3://{self._s3_bucket}/{key} deleted successfully.")
+                except Exception as e:  # pragma: no cover - environment dependent
+                    logging.error(f"Error deleting dataset object s3://{self._s3_bucket}/{key}: {e}")
+            elif self.storage_path:
+                file_path = self.storage_path / f"{name}.pt"  # type: ignore[union-attr]
                 try:
                     if file_path.exists():
                         file_path.unlink() # Delete the .pt file

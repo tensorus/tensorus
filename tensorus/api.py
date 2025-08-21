@@ -198,9 +198,10 @@ if TYPE_CHECKING:
 
 # --- Global Tensorus Instances ---
 try:
-    # Ensure TensorStorage and NQLAgent can be instantiated without arguments
-    # or provide necessary configuration here.
-    tensor_storage_instance = TensorStorage()
+    # Allow overriding storage backend path via environment variable. Supports
+    # local directories (default behavior) and S3 URIs like s3://bucket/prefix
+    storage_path_env = os.environ.get("TENSORUS_TENSOR_STORAGE_PATH")
+    tensor_storage_instance = TensorStorage(storage_path=storage_path_env) if storage_path_env is not None else TensorStorage()
     nql_agent_instance = NQLAgent(tensor_storage_instance)
     logger.info("Tensorus components (TensorStorage, NQLAgent) initialized successfully.")
     # NOTE: Actual agent processes (Ingestion, RL, AutoML) are assumed to be
