@@ -8,3 +8,45 @@ run:
   command: uvicorn tensorus.api:app --host 0.0.0.0 --port ${PORT:-7860}
   network:
     port: 7860
+  env:
+    # Storage configuration (defaults to in-memory; set to "postgres" for RDS)
+    - name: TENSORUS_STORAGE_BACKEND
+      value: "in_memory"
+    - name: TENSORUS_POSTGRES_HOST
+      value: ""
+    - name: TENSORUS_POSTGRES_PORT
+      value: "5432"
+    - name: TENSORUS_POSTGRES_USER
+      value: ""
+    - name: TENSORUS_POSTGRES_PASSWORD
+      value: ""
+    - name: TENSORUS_POSTGRES_DB
+      value: ""
+    - name: TENSORUS_POSTGRES_DSN
+      value: ""
+
+    # Auth via API keys (set secrets in the App Runner console or via IAM)
+    - name: TENSORUS_API_KEY_HEADER_NAME
+      value: "X-API-KEY"
+    - name: TENSORUS_API_KEYS
+      value: ""  # e.g., key1,key2 — prefer setting securely in console
+    - name: TENSORUS_VALID_API_KEYS
+      value: "[]"  # legacy variable supported by app
+
+    # Optional JWT auth (leave disabled unless configured)
+    - name: TENSORUS_AUTH_JWT_ENABLED
+      value: "False"
+    - name: TENSORUS_AUTH_JWT_ISSUER
+      value: ""
+    - name: TENSORUS_AUTH_JWT_AUDIENCE
+      value: ""
+    - name: TENSORUS_AUTH_JWT_ALGORITHM
+      value: "RS256"
+    - name: TENSORUS_AUTH_JWT_JWKS_URI
+      value: ""
+    - name: TENSORUS_AUTH_DEV_MODE_ALLOW_DUMMY_JWT
+      value: "False"
+
+    # Reduce optional imports for faster cold starts
+    - name: TENSORUS_MINIMAL_IMPORT
+      value: "1"
