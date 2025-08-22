@@ -6,6 +6,8 @@ build:
     - pip install -r requirements.txt
 run:
   command: uvicorn tensorus.api:app --host 0.0.0.0 --port ${PORT:-7860}
+  network:
+    port: 7860
   env:
     # Storage configuration (defaults to in-memory; set to "postgres" for RDS)
     - name: TENSORUS_STORAGE_BACKEND
@@ -27,9 +29,9 @@ run:
     - name: TENSORUS_API_KEY_HEADER_NAME
       value: "X-API-KEY"
     - name: TENSORUS_API_KEYS
-      value: "" 
+      value: ""  # e.g., key1,key2 — prefer setting securely in console
     - name: TENSORUS_VALID_API_KEYS
-      value: "[]" 
+      value: "[]"  # legacy variable supported by app
 
     # Optional JWT auth (leave disabled unless configured)
     - name: TENSORUS_AUTH_JWT_ENABLED
