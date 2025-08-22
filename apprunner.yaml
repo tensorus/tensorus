@@ -29,7 +29,7 @@ run:
     - name: TENSORUS_API_KEYS
       value: "" 
     - name: TENSORUS_VALID_API_KEYS
-      value: "[]" 
+      value: "[]"  
 
     # Optional JWT auth (leave disabled unless configured)
     - name: TENSORUS_AUTH_JWT_ENABLED
