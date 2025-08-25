@@ -22,65 +22,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install dependencies
+      - name: Install core package
         run: |
-          python -m pip install -r core/requirements.txt
-          python -m pip install -r core/requirements-test.txt
-      - name: Prepare models package
+          cd core
+          pip install -e .
+      - name: Install models package
         run: |
-          echo "--- Preparing models package ---"
-          # For debugging in GH Actions:
-          # echo "Initial contents of models/:"; ls -R models/
-          # echo "Initial contents of core/:"; ls -R core/
-
-          # 1. Cleanly set up the 'models/tensorus' directory by copying from 'core/tensorus'.
-          echo "Step 1: Setting up models/tensorus from core/tensorus"
-          rm -rf models/tensorus
-          mkdir -p models/tensorus
-
-          # Copy contents of core/tensorus (files and directories) into models/tensorus/
-          # This ensures models/tensorus/__init__.py, models/tensorus/tensor_storage.py etc. are correctly placed.
-          cp -r core/tensorus/* models/tensorus/
-          # Ensure models/tensorus/models/ directory exists, even if core/tensorus/models/ didn't.
-          mkdir -p models/tensorus/models
-          cp models/*.py models/tensorus/models/
-          cp models/__init__.py models/tensorus/models/__init__.py
-
-          # For debugging:
-          # echo "After Step 1, models/tensorus/:"; ls -R models/tensorus/
-
-          # 2. Copy model .py files from the root of the 'models' checkout (tensorus/models repo)
-          #    into 'models/tensorus/models/'. This includes 'models/__init__.py' which becomes
-          #    'models/tensorus/models/__init__.py', vital for 'tensorus.models' to be a package.
-          echo "Step 2: Copying model files from models/ root to models/tensorus/models/"
-          # Use find to copy only files from models/ root. Exclude 'tests' and 'tensorus' (if any) subdirectories.
-          find models/ -maxdepth 1 -type f -name '*.py' -exec cp -v {} models/tensorus/models/ \;
-
-          # Ensure models/tensorus/models/__init__.py exists. If not copied, create a basic one.
-          if [ ! -f models/tensorus/models/__init__.py ]; then
-            echo "Warning: models/__init__.py (from tensorus/models repo root) not found or not copied. Creating empty models/tensorus/models/__init__.py"
-            touch models/tensorus/models/__init__.py
-          fi
-
-          # For debugging:
-          # echo "After Step 2, models/tensorus/models/:"; ls -R models/tensorus/models/
-
-          # 3. Place the authoritative 'base.py' (from core/tensorus/base.py) into 'models/tensorus/models/'
-          #    as model files (e.g., isolation_forest.py) expect to import it via 'from .base import TensorusModel'.
-          echo "Step 3: Copying core/tensorus/base.py to models/tensorus/models/base.py"
-          if [ -f core/tensorus/base.py ]; then
-            cp -v core/tensorus/base.py models/tensorus/models/base.py
-          else
-            # This should not happen if core repo is structured correctly.
-            echo "Error: core/tensorus/base.py not found! This indicates a problem with the core repository structure or checkout."
-            exit 1
-          fi
-
-          # For debugging:
-          # echo "Final structure of models/tensorus/:"; ls -R models/tensorus/
-          echo "--- Finished preparing models package ---"
+          cd models
+          pip install -e .
       - name: Run models tests
         working-directory: models
-        env:
-          PYTHONPATH: ${{ github.workspace }}/models
         run: pytest -v tests
