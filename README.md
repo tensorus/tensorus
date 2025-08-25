@@ -263,43 +263,164 @@ You can run the example agents directly from their respective files:
 
     *   Note: The Ingestion Agent will monitor the `temp_ingestion_source` directory (created automatically if it doesn't exist in the project root) for new files.
 
-### Docker Usage
+### Docker Quickstart
 
-Tensorus can also be run inside a Docker container. Build the image from the project root:
+Run Tensorus with Docker in two ways: a single container (in‑memory storage) or a full stack with PostgreSQL via Docker Compose.
+
+#### Option A: Full stack with PostgreSQL (recommended)
+1. Install Docker Desktop (or Docker Engine) and Docker Compose v2.
+2. Generate an API key:
+
+   ```bash
+   python generate_api_key.py --format env
+   # Copy the value printed after TENSORUS_API_KEYS=
+   ```
+
+3. Open `docker-compose.yml` and set your key. Either:
+   - Replace the placeholder in `TENSORUS_VALID_API_KEYS` with your key, or
+   - Add `TENSORUS_API_KEYS: "tsr_..."` alongside it. Both are supported; `TENSORUS_API_KEYS` is preferred.
+
+4. Start the stack from the project root:
+
+   ```bash
+   docker compose up --build
+   ```
+
+   - The API starts on `http://localhost:7860`
+   - PostgreSQL is exposed on host `5433` (container `5432`)
+   - Audit logs are persisted to `./tensorus_audit.log` via a bind mount
+
+5. Test authentication (Bearer token is recommended):
+
+   ```bash
+   # Replace tsr_your_key with the key you generated
+   curl -H "Authorization: Bearer tsr_your_key" http://localhost:7860/datasets
+   ```
+
+Notes
+- The compose file waits for Postgres to become healthy before starting the app.
+- Legacy header `X-API-KEY: tsr_your_key` is still accepted for backward compatibility.
+
+Useful commands
+```bash
+# View logs
+docker compose logs -f app
+
+# Rebuild after code changes
+docker compose up --build --force-recreate
+
+# Stop stack
+docker compose down
+```
+
+#### Option B: Single container (in‑memory storage)
+Use this for quick, ephemeral testing without Postgres.
 
 ```bash
 docker build -t tensorus .
+docker run --rm -p 7860:7860 \
+  -e TENSORUS_AUTH_ENABLED=true \
+  -e TENSORUS_API_KEYS=tsr_your_key \
+  -e TENSORUS_STORAGE_BACKEND=in_memory \
+  -v "$(pwd)/tensorus_audit.log:/app/tensorus_audit.log" \
+  tensorus
 ```
 
-Run the container and expose the API server on port `7860`:
+Then open `http://localhost:7860/docs`.
 
+WSL2 tip: If you run Docker Desktop on Windows with WSL2, `localhost:7860` works from both Windows and the WSL distro. Keep volumes on the Linux side (`/home/...`) for best performance.
+
+#### GPU acceleration (optional)
+The default image uses CPU wheels. For GPUs, install the NVIDIA Container Toolkit and switch to CUDA‑enabled PyTorch wheels in your build (e.g., modify `setup.sh` or your Dockerfile). Pass `--gpus all` to `docker run`.
+
+### Environment configuration (reference)
+Tensorus reads configuration from environment variables (prefix `TENSORUS_`). Common settings:
+
+- Authentication
+  - `TENSORUS_AUTH_ENABLED` (default: `true`)
+  - `TENSORUS_API_KEYS`: Comma‑separated list of keys (recommended)
+  - `TENSORUS_VALID_API_KEYS`: Legacy alternative; comma list or JSON array
+  - Usage: Prefer `Authorization: Bearer tsr_...`; legacy `X-API-KEY` also accepted
+
+- Storage backend
+  - `TENSORUS_STORAGE_BACKEND`: `in_memory` | `postgres` (default: `in_memory`)
+  - Postgres when `postgres`:
+    - `TENSORUS_POSTGRES_HOST`, `TENSORUS_POSTGRES_PORT` (default `5432`),
+      `TENSORUS_POSTGRES_USER`, `TENSORUS_POSTGRES_PASSWORD`, `TENSORUS_POSTGRES_DB`
+    - or `TENSORUS_POSTGRES_DSN` (overrides individual fields)
+  - Optional tensor persistence path: `TENSORUS_TENSOR_STORAGE_PATH` (e.g., a local path or URI)
+
+- Security headers
+  - `TENSORUS_X_FRAME_OPTIONS` (default `SAMEORIGIN`; set to `NONE` to omit)
+  - `TENSORUS_CONTENT_SECURITY_POLICY` (default `default-src 'self'`; set to `NONE` to omit)
+
+- Misc
+  - `TENSORUS_AUDIT_LOG_PATH` (default `tensorus_audit.log`)
+  - `TENSORUS_MINIMAL_IMPORT`=1 to skip optional model package imports
+  - NQL with LLM: `NQL_USE_LLM=true`, `GOOGLE_API_KEY`, optional `NQL_LLM_MODEL`
+
+Example `.env` (for local runs or compose env_file):
 ```bash
-docker run -p 7860:7860 tensorus
+TENSORUS_AUTH_ENABLED=true
+TENSORUS_API_KEYS=tsr_your_key
+TENSORUS_STORAGE_BACKEND=postgres
+TENSORUS_POSTGRES_HOST=db
+TENSORUS_POSTGRES_PORT=5432
+TENSORUS_POSTGRES_USER=tensorus_user
+TENSORUS_POSTGRES_PASSWORD=change_me
+TENSORUS_POSTGRES_DB=tensorus_db
+TENSORUS_AUDIT_LOG_PATH=/app/tensorus_audit.log
 ```
 
-The FastAPI documentation will then be available at `http://localhost:7860/docs`.
+### Production deployment with Docker (step‑by‑step)
+This example uses Docker Compose with PostgreSQL. Adjust for your infra as needed.
 
-If your system has NVIDIA GPUs and the [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker) installed, you can pass `--gpus all` to `docker run` and modify `setup.sh` to install CUDA-enabled PyTorch wheels for GPU acceleration.
+1. Generate and store your API key securely
+   - `python generate_api_key.py --format env`
+   - Prefer secret management (Docker/Swarm/K8s/Vault). For Compose, you can use a file‑based secret:
 
-### Deployment
+     ```bash
+     # secrets/api_key.txt contains only your key value (no quotes)
+     echo "tsr_prod_key_..." > secrets/api_key.txt
+     ```
 
-Tensorus adds several security headers by default. You can customize them with environment variables:
+2. Configure Compose for production
+   - Edit `docker-compose.yml` and set:
+     - `TENSORUS_AUTH_ENABLED: "true"`
+     - `TENSORUS_API_KEYS: ${TENSORUS_API_KEYS:-}` or point to a secret/file
+     - `TENSORUS_STORAGE_BACKEND: postgres` and your Postgres credentials
+   - Optionally add `env_file: .env` and put non‑secret config there.
 
-* `TENSORUS_X_FRAME_OPTIONS` – value for the `X-Frame-Options` header (default `SAMEORIGIN`).
-* `TENSORUS_CONTENT_SECURITY_POLICY` – value for the `Content-Security-Policy` header (default `default-src 'self'`).
+3. Harden runtime
+   - Put Tensorus behind a reverse proxy (Nginx/Traefik) with TLS
+   - Restrict CORS/hosts at the proxy; the app currently allows all by default
+   - Set security headers via env vars (see below)
 
-If either variable is empty or set to `NONE`, the corresponding header is omitted.
-The default policy prevents ReDoc from loading its CDN assets. See [ReDoc and Content Security Policy](docs/api_guide.md#re-doc-and-content-security-policy) for an example policy that allows them.
+4. Start and verify
+   ```bash
+   docker compose up -d --build
+   docker compose ps
+   curl -f -H "Authorization: Bearer tsr_prod_key_..." http://localhost:7860/ || echo "API not ready"
+   ```
 
-Example configuration:
+5. Health and logs
+   - Postgres health is checked automatically; the app waits until healthy
+   - `docker compose logs -f app`
+
+Security headers
+- Override defaults to match your CSP and embedding needs. If set to `NONE` or empty, the header is omitted.
 
 ```bash
-# Allow embedding from a trusted site
+# Example: allow Swagger/ReDoc CDNs and a trusted frame host
 TENSORUS_X_FRAME_OPTIONS="ALLOW-FROM https://example.com"
-
-# Permit scripts from an external CDN
-TENSORUS_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://cdn.example.com"
+TENSORUS_CONTENT_SECURITY_POLICY="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://fastapi.tiangolo.com"
 ```
+
+Troubleshooting
+- 401 Unauthorized: ensure you send `Authorization: Bearer tsr_...` and the key is configured (`TENSORUS_API_KEYS` or `TENSORUS_VALID_API_KEYS`).
+- 503 auth not configured: set an API key when auth is enabled.
+- DB connection errors: verify Postgres env, port conflicts (host 5433 vs local 5432), and that the DB user/database exist.
+- Windows/WSL2 volume performance: keep bind‑mounted files on the Linux filesystem for best performance.
 
 ### Preparing the Test Environment
 
