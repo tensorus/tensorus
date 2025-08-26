@@ -338,17 +338,19 @@ Tensorus reads configuration from environment variables (prefix `TENSORUS_`). Co
 
 - Authentication
   - `TENSORUS_AUTH_ENABLED` (default: `true`)
-  - `TENSORUS_API_KEYS`: Comma‑separated list of keys (recommended)
+  - `TENSORUS_API_KEYS`: Comma‑separated list of keys (preferred)
   - `TENSORUS_VALID_API_KEYS`: Legacy alternative; comma list or JSON array
-  - Usage: Prefer `Authorization: Bearer tsr_...`; legacy `X-API-KEY` also accepted
+  - Usage: Prefer `Authorization: Bearer tsr_...`; legacy header is supported and configurable via `TENSORUS_API_KEY_HEADER_NAME`
 
-- Storage backend
+- Metadata storage backend (separate from tensor data persistence)
   - `TENSORUS_STORAGE_BACKEND`: `in_memory` | `postgres` (default: `in_memory`)
   - Postgres when `postgres`:
     - `TENSORUS_POSTGRES_HOST`, `TENSORUS_POSTGRES_PORT` (default `5432`),
       `TENSORUS_POSTGRES_USER`, `TENSORUS_POSTGRES_PASSWORD`, `TENSORUS_POSTGRES_DB`
     - or `TENSORUS_POSTGRES_DSN` (overrides individual fields)
-  - Optional tensor persistence path: `TENSORUS_TENSOR_STORAGE_PATH` (e.g., a local path or URI)
+
+- Tensor data persistence (optional, independent of metadata backend)
+  - `TENSORUS_TENSOR_STORAGE_PATH`: Local directory path (e.g., `/app/tensor_data`) or `s3://bucket/prefix` (requires AWS credentials and boto3)
 
 - Security headers
   - `TENSORUS_X_FRAME_OPTIONS` (default `SAMEORIGIN`; set to `NONE` to omit)
@@ -389,6 +391,7 @@ This example uses Docker Compose with PostgreSQL. Adjust for your infra as neede
      - `TENSORUS_AUTH_ENABLED: "true"`
      - `TENSORUS_API_KEYS: ${TENSORUS_API_KEYS:-}` or point to a secret/file
      - `TENSORUS_STORAGE_BACKEND: postgres` and your Postgres credentials
+     - (Optional tensor persistence) Mount a volume and set `TENSORUS_TENSOR_STORAGE_PATH: /app/tensor_data`
    - Optionally add `env_file: .env` and put non‑secret config there.
 
 3. Harden runtime

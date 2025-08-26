@@ -12,6 +12,12 @@ from typing import Optional, List, Dict, Any # Added for new functions
 logger = logging.getLogger(__name__)
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860") # Changed API_BASE_URL
+API_KEY = os.getenv("TENSORUS_UI_API_KEY")
+
+def _auth_headers() -> dict:
+    if API_KEY:
+        return {"Authorization": f"Bearer {API_KEY}"}
+    return {}
 
 def load_css():
     """Loads the main CSS styles. Assumes app.py's CSS content."""
@@ -238,7 +244,7 @@ def get_api_status() -> tuple[bool, dict]:
                 - If unsuccessful, contains an 'error' key with a descriptive message.
     """
     try:
-        response = requests.get(f"{API_BASE_URL}/", timeout=3) # Increased timeout slightly
+        response = requests.get(f"{API_BASE_URL}/", headers=_auth_headers(), timeout=3) # Increased timeout slightly
         response.raise_for_status()
         return True, response.json()
     except requests.exceptions.RequestException as e:
@@ -261,7 +267,7 @@ def get_agent_status() -> Optional[dict]:
         Optional[dict]: Agent statuses dictionary or None.
     """
     try:
-        response = requests.get(f"{API_BASE_URL}/agents/status", timeout=5)
+        response = requests.get(f"{API_BASE_URL}/agents/status", headers=_auth_headers(), timeout=5)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -287,7 +293,7 @@ def start_agent(agent_id: str) -> dict:
               it also returns a dict with 'success': False and an error 'message'.
     """
     try:
-        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/start", timeout=7) # Increased timeout
+        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/start", headers=_auth_headers(), timeout=7) # Increased timeout
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -313,7 +319,7 @@ def stop_agent(agent_id: str) -> dict:
               it also returns a dict with 'success': False and an error 'message'.
     """
     try:
-        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/stop", timeout=7) # Increased timeout
+        response = requests.post(f"{API_BASE_URL}/agents/{agent_id}/stop", headers=_auth_headers(), timeout=7) # Increased timeout
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -336,7 +342,7 @@ def get_datasets() -> list[str]:
                    or if an exception occurs.
     """
     try:
-        response = requests.get(f"{API_BASE_URL}/explorer/datasets", timeout=5)
+        response = requests.get(f"{API_BASE_URL}/explorer/datasets", headers=_auth_headers(), timeout=5)
         response.raise_for_status()
         data = response.json()
         return data.get("datasets", [])
@@ -366,7 +372,7 @@ def get_dataset_preview(dataset_name: str, limit: int = 10) -> Optional[dict]:
                         Returns None if the API call fails or an exception occurs.
     """
     try:
-        response = requests.get(f"{API_BASE_URL}/explorer/dataset/{dataset_name}/preview?limit={limit}", timeout=10)
+        response = requests.get(f"{API_BASE_URL}/explorer/dataset/{dataset_name}/preview?limit={limit}", headers=_auth_headers(), timeout=10)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -457,8 +463,9 @@ def post_nql_query(query: str) -> dict:
     """
     try:
         response = requests.post(
-            f"{API_BASE_URL}/chat/query", # Ensure API_BASE_URL is defined in this file
+            f"{API_BASE_URL}/query", # align with API endpoint
             json={"query": query},
+            headers=_auth_headers(),
             timeout=15
         )
         response.raise_for_status()
@@ -493,6 +500,7 @@ def configure_agent(agent_id: str, config: dict) -> dict:
         response = requests.post(
             f"{API_BASE_URL}/agents/{agent_id}/configure",
             json={"config": config},
+            headers=_auth_headers(),
             timeout=7 # Increased timeout similar to start/stop
         )
         response.raise_for_status()
@@ -535,6 +543,7 @@ def operate_explorer(dataset: str, operation: str, index: int, params: dict) -> 
         response = requests.post(
             f"{API_BASE_URL}/explorer/operate",
             json=payload,
+            headers=_auth_headers(),
             timeout=15 # Standard timeout for potentially long operations
         )
         response.raise_for_status()

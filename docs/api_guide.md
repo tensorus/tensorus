@@ -44,6 +44,6 @@ The API is organized into several categories based on functionality:
 *   **Search & Aggregation:** Advanced querying, text-based search across metadata, and metadata aggregation.
 *   **Import/Export:** Endpoints for exporting and importing tensor metadata in JSON format.
 *   **Management:** Health checks and system metrics.
-*   **Authentication:** Write operations (POST, PUT, PATCH, DELETE) are protected by API keys. See [Installation and Configuration](./installation.md) for details on setting API keys. The API key should be passed in the HTTP header specified by `TENSORUS_API_KEY_HEADER_NAME` (default: `X-API-KEY`).
+*   **Authentication:** Write operations (POST, PUT, PATCH, DELETE) are protected by API keys. Default is Bearer token: `Authorization: Bearer tsr_...`. A legacy header is also supported and configurable via `TENSORUS_API_KEY_HEADER_NAME`. See [Installation and Configuration](./installation.md).
 
 Please refer to the interactive `/docs` for detailed information on each endpoint, including request parameters, request bodies, and response structures.

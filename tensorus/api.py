@@ -1996,6 +1996,103 @@ app.include_router(ops_router)
 # --- Root Endpoint ---
 @app.get("/", include_in_schema=False)
 async def read_root():
-    """Provides a simple welcome message for the API root."""
-    # Useful for health checks or simple verification that the API is running
-    return {"message": "Welcome to the Tensorus API! Visit /docs or /redoc for interactive documentation."}
+    """Simple root with message and version for health checks and UIs."""
+    return {
+        "message": "Welcome to the Tensorus API! Visit /docs or /redoc for interactive documentation.",
+        "version": app.version,
+    }
+
+# --- Explorer convenience endpoints for UI ---
+class ExplorerPreviewResponse(BaseModel):
+    dataset: str
+    record_count: int
+    preview: List[Dict[str, Any]]
+
+@app.get("/explorer/datasets", tags=["Explorer"], response_model=List[str])
+async def explorer_list_datasets(storage: TensorStorage = Depends(get_tensor_storage), api_key: str = Depends(verify_api_key)):
+    if hasattr(storage, 'list_datasets'):
+        return storage.list_datasets()  # type: ignore[no-any-return]
+    return list(getattr(storage, 'datasets', {}).keys())
+
+@app.get("/explorer/dataset/{dataset_name}/preview", tags=["Explorer"], response_model=ExplorerPreviewResponse)
+async def explorer_dataset_preview(
+    dataset_name: str,
+    limit: int = Query(10, ge=1, le=1000),
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key),
+):
+    try:
+        records = storage.get_records_paginated(dataset_name, offset=0, limit=limit)
+        # Convert tensors to list format, include key metadata
+        preview_items: List[Dict[str, Any]] = []
+        for rec in records:
+            shape, dtype, data_list = tensor_to_list(rec["tensor"])  # type: ignore[index]
+            preview_items.append({
+                "id": rec["metadata"].get("record_id"),
+                "shape": shape,
+                "dtype": dtype,
+                "metadata": rec["metadata"],
+                "data": data_list,
+            })
+        count = storage.count(dataset_name)
+        return ExplorerPreviewResponse(dataset=dataset_name, record_count=count, preview=preview_items)
+    except DatasetNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+class ExplorerOperateRequest(BaseModel):
+    dataset: str
+    operation: str
+    tensor_index: int
+    params: Dict[str, Any] = {}
+
+class ExplorerOperateResponse(BaseModel):
+    success: bool
+    metadata: Dict[str, Any] | None = None
+    result_data: Any | None = None
+
+@app.post("/explorer/operate", tags=["Explorer"], response_model=ExplorerOperateResponse)
+async def explorer_operate(
+    req: ExplorerOperateRequest,
+    storage: TensorStorage = Depends(get_tensor_storage),
+    api_key: str = Depends(verify_api_key),
+):
+    try:
+        items = storage.get_records_paginated(req.dataset, 0, req.tensor_index + 1)
+        if req.tensor_index < 0 or req.tensor_index >= len(items):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tensor_index out of range")
+        rec = items[req.tensor_index]
+        tensor = rec["tensor"]
+        # Minimal supported operations demo; extend as needed
+        op = req.operation.lower()
+        if op == "view":
+            shape, dtype, data_list = tensor_to_list(tensor)
+            return ExplorerOperateResponse(success=True, metadata={"shape": shape, "dtype": dtype, "record_id": rec["metadata"].get("record_id")}, result_data=data_list)
+        elif op == "transpose":
+            dim0 = int(req.params.get("dim0", 0))
+            dim1 = int(req.params.get("dim1", 1))
+            result = TensorOps.transpose(tensor, dim0, dim1)
+            shape, dtype, data_list = tensor_to_list(result)
+            return ExplorerOperateResponse(success=True, metadata={"operation": "transpose", "dim0": dim0, "dim1": dim1, "shape": shape, "dtype": dtype}, result_data=data_list)
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported operation: {req.operation}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Explorer operate failed: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Explorer operation failed")
+
+# Aggregate agents status endpoint for UI convenience
+@app.get("/agents/status", tags=["Agents"])  # simple map of id->status
+async def agents_status():
+    try:
+        statuses: Dict[str, Dict[str, Any]] = {}
+        for agent_id in agent_registry.keys():
+            try:
+                data = await get_agent_status_api(agent_id)  # reuse existing handler
+                statuses[agent_id] = data.model_dump()
+            except Exception:
+                statuses[agent_id] = {"status": "unknown"}
+        return statuses
+    except Exception as e:
+        logger.exception(f"Failed to aggregate agent statuses: {e}")
+        raise HTTPException(status_code=500, detail="Failed to aggregate agent statuses")
