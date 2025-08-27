@@ -57,3 +57,12 @@ semopy>=2.3
 gensim
 joblib
 opencv-python
+
+# --- Vector Database Dependencies ---
+# For embedding generation and vector similarity search
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.0
+# Alternative: faiss-gpu>=1.7.0 for GPU acceleration
+openai>=1.0.0
+# For additional embedding models
+tiktoken>=0.5.0

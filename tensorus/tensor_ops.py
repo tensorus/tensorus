@@ -679,3 +679,129 @@ class TensorOps:
             )
         return torch.linalg.matrix_norm(matrix, ord="nuc")
 
+    # --- Vector Distance Metrics (Added for Vector Database Support) ---
+    
+    @staticmethod
+    def pairwise_distances(vectors: torch.Tensor, metric: str = "euclidean") -> torch.Tensor:
+        """
+        Computes pairwise distances between all vectors in a batch.
+        
+        Args:
+            vectors (torch.Tensor): Batch of vectors of shape (n, d)
+            metric (str): Distance metric ("euclidean", "manhattan", "cosine")
+            
+        Returns:
+            torch.Tensor: Pairwise distance matrix of shape (n, n)
+            
+        Raises:
+            TypeError: If input is not a torch.Tensor
+            ValueError: If vectors is not 2D or metric is unsupported
+        """
+        TensorOps._check_tensor(vectors)
+        
+        if vectors.ndim != 2:
+            raise ValueError(f"Vectors must be 2D (batch, features), got shape {vectors.shape}")
+        
+        if metric not in ["euclidean", "manhattan", "cosine"]:
+            raise ValueError(f"Unsupported metric: {metric}. Use 'euclidean', 'manhattan', or 'cosine'")
+        
+        n = vectors.shape[0]
+        
+        try:
+            if metric == "euclidean":
+                # Efficient pairwise Euclidean distance computation
+                # ||a - b||^2 = ||a||^2 + ||b||^2 - 2<a,b>
+                norms_sq = torch.sum(vectors ** 2, dim=1, keepdim=True)
+                distances_sq = norms_sq + norms_sq.t() - 2 * torch.matmul(vectors, vectors.t())
+                # Clamp to avoid numerical errors with sqrt
+                distances_sq = torch.clamp(distances_sq, min=0.0)
+                distances = torch.sqrt(distances_sq)
+                
+            elif metric == "manhattan":
+                # Pairwise Manhattan distance
+                distances = torch.zeros(n, n, dtype=vectors.dtype, device=vectors.device)
+                for i in range(n):
+                    for j in range(n):
+                        distances[i, j] = torch.sum(torch.abs(vectors[i] - vectors[j]))
+                        
+            else:  # cosine
+                # Pairwise cosine distance (1 - cosine_similarity)
+                # Normalize vectors
+                norms = torch.linalg.norm(vectors, dim=1, keepdim=True)
+                normalized = vectors / torch.clamp(norms, min=1e-8)
+                similarities = torch.matmul(normalized, normalized.t())
+                distances = 1.0 - similarities
+                
+            return distances
+            
+        except Exception as e:
+            logging.error(f"Error computing pairwise distances: {e}")
+            raise
+
+    @staticmethod
+    def cdist(x1: torch.Tensor, x2: torch.Tensor, p: float = 2.0) -> torch.Tensor:
+        """
+        Computes the p-norm distance between each pair of vectors in x1 and x2.
+        
+        Args:
+            x1 (torch.Tensor): First set of vectors of shape (m, d)
+            x2 (torch.Tensor): Second set of vectors of shape (n, d)
+            p (float): The norm degree (1.0 for Manhattan, 2.0 for Euclidean)
+            
+        Returns:
+            torch.Tensor: Distance matrix of shape (m, n)
+            
+        Raises:
+            TypeError: If inputs are not torch.Tensor objects
+            ValueError: If tensors don't have compatible shapes
+        """
+        TensorOps._check_tensor(x1, x2)
+        
+        if x1.ndim != 2 or x2.ndim != 2:
+            raise ValueError(f"Both inputs must be 2D, got shapes {x1.shape} and {x2.shape}")
+        
+        if x1.shape[1] != x2.shape[1]:
+            raise ValueError(f"Feature dimensions must match: {x1.shape[1]} vs {x2.shape[1]}")
+        
+        try:
+            # Use PyTorch's built-in cdist function
+            distances = torch.cdist(x1, x2, p=p)
+            return distances
+            
+        except Exception as e:
+            logging.error(f"Error computing cdist: {e}")
+            raise
+
+    @staticmethod
+    def hamming_distance(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
+        """
+        Computes the Hamming distance between two binary vectors.
+        
+        Args:
+            v1 (torch.Tensor): First binary vector
+            v2 (torch.Tensor): Second binary vector
+            
+        Returns:
+            torch.Tensor: Hamming distance (number of differing positions)
+            
+        Raises:
+            TypeError: If inputs are not torch.Tensor objects
+            ValueError: If vectors have different shapes or are not 1D
+        """
+        TensorOps._check_tensor(v1, v2)
+        
+        if v1.ndim != 1 or v2.ndim != 1:
+            raise ValueError(f"Hamming distance requires 1D vectors, got shapes {v1.shape} and {v2.shape}")
+        
+        if v1.shape[0] != v2.shape[0]:
+            raise ValueError(f"Vector dimensions must match: {v1.shape[0]} vs {v2.shape[0]}")
+        
+        try:
+            # Count number of positions where vectors differ
+            diff_count = torch.sum(v1 != v2).float()
+            return diff_count
+            
+        except Exception as e:
+            logging.error(f"Error computing Hamming distance: {e}")
+            raise
+

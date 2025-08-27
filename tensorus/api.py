@@ -31,6 +31,8 @@ from tensorus.api.endpoints import (
     router_management,
     router_analytics,
 )
+# Import vector database router
+from tensorus.api.routers.vector import router as vector_router
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 # Import security functions
@@ -1992,6 +1994,9 @@ app.include_router(router_analytics)
 
 # Include the tensor operations router defined above
 app.include_router(ops_router)
+
+# Include vector database router
+app.include_router(vector_router, prefix="/vector", tags=["Vector Database"])
 
 # --- Root Endpoint ---
 @app.get("/", include_in_schema=False)

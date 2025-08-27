@@ -248,3 +248,76 @@ class UsageMetadata(BaseModel):
 
         return self
 
+# --- Vector Database Specific Metadata Schemas ---
+
+class EmbeddingModelInfo(BaseModel):
+    """Information about the embedding model used to generate vectors."""
+    model_name: str = Field(..., description="Name/identifier of the embedding model")
+    model_version: Optional[str] = None
+    provider: Optional[str] = None  # e.g., "sentence-transformers", "openai", "huggingface"
+    embedding_dimension: int = Field(..., ge=1, description="Dimensionality of the embedding vectors")
+    max_sequence_length: Optional[int] = None
+    model_parameters: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    normalization: Optional[str] = None  # e.g., "l2", "none"
+
+class VectorIndexInfo(BaseModel):
+    """Information about vector indexing for similarity search."""
+    index_type: str = Field(..., description="Type of vector index (e.g., 'flat', 'ivf', 'hnsw')")
+    index_parameters: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    distance_metric: str = Field(default="cosine", description="Distance metric used for similarity")
+    is_trained: bool = Field(default=False, description="Whether the index has been trained")
+    num_vectors_indexed: Optional[int] = Field(default=0, ge=0)
+    index_build_timestamp: Optional[datetime] = None
+    index_file_path: Optional[str] = None  # Path to serialized index file
+
+class VectorMetadata(BaseModel):
+    """Metadata specific to vector embeddings and similarity search."""
+    tensor_id: UUID
+    is_embedding: bool = Field(default=True, description="Whether this tensor is an embedding vector")
+    embedding_model: Optional[EmbeddingModelInfo] = None
+    source_text: Optional[str] = None  # Original text that was embedded
+    source_data_type: Optional[str] = None  # e.g., "text", "image", "audio"
+    vector_index: Optional[VectorIndexInfo] = None
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    nearest_neighbors: Optional[List[UUID]] = Field(default_factory=list)  # Cached nearest neighbor IDs
+    cluster_id: Optional[str] = None  # If vector belongs to a cluster
+    vector_tags: Optional[List[str]] = Field(default_factory=list)  # Semantic tags for the vector
+
+    @field_validator('similarity_threshold')
+    def validate_similarity_threshold(cls, v):
+        if v is not None and (v < 0.0 or v > 1.0):
+            raise ValueError('Similarity threshold must be between 0.0 and 1.0')
+        return v
+
+class SimilaritySearchResult(BaseModel):
+    """Result from a vector similarity search operation."""
+    query_vector_id: Optional[UUID] = None
+    result_vector_id: UUID
+    similarity_score: float = Field(..., description="Similarity score between query and result")
+    distance: Optional[float] = None  # Distance metric value
+    rank: int = Field(..., ge=1, description="Rank in search results (1-based)")
+    metadata_match: Optional[Dict[str, Any]] = Field(default_factory=dict)  # Additional metadata matches
+
+    @field_validator('similarity_score')
+    def validate_similarity_score(cls, v):
+        if not isinstance(v, (int, float)):
+            raise ValueError('Similarity score must be numeric')
+        return float(v)
+
+class HybridSearchMetadata(BaseModel):
+    """Metadata for hybrid search combining vector similarity and metadata filtering."""
+    tensor_id: UUID
+    search_query: str = Field(..., description="Original search query")
+    vector_weight: float = Field(default=0.7, ge=0.0, le=1.0, description="Weight for vector similarity")
+    metadata_weight: float = Field(default=0.3, ge=0.0, le=1.0, description="Weight for metadata matching")
+    filters_applied: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    search_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    total_candidates: Optional[int] = Field(default=None, ge=0)
+    results_returned: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode='after')
+    def validate_weights_sum(self) -> 'HybridSearchMetadata':
+        if abs(self.vector_weight + self.metadata_weight - 1.0) > 1e-6:
+            raise ValueError('Vector weight and metadata weight must sum to 1.0')
+        return self
+
