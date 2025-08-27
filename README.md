@@ -18,19 +18,13 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 ## Key Features
 
 *   **Tensor Storage:** Efficiently store and retrieve PyTorch tensors with associated metadata.
-*   **Vector Database Capabilities:** Full vector database integration with embedding generation, similarity search, and approximate nearest neighbor indexing.
-    *   **Embedding Generation:** Support for sentence-transformers and OpenAI models with automatic caching.
-    *   **Similarity Search:** Cosine, Euclidean, and Manhattan distance metrics with fast vector operations.
-    *   **Vector Indexing:** FAISS-based approximate nearest neighbor search (Flat, IVF, HNSW indexes).
-    *   **Hybrid Search:** Combine semantic similarity with metadata filtering for powerful search capabilities.
 *   **Dataset Schemas:** Optional per-dataset schemas enforce required metadata fields and tensor shape/dtype.
 *   **Natural Query Language (NQL):** Query your tensor data using a simple, natural language-like syntax.
 *   **Agent Framework:** A foundation for building and integrating intelligent agents that interact with your data.
     *   **Data Ingestion Agent:** Automatically monitors a directory for new files and ingests them as tensors.
     *   **RL Agent:** A Deep Q-Network (DQN) agent that can learn from experiences stored in TensorStorage.
     *   **AutoML Agent:** Performs hyperparameter optimization for a dummy model using random search.
-    *   **Embedding Agent:** Generates and manages text embeddings with multiple model backends.
-*   **API-Driven:** A FastAPI backend provides a RESTful API for interacting with Tensorus, including comprehensive vector database endpoints.
+*   **API-Driven:** A FastAPI backend provides a RESTful API for interacting with Tensorus.
 *   **Streamlit UI:** A user-friendly Streamlit frontend for exploring data and controlling agents.
 *   **Tensor Operations:** A comprehensive library of robust tensor operations for common manipulations. See [Basic Tensor Operations](#basic-tensor-operations) for details.
 *   **Model System:** Optional model registry with example models provided in a
@@ -50,9 +44,6 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
     *   `tensorus/api.py`: The FastAPI application providing the backend API for Tensorus.
     *   `tensorus/tensor_storage.py`: Core TensorStorage implementation for managing tensor data.
     *   `tensorus/tensor_ops.py`: Library of functions for tensor manipulations.
-    *   `tensorus/vector_ops.py`: Specialized vector operations for similarity search and distance metrics.
-    *   `tensorus/embedding_agent.py`: Agent for generating and managing text embeddings.
-    *   `tensorus/vector_index.py`: FAISS-based vector indexing for approximate nearest neighbor search.
     *   `tensorus/nql_agent.py`: Agent for processing Natural Query Language queries.
     *   `tensorus/ingestion_agent.py`: Agent for ingesting data from various sources.
     *   `tensorus/rl_agent.py`: Agent for Reinforcement Learning tasks.
@@ -111,14 +102,6 @@ graph TD
         NQLA[NQL Agent]
         RLA[RL Agent]
         AutoMLA[AutoML Agent]
-        EA[Embedding Agent]
-    end
-
-    %% Vector Database Layer
-    subgraph Vector_Layer ["Vector Database"]
-        VOps[VectorOps Library]
-        VIndex[Vector Index Manager]
-        FAISS[FAISS Indexes]
     end
 
     %% Model System
@@ -140,9 +123,6 @@ graph TD
     API -->|Command Dispatch| NQLA
     API -->|Command Dispatch| RLA
     API -->|Command Dispatch| AutoMLA
-    API -->|Command Dispatch| EA
-    API -->|Vector Operations| VOps
-    API -->|Index Management| VIndex
     API -->|Model Training| Registry
     API -->|Direct Query| TS_query
 
@@ -163,15 +143,6 @@ graph TD
 
     AutoMLA -->|Trial Storage| TS_insert
     AutoMLA -->|Data Retrieval| TS_query
-
-    EA -->|Embedding Storage| TS_insert
-    EA -->|Similarity Search| TS_query
-    EA -->|Vector Operations| VOps
-
-    %% Vector Database Interactions
-    VIndex -->|Index Storage| FAISS
-    VIndex -->|Vector Retrieval| TS_query
-    VOps -->|Distance Metrics| TOps
 
     %% Computational Operations
     NQLA -->|Vector Operations| TOps
@@ -195,10 +166,6 @@ graph TD
 *   Requests
 *   Pillow (for image preprocessing)
 *   Matplotlib (optional, for plotting RL rewards)
-*   sentence-transformers (for embedding generation)
-*   faiss-cpu or faiss-gpu (for vector indexing)
-*   openai (optional, for OpenAI embeddings)
-*   tiktoken (for OpenAI tokenization)
 
 ### Installation
 
@@ -507,6 +474,7 @@ Tensorus includes Python unit tests. To set up the environment and run them:
 
 
 ## Using Tensorus
+
 ### API Endpoints
 
 The API provides the following main endpoints:
@@ -517,15 +485,6 @@ The API provides the following main endpoints:
     *   `GET /datasets/{name}/fetch`: Retrieve all records from a dataset.
     *   `GET /datasets/{name}/records`: Retrieve a page of records. Supports `offset` (start index, default `0`) and `limit` (max results, default `100`).
     *   `GET /datasets`: List all available datasets.
-*   **Vector Database:**
-    *   `POST /vector/embed`: Generate and store text embeddings.
-    *   `POST /vector/search`: Perform similarity search on embeddings.
-    *   `POST /vector/hybrid-search`: Combine semantic and metadata search.
-    *   `POST /vector/index/build`: Build FAISS indexes for fast search.
-    *   `POST /vector/index/search`: Search using pre-built indexes.
-    *   `GET /vector/index/list`: List available vector indexes.
-    *   `DELETE /vector/index/{name}`: Delete a vector index.
-    *   `GET /vector/models`: List supported embedding models.
 *   **Querying:**
     *   `POST /query`: Execute an NQL query.
 *   **Agents:**
@@ -539,7 +498,7 @@ The API provides the following main endpoints:
 
 ### Dataset Schemas
 
-Datasets can optionally include a schema when created. The schema defines required metadata fields and expected tensor `shape` and `dtype`. Inserts that violate the schema will raise a validation error.
+Datasets can optionally include a schema when created. The schema defines
 required metadata fields and expected tensor `shape` and `dtype`. Inserts that
 violate the schema will raise a validation error.
 
@@ -745,111 +704,13 @@ Examples of how to call these methods are provided in
 [`tensorus/tensor_decompositions.py`](tensorus/tensor_decompositions.py).
 
 
-## Vector Database Operations
-
-Tensorus includes comprehensive vector database capabilities that rival dedicated vector databases like Pinecone and Weaviate. The vector database integration provides:
-
-### Core Vector Operations (`vector_ops.py`)
-
-*   `cosine_similarity(vec1, vec2)`: Computes cosine similarity between two vectors.
-*   `cosine_similarity_batch(vectors1, vectors2)`: Batch cosine similarity computation.
-*   `euclidean_distance(vec1, vec2)`: Euclidean distance between vectors.
-*   `manhattan_distance(vec1, vec2)`: Manhattan (L1) distance between vectors.
-*   `hamming_distance(vec1, vec2)`: Hamming distance for binary vectors.
-*   `top_k_similarity(query, vectors, k)`: Find k most similar vectors to query.
-*   `normalize_vectors(vectors)`: L2 normalization of vectors.
-*   `vector_angle(vec1, vec2)`: Angle between two vectors in radians.
-*   `pairwise_distance_matrix(vectors, metric)`: Compute pairwise distance matrix.
-
-### Embedding Generation (`embedding_agent.py`)
-
-*   **Multiple Model Support**: sentence-transformers, OpenAI embeddings
-*   **Model Caching**: Automatic caching of loaded models for efficiency
-*   **Embedding Caching**: Cache computed embeddings to avoid recomputation
-*   **Batch Processing**: Efficient batch encoding of multiple texts
-*   **Storage Integration**: Seamless integration with TensorStorage
-
-Supported Models:
-- `all-MiniLM-L6-v2` (384 dimensions) - Fast and efficient
-- `all-mpnet-base-v2` (768 dimensions) - High quality embeddings
-- `text-embedding-ada-002` (1536 dimensions) - OpenAI's general-purpose model
-- `text-embedding-3-small/large` - OpenAI's latest models
-
-### Vector Indexing (`vector_index.py`)
-
-*   **FAISS Integration**: Fast approximate nearest neighbor search
-*   **Multiple Index Types**:
-    - **Flat Index**: Exact search for small datasets (<10K vectors)
-    - **IVF Index**: Inverted file index for medium datasets (10K-1M vectors)
-    - **HNSW Index**: Hierarchical navigable small world for large datasets (>100K vectors)
-*   **Persistent Storage**: Save and load indexes to/from disk
-*   **Metadata Integration**: Associate metadata with indexed vectors
-
-### API Endpoints
-
-The vector database provides comprehensive REST API endpoints:
-
-*   `POST /vector/embed`: Generate embeddings from text
-*   `POST /vector/search`: Similarity search in embedding space
-*   `POST /vector/hybrid-search`: Combine semantic and metadata search
-*   `POST /vector/index/build`: Build FAISS indexes for fast search
-*   `POST /vector/index/search`: Search using pre-built indexes
-*   `GET /vector/index/list`: List available indexes
-*   `DELETE /vector/index/{name}`: Delete vector indexes
-*   `GET /vector/models`: List supported embedding models
-
-### Usage Examples
-
-```python
-from tensorus.embedding_agent import EmbeddingAgent
-from tensorus.vector_index import VectorIndexManager
-from tensorus.tensor_storage import TensorStorage
-
-# Initialize components
-storage = TensorStorage()
-agent = EmbeddingAgent(storage)
-index_manager = VectorIndexManager(storage)
-
-# Generate and store embeddings
-texts = ["Machine learning", "Deep learning", "Neural networks"]
-result = agent.encode_and_store(
-    texts=texts,
-    dataset_name="ai_concepts",
-    model_name="all-MiniLM-L6-v2"
-)
-
-# Build fast search index
-index = index_manager.build_index(
-    dataset_name="ai_concepts",
-    index_type="hnsw",
-    metric="cosine"
-)
-
-# Perform similarity search
-results = index_manager.search_index(
-    index_name="ai_concepts_hnsw",
-    query="artificial intelligence",
-    k=5
-)
-```
-
-For detailed usage instructions, see [`docs/vector_database_guide.md`](docs/vector_database_guide.md).
-
 ## Completed Features
 
 The current codebase implements all of the items listed in
-[Key Features](#key-features). Tensorus provides efficient tensor
-storage with optional file persistence, comprehensive vector database capabilities,
-a natural query language, a flexible agent framework, a RESTful API, a Streamlit UI, 
-and robust tensor operations. The modular architecture makes future extensions straightforward.
-
-**Recently Added Vector Database Features:**
-*   ✅ **Vector Operations Library** - Complete similarity and distance metrics
-*   ✅ **Embedding Generation** - Support for sentence-transformers and OpenAI models  
-*   ✅ **FAISS Integration** - Approximate nearest neighbor indexing (Flat, IVF, HNSW)
-*   ✅ **Hybrid Search** - Semantic similarity combined with metadata filtering
-*   ✅ **REST API Endpoints** - Full vector database API (`/vector/*`)
-*   ✅ **Comprehensive Testing** - Complete test coverage for all vector components
+[Key Features](#key-features). Tensorus already provides efficient tensor
+storage with optional file persistence, a natural query language, a flexible
+agent framework, a RESTful API, a Streamlit UI, and robust tensor operations. 
+The modular architecture makes future extensions straightforward.
 
 ## Future Implementation
 
