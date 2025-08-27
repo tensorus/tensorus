@@ -65,9 +65,8 @@ Tensorus is configured via environment variables. Key variables include:
 *   `TENSORUS_POSTGRES_PASSWORD`: Password for PostgreSQL.
 *   `TENSORUS_POSTGRES_DB`: Database name for PostgreSQL.
 *   `TENSORUS_POSTGRES_DSN`: Alternative DSN connection string for PostgreSQL.
-*   `TENSORUS_API_KEYS` (preferred): Comma-separated keys for Bearer auth (`Authorization: Bearer tsr_...`).
-*   `TENSORUS_VALID_API_KEYS` (legacy): Comma list or JSON array. Kept for backward compatibility.
-*   `TENSORUS_API_KEY_HEADER_NAME`: Legacy header name if you want to use a custom API-key header instead of Bearer. Default remains `X-API-KEY` when used.
+*   `TENSORUS_VALID_API_KEYS`: List of valid API keys. Values can be a comma-separated string (e.g., `key1,key2,anotherkey`) or a JSON array. If no keys are required, set this to `[]`.
+*   `TENSORUS_API_KEY_HEADER_NAME`: HTTP header name for the API key (default: `X-API-KEY`).
 *   `TENSORUS_MINIMAL_IMPORT`: Set to any value to skip importing the optional
     `tensorus-models` package for a lightweight installation.
 *   `NQL_USE_LLM`: Set to `true` to enable the Gemini-based natural query
@@ -77,11 +76,7 @@ Tensorus is configured via environment variables. Key variables include:
 *   `GOOGLE_API_KEY`: Your key for Google AI Studio. If not provided or the
     model fails to load, Tensorus falls back to regex parsing.
 
-### Authentication defaults
-* Default auth is Bearer tokens via `Authorization: Bearer <key>`.
-* Legacy header (`X-API-KEY`) is also accepted. You can set `TENSORUS_API_KEY_HEADER_NAME` to customize this header name.
-
-### JWT Authentication (Optional)
+### JWT Authentication (Conceptual - For Future Use)
 *   `TENSORUS_AUTH_JWT_ENABLED`: `True` or `False` (default `False`).
 *   `TENSORUS_AUTH_JWT_ISSUER`: URL of the JWT issuer.
 *   `TENSORUS_AUTH_JWT_AUDIENCE`: Expected audience for JWTs.

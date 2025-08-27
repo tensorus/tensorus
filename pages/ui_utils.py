@@ -9,21 +9,14 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
-import os
-TENSORUS_API_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:7860") # Ensure FastAPI runs here
-TENSORUS_UI_API_KEY = os.getenv("TENSORUS_UI_API_KEY")
-
-def _auth_headers():
-    if TENSORUS_UI_API_KEY:
-        return {"Authorization": f"Bearer {TENSORUS_UI_API_KEY}"}
-    return {}
+TENSORUS_API_URL = "http://127.0.0.1:7860" # Ensure FastAPI runs here
 
 # --- API Interaction Functions ---
 
 def get_api_status() -> bool:
     """Checks if the Tensorus API is reachable."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/", headers=_auth_headers(), timeout=2)
+        response = requests.get(f"{TENSORUS_API_URL}/", timeout=2)
         return response.status_code == 200
     except requests.exceptions.ConnectionError:
         return False
@@ -34,7 +27,7 @@ def get_api_status() -> bool:
 def list_datasets() -> Optional[List[str]]:
     """Fetches the list of dataset names from the API."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/datasets", headers=_auth_headers())
+        response = requests.get(f"{TENSORUS_API_URL}/datasets")
         response.raise_for_status()
         data = response.json()
         if data.get("success"):
@@ -54,7 +47,7 @@ def fetch_dataset_data(dataset_name: str, offset: int = 0, limit: int = 50) -> O
     """Fetches a page of records from a dataset via API."""
     try:
         params = {"offset": offset, "limit": limit}
-        response = requests.get(f"{TENSORUS_API_URL}/datasets/{dataset_name}/records", headers=_auth_headers(), params=params)
+        response = requests.get(f"{TENSORUS_API_URL}/datasets/{dataset_name}/records", params=params)
         response.raise_for_status()
         data = response.json()
         if data.get("success"):
@@ -74,7 +67,7 @@ def execute_nql_query(query: str) -> Optional[Dict[str, Any]]:
     """Sends an NQL query to the API."""
     try:
         payload = {"query": query}
-        response = requests.post(f"{TENSORUS_API_URL}/query", json=payload, headers=_auth_headers())
+        response = requests.post(f"{TENSORUS_API_URL}/query", json=payload)
         # Handle specific NQL errors (400) vs other errors
         if response.status_code == 400:
              error_detail = response.json().get("detail", "Unknown NQL processing error")
@@ -94,7 +87,7 @@ def execute_nql_query(query: str) -> Optional[Dict[str, Any]]:
 def list_all_agents() -> Optional[List[Dict[str, Any]]]:
     """Fetches the list of all registered agents from the API."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/agents", headers=_auth_headers())
+        response = requests.get(f"{TENSORUS_API_URL}/agents")
         response.raise_for_status()
         # The response is directly the list of AgentInfo objects
         return response.json()
@@ -109,7 +102,7 @@ def list_all_agents() -> Optional[List[Dict[str, Any]]]:
 def get_agent_status(agent_id: str) -> Optional[Dict[str, Any]]:
     """Fetches status for a specific agent from the API."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/agents/{agent_id}/status", headers=_auth_headers())
+        response = requests.get(f"{TENSORUS_API_URL}/agents/{agent_id}/status")
         if response.status_code == 404:
             st.error(f"Agent '{agent_id}' not found via API.")
             return None
@@ -127,7 +120,7 @@ def get_agent_status(agent_id: str) -> Optional[Dict[str, Any]]:
 def get_agent_logs(agent_id: str, lines: int = 20) -> Optional[List[str]]:
     """Fetches recent logs for a specific agent from the API."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/agents/{agent_id}/logs", headers=_auth_headers(), params={"lines": lines})
+        response = requests.get(f"{TENSORUS_API_URL}/agents/{agent_id}/logs", params={"lines": lines})
         if response.status_code == 404:
             st.error(f"Agent '{agent_id}' not found via API for logs.")
             return None
@@ -146,7 +139,7 @@ def get_agent_logs(agent_id: str, lines: int = 20) -> Optional[List[str]]:
 def start_agent(agent_id: str) -> bool:
     """Sends a start signal to an agent via the API."""
     try:
-        response = requests.post(f"{TENSORUS_API_URL}/agents/{agent_id}/start", headers=_auth_headers())
+        response = requests.post(f"{TENSORUS_API_URL}/agents/{agent_id}/start")
         if response.status_code == 404:
             st.error(f"Agent '{agent_id}' not found via API.")
             return False
@@ -179,7 +172,7 @@ def start_agent(agent_id: str) -> bool:
 def stop_agent(agent_id: str) -> bool:
     """Sends a stop signal to an agent via the API."""
     try:
-        response = requests.post(f"{TENSORUS_API_URL}/agents/{agent_id}/stop", headers=_auth_headers())
+        response = requests.post(f"{TENSORUS_API_URL}/agents/{agent_id}/stop")
         if response.status_code == 404:
             st.error(f"Agent '{agent_id}' not found via API.")
             return False
@@ -208,7 +201,7 @@ def stop_agent(agent_id: str) -> bool:
 def get_dashboard_metrics() -> Optional[Dict[str, Any]]:
     """Fetches dashboard metrics from the API."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/metrics/dashboard", headers=_auth_headers())
+        response = requests.get(f"{TENSORUS_API_URL}/metrics/dashboard")
         response.raise_for_status()
         # Returns DashboardMetrics model dict
         return response.json()
@@ -223,7 +216,7 @@ def get_dashboard_metrics() -> Optional[Dict[str, Any]]:
 def get_agent_config(agent_id: str) -> Optional[Dict[str, Any]]:
     """Fetch an agent's configuration from the API."""
     try:
-        response = requests.get(f"{TENSORUS_API_URL}/agents/{agent_id}/config", headers=_auth_headers())
+        response = requests.get(f"{TENSORUS_API_URL}/agents/{agent_id}/config")
         if response.status_code == 404:
             st.error(f"Agent '{agent_id}' not found via API for configuration.")
             return None
@@ -243,7 +236,6 @@ def update_agent_config(agent_id: str, config: Dict[str, Any]) -> bool:
         response = requests.post(
             f"{TENSORUS_API_URL}/agents/{agent_id}/configure",
             json={"config": config},
-            headers=_auth_headers(),
         )
         if response.status_code == 404:
             st.error(f"Agent '{agent_id}' not found via API for configuration.")

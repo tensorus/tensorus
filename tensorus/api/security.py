@@ -42,28 +42,13 @@ class MutableAPIKeyHeader(APIKeyHeader):
 bearer_scheme = HTTPBearer(auto_error=False)
 
 # Legacy API key header support for backward compatibility
-# Name is configurable via settings. Defaults to X-API-KEY in Dockerfile/compose,
-# but can be changed (e.g., to X-CUSTOM-API-KEY). This is in addition to Bearer.
 api_key_header_auth = MutableAPIKeyHeader(name="X-API-KEY", auto_error=False)
-
-def _refresh_api_key_header_name() -> None:
-    """Ensure the legacy API key header name reflects current settings."""
-    try:
-        # If a custom header name is configured, use it for legacy support
-        if settings.API_KEY_HEADER_NAME:
-            api_key_header_auth.name = settings.API_KEY_HEADER_NAME
-    except Exception:
-        # Never fail auth because of header-name refresh
-        pass
 
 
 async def verify_api_key(
     credentials: Optional[HTTPAuthorizationCredentials] = Security(bearer_scheme),
     legacy_api_key: Optional[str] = Security(api_key_header_auth)
 ) -> str:
-    # Keep legacy header name in sync with settings at request time (supports tests/monkeypatch)
-    _refresh_api_key_header_name()
-
     """
     Verify API key using Bearer token authentication (OpenAI/Pinecone style).
     
