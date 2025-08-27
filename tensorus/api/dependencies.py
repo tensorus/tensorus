@@ -1,8 +1,21 @@
 from tensorus.metadata import storage_instance as globally_configured_storage_instance
 from tensorus.metadata.storage_abc import MetadataStorage
+from tensorus.tensor_storage import TensorStorage
 
 # Note: The `storage_instance` imported here is already configured (InMemory or Postgres)
 # based on the logic in `tensorus/metadata/__init__.py` which reads `tensorus.config.settings`.
+
+# Global TensorStorage instance
+_tensor_storage_instance = None
+
+def get_tensor_storage() -> TensorStorage:
+    """
+    FastAPI dependency to get the TensorStorage instance.
+    """
+    global _tensor_storage_instance
+    if _tensor_storage_instance is None:
+        _tensor_storage_instance = TensorStorage()
+    return _tensor_storage_instance
 
 def get_storage_instance() -> MetadataStorage:
     """
