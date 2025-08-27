@@ -22,7 +22,7 @@ from ...vector_index import VectorIndexManager
 from ...metadata.schemas import SimilaritySearchResult, EmbeddingModelInfo
 from ..dependencies import get_tensor_storage
 from ..security import verify_api_key
-from ..utils import tensor_to_list
+from ...utils import tensor_to_list
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

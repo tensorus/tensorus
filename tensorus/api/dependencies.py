@@ -1,6 +1,6 @@
 from tensorus.metadata import storage_instance as globally_configured_storage_instance
 from tensorus.metadata.storage_abc import MetadataStorage
-from tensorus.tensor_storage import TensorStorage
+from ..tensor_storage import TensorStorage
 
 # Note: The `storage_instance` imported here is already configured (InMemory or Postgres)
 # based on the logic in `tensorus/metadata/__init__.py` which reads `tensorus.config.settings`.

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Any, Dict, List
 
-from ..utils import tensor_to_list
+from ...utils import tensor_to_list
 from ...nql_agent import NQLAgent
 from ...tensor_storage import TensorStorage
 from ...api import NQLQueryRequest, NQLResponse, get_nql_agent
