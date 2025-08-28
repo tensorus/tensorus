@@ -15,6 +15,7 @@ Future Enhancements:
 
 import torch
 import logging
+import gc
 from typing import Tuple, Optional, List, Union
 
 import tensorly as tl
@@ -27,6 +28,21 @@ class TensorOps:
     A static library class providing robust tensor operations.
     All methods are static and operate on provided torch.Tensor objects.
     """
+    
+    @staticmethod
+    def _cleanup_memory() -> None:
+        """Clean up GPU and CPU memory after large tensor operations."""
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        gc.collect()
+        
+    @staticmethod
+    def _should_cleanup(tensor: torch.Tensor, threshold_mb: float = 100.0) -> bool:
+        """Check if tensor is large enough to warrant memory cleanup."""
+        size_bytes = tensor.element_size() * tensor.numel()
+        size_mb = size_bytes / (1024 * 1024)
+        return size_mb > threshold_mb
 
     @staticmethod
     def _check_tensor(*tensors: torch.Tensor) -> None:
@@ -165,7 +181,7 @@ class TensorOps:
 
     @staticmethod
     def matmul(t1: torch.Tensor, t2: torch.Tensor) -> torch.Tensor:
-        """Matrix multiplication (torch.matmul) with shape checks."""
+        """Matrix multiplication (torch.matmul) with shape checks and memory management."""
         TensorOps._check_tensor(t1, t2)
         if t1.ndim < 1 or t2.ndim < 1:
              raise ValueError(f"Matmul requires tensors with at least 1 dimension, got {t1.ndim} and {t2.ndim}")
@@ -176,9 +192,14 @@ class TensorOps:
                 raise ValueError(f"Matrix multiplication shape mismatch: t1 shape {t1.shape} (inner dim {t1.shape[1]}) and t2 shape {t2.shape} (inner dim {t2.shape[0]}) are incompatible.")
         # Note: torch.matmul handles broadcasting and batch matmul, more complex checks could be added here.
         try:
-            return torch.matmul(t1, t2)
+            result = torch.matmul(t1, t2)
+            # Clean up memory for large operations
+            if TensorOps._should_cleanup(result) or TensorOps._should_cleanup(t1) or TensorOps._should_cleanup(t2):
+                TensorOps._cleanup_memory()
+            return result
         except RuntimeError as e:
             logging.error(f"Error during matmul: {e}. t1 shape: {t1.shape}, t2 shape: {t2.shape}")
+            TensorOps._cleanup_memory()  # Cleanup on error too
             raise e
 
     @staticmethod
@@ -399,13 +420,18 @@ class TensorOps:
 
     @staticmethod
     def einsum(equation: str, *tensors: torch.Tensor) -> torch.Tensor:
-        """Einstein summation with type checking."""
+        """Einstein summation with type checking and memory management."""
         TensorOps._check_tensor(*tensors)
         try:
-            return torch.einsum(equation, *tensors)
+            result = torch.einsum(equation, *tensors)
+            # Check if any input or output tensor is large enough to warrant cleanup
+            if any(TensorOps._should_cleanup(t) for t in tensors) or TensorOps._should_cleanup(result):
+                TensorOps._cleanup_memory()
+            return result
         except RuntimeError as e:
             shapes = [t.shape for t in tensors]
             logging.error(f"Error during einsum: {e}. Equation: '{equation}', Input shapes: {shapes}")
+            TensorOps._cleanup_memory()
             raise e
 
     # --- Autograd Operations ---
@@ -463,11 +489,18 @@ class TensorOps:
 
     @staticmethod
     def svd(matrix: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Singular Value Decomposition of a 2-D matrix."""
+        """Singular Value Decomposition of a 2-D matrix with memory management."""
         TensorOps._check_tensor(matrix)
         if matrix.ndim != 2:
             raise ValueError("Input matrix must be 2-D")
-        return torch.linalg.svd(matrix, full_matrices=False)
+        try:
+            result = torch.linalg.svd(matrix, full_matrices=False)
+            if TensorOps._should_cleanup(matrix):
+                TensorOps._cleanup_memory()
+            return result
+        except Exception as e:
+            TensorOps._cleanup_memory()
+            raise e
 
     @staticmethod
     def qr_decomposition(matrix: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

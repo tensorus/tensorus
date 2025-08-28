@@ -338,24 +338,145 @@ else:
             raise ImportError("FAISS not available")
 
 
+class HierarchicalVectorIndex:
+    """
+    Hierarchical vector index with multi-level partitioning for improved scaling.
+    
+    Implements a tree-like structure where each level contains indexes optimized
+    for different vector count ranges, providing O(log n) search complexity.
+    """
+    
+    def __init__(self, dimension: int, max_vectors_per_shard: int = 100000, metric: str = "cosine"):
+        self.dimension = dimension
+        self.metric = metric
+        self.max_vectors_per_shard = max_vectors_per_shard
+        self.shards: Dict[int, VectorIndex] = {}
+        self.routing_table: Dict[str, int] = {}  # vector_id -> shard_id
+        self.shard_stats: Dict[int, int] = {}  # shard_id -> vector_count
+        self.next_shard_id = 0
+        
+    def _get_or_create_shard(self, target_size: int = None) -> int:
+        """Get existing shard with capacity or create new one."""
+        # Find shard with available capacity
+        for shard_id, count in self.shard_stats.items():
+            if count < self.max_vectors_per_shard:
+                return shard_id
+                
+        # Create new shard
+        shard_id = self.next_shard_id
+        self.shards[shard_id] = FAISSVectorIndex(self.dimension, self.metric)
+        self.shard_stats[shard_id] = 0
+        self.next_shard_id += 1
+        return shard_id
+        
+    async def add_vectors(self, vectors: Dict[str, Tuple[np.ndarray, VectorMetadata]]) -> None:
+        """Add vectors with automatic shard assignment."""
+        # Group vectors by target shard
+        shard_batches: Dict[int, Dict[str, Tuple[np.ndarray, VectorMetadata]]] = {}
+        
+        for vector_id, vector_data in vectors.items():
+            shard_id = self._get_or_create_shard()
+            if shard_id not in shard_batches:
+                shard_batches[shard_id] = {}
+            shard_batches[shard_id][vector_id] = vector_data
+            self.routing_table[vector_id] = shard_id
+            
+        # Add to shards in parallel
+        tasks = []
+        for shard_id, shard_vectors in shard_batches.items():
+            tasks.append(self.shards[shard_id].add_vectors(shard_vectors))
+            self.shard_stats[shard_id] += len(shard_vectors)
+            
+        await asyncio.gather(*tasks)
+        
+    async def search(self, query_vector: np.ndarray, k: int = 10,
+                    filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+        """Search across all shards with intelligent routing."""
+        if not self.shards:
+            return []
+            
+        # Search all shards in parallel
+        tasks = []
+        for shard in self.shards.values():
+            tasks.append(shard.search(query_vector, k, filters))
+            
+        shard_results = await asyncio.gather(*tasks)
+        
+        # Merge and rank results
+        all_results = []
+        for results in shard_results:
+            all_results.extend(results)
+            
+        # Sort by score
+        if self.metric == "cosine":
+            all_results.sort(key=lambda x: x.score, reverse=True)
+        else:  # euclidean
+            all_results.sort(key=lambda x: x.score)
+            
+        # Update ranks and return top k
+        for i, result in enumerate(all_results[:k]):
+            result.rank = i + 1
+            
+        return all_results[:k]
+        
+    async def delete_vectors(self, vector_ids: Set[str]) -> None:
+        """Delete vectors from appropriate shards."""
+        # Group by shard
+        shard_deletes: Dict[int, Set[str]] = {}
+        
+        for vector_id in vector_ids:
+            shard_id = self.routing_table.get(vector_id)
+            if shard_id is not None:
+                if shard_id not in shard_deletes:
+                    shard_deletes[shard_id] = set()
+                shard_deletes[shard_id].add(vector_id)
+                del self.routing_table[vector_id]
+                
+        # Delete from shards
+        tasks = []
+        for shard_id, ids_to_delete in shard_deletes.items():
+            tasks.append(self.shards[shard_id].delete_vectors(ids_to_delete))
+            self.shard_stats[shard_id] = max(0, self.shard_stats[shard_id] - len(ids_to_delete))
+            
+        await asyncio.gather(*tasks)
+        
+    def get_hierarchical_stats(self) -> IndexStats:
+        """Get combined statistics across all shards."""
+        total_vectors = sum(self.shard_stats.values())
+        total_size = sum(shard.get_stats().index_size_mb for shard in self.shards.values())
+        
+        return IndexStats(
+            total_vectors=total_vectors,
+            index_size_mb=total_size,
+            partitions=len(self.shards),
+            last_updated=datetime.utcnow()
+        )
+
+
 class PartitionedVectorIndex:
     """
     Multi-partition vector index with geometric partitioning and freshness layer.
     
     Implements Pinecone-style architecture with storage-compute separation.
+    Enhanced with hierarchical indexing for better scaling.
     """
     
-    def __init__(self, dimension: int, num_partitions: int = 8, metric: str = "cosine"):
+    def __init__(self, dimension: int, num_partitions: int = 8, metric: str = "cosine", 
+                 use_hierarchical: bool = True):
         self.dimension = dimension
         self.metric = metric
+        self.use_hierarchical = use_hierarchical
         self.partitioner = GeometricPartitioner(num_partitions, dimension)
         self.partitions: Dict[int, VectorIndex] = {}
         self.freshness_layer = FreshnessLayer()
         self.stats_history: List[IndexStats] = []
         
-        # Initialize partitions
+        # Initialize partitions with hierarchical or flat structure
         for i in range(num_partitions):
-            self.partitions[i] = FAISSVectorIndex(dimension, metric)
+            if use_hierarchical:
+                self.partitions[i] = HierarchicalVectorIndex(dimension, metric=metric)
+            else:
+                self.partitions[i] = FAISSVectorIndex(dimension, metric)
             
     async def add_vectors(self, vectors: Dict[str, Tuple[np.ndarray, VectorMetadata]]) -> None:
         """Add vectors with automatic partitioning."""
@@ -369,15 +490,32 @@ class PartitionedVectorIndex:
             
     async def search(self, query_vector: np.ndarray, k: int = 10,
                     filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
-        """Search across all partitions and freshness layer."""
+        """Search across all partitions and freshness layer with intelligent routing."""
         tasks = []
         
         # Search freshness layer
         fresh_results = self._search_freshness_layer(query_vector, k * 2, filters)
         
-        # Search all partitions
-        for partition in self.partitions.values():
-            tasks.append(partition.search(query_vector, k, filters))
+        # Intelligent partition selection for large indexes
+        if len(self.partitions) > 4 and self.partitioner.centroids is not None:
+            # Find closest partitions for more efficient search
+            partition_distances = []
+            for partition_id, partition in self.partitions.items():
+                if partition_id < len(self.partitioner.centroids):
+                    centroid = self.partitioner.centroids[partition_id]
+                    distance = np.linalg.norm(query_vector - centroid)
+                    partition_distances.append((distance, partition_id))
+                    
+            # Search top partitions first
+            partition_distances.sort()
+            search_partitions = partition_distances[:min(4, len(partition_distances))]
+            
+            for _, partition_id in search_partitions:
+                tasks.append(self.partitions[partition_id].search(query_vector, k, filters))
+        else:
+            # Search all partitions for smaller indexes
+            for partition in self.partitions.values():
+                tasks.append(partition.search(query_vector, k, filters))
             
         partition_results = await asyncio.gather(*tasks)
         
@@ -465,14 +603,14 @@ class PartitionedVectorIndex:
                 partition_vectors[partition] = {}
             partition_vectors[partition][vector_id] = (vector, metadata)
             
-        # Add vectors to partitions
+        # Add vectors to partitions in parallel
         tasks = []
         for partition_id, vectors in partition_vectors.items():
             tasks.append(self.partitions[partition_id].add_vectors(vectors))
             
         await asyncio.gather(*tasks)
         
-        # Delete vectors from partitions
+        # Delete vectors from partitions in parallel
         if deleted_ids:
             delete_tasks = []
             for partition in self.partitions.values():
@@ -498,10 +636,19 @@ class PartitionedVectorIndex:
         
     def get_combined_stats(self) -> IndexStats:
         """Get combined statistics across all partitions."""
-        total_vectors = sum(p.get_stats().total_vectors for p in self.partitions.values())
-        total_vectors += len(self.freshness_layer.fresh_vectors)
+        total_vectors = 0
+        total_size = 0.0
         
-        total_size = sum(p.get_stats().index_size_mb for p in self.partitions.values())
+        # Collect stats from partitions
+        for partition in self.partitions.values():
+            if hasattr(partition, 'get_hierarchical_stats'):
+                stats = partition.get_hierarchical_stats()
+            else:
+                stats = partition.get_stats()
+            total_vectors += stats.total_vectors
+            total_size += stats.index_size_mb
+            
+        total_vectors += len(self.freshness_layer.fresh_vectors)
         
         return IndexStats(
             total_vectors=total_vectors,

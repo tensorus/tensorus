@@ -17,6 +17,7 @@ import numpy as np
 import time
 import torch
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -266,9 +267,12 @@ class EmbeddingAgent:
             "cache_hit_rate": 0.0
         }
         
-        # Embedding cache
-        self.embedding_cache: Dict[str, Tuple[np.ndarray, datetime]] = {}
+        # LRU Embedding cache with size limits
+        self.cache_max_size = 10000  # Maximum cache entries
+        self.cache_max_memory_mb = 500  # Maximum cache memory in MB
+        self.embedding_cache: OrderedDict[str, Tuple[np.ndarray, datetime, float]] = OrderedDict()
         self.cache_ttl = 3600  # 1 hour
+        self.cache_memory_usage = 0.0  # Current memory usage in MB
         
     def _get_provider(self, provider_name: Optional[str] = None) -> EmbeddingProvider:
         """Get embedding provider by name."""
@@ -288,6 +292,74 @@ class EmbeddingAgent:
     def _is_cache_valid(self, timestamp: datetime) -> bool:
         """Check if cache entry is still valid."""
         return (datetime.utcnow() - timestamp).total_seconds() < self.cache_ttl
+        
+    def _calculate_embedding_size_mb(self, embedding: np.ndarray) -> float:
+        """Calculate memory size of embedding in MB."""
+        size_bytes = embedding.nbytes
+        return size_bytes / (1024 * 1024)
+        
+    def _evict_lru_entries(self, required_space_mb: float = 0) -> None:
+        """Evict least recently used entries to free memory."""
+        # Remove expired entries first
+        current_time = datetime.utcnow()
+        expired_keys = []
+        
+        for key, (embedding, timestamp, size_mb) in self.embedding_cache.items():
+            if not self._is_cache_valid(timestamp):
+                expired_keys.append(key)
+                
+        for key in expired_keys:
+            embedding, timestamp, size_mb = self.embedding_cache.pop(key)
+            self.cache_memory_usage -= size_mb
+            
+        # Evict LRU entries if still over limits
+        while (len(self.embedding_cache) >= self.cache_max_size or 
+               self.cache_memory_usage + required_space_mb > self.cache_max_memory_mb):
+            if not self.embedding_cache:
+                break
+                
+            # Remove oldest entry (FIFO in OrderedDict)
+            key, (embedding, timestamp, size_mb) = self.embedding_cache.popitem(last=False)
+            self.cache_memory_usage -= size_mb
+            
+    def _add_to_cache(self, cache_key: str, embedding: np.ndarray) -> None:
+        """Add embedding to cache with LRU management."""
+        size_mb = self._calculate_embedding_size_mb(embedding)
+        
+        # Evict entries if needed
+        self._evict_lru_entries(size_mb)
+        
+        # Add new entry
+        self.embedding_cache[cache_key] = (embedding, datetime.utcnow(), size_mb)
+        self.cache_memory_usage += size_mb
+        
+    def _get_from_cache(self, cache_key: str) -> Optional[np.ndarray]:
+        """Get embedding from cache and update LRU order."""
+        if cache_key not in self.embedding_cache:
+            return None
+            
+        embedding, timestamp, size_mb = self.embedding_cache[cache_key]
+        
+        if not self._is_cache_valid(timestamp):
+            # Remove expired entry
+            del self.embedding_cache[cache_key]
+            self.cache_memory_usage -= size_mb
+            return None
+            
+        # Move to end (most recently used)
+        self.embedding_cache.move_to_end(cache_key)
+        return embedding
+        
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics."""
+        return {
+            "cache_size": len(self.embedding_cache),
+            "cache_max_size": self.cache_max_size,
+            "cache_memory_usage_mb": self.cache_memory_usage,
+            "cache_max_memory_mb": self.cache_max_memory_mb,
+            "cache_utilization_pct": (len(self.embedding_cache) / self.cache_max_size) * 100,
+            "memory_utilization_pct": (self.cache_memory_usage / self.cache_max_memory_mb) * 100
+        }
         
     async def generate_embeddings(self, 
                                 texts: Union[str, List[str]], 
@@ -310,11 +382,10 @@ class EmbeddingAgent:
         
         for i, text in enumerate(texts):
             cache_key = self._get_cache_key(text, model_name, provider)
-            if cache_key in self.embedding_cache:
-                embedding, timestamp = self.embedding_cache[cache_key]
-                if self._is_cache_valid(timestamp):
-                    cached_embeddings.append((i, embedding))
-                    continue
+            embedding = self._get_from_cache(cache_key)
+            if embedding is not None:
+                cached_embeddings.append((i, embedding))
+                continue
                     
             uncached_texts.append(text)
             uncached_indices.append(i)
@@ -334,7 +405,7 @@ class EmbeddingAgent:
             # Cache new embeddings
             for text, embedding in zip(uncached_texts, new_embeddings):
                 cache_key = self._get_cache_key(text, model_name, provider)
-                self.embedding_cache[cache_key] = (embedding, datetime.utcnow())
+                self._add_to_cache(cache_key, embedding)
                 
         # Combine cached and new embeddings
         final_embeddings = [None] * len(texts)
@@ -539,8 +610,10 @@ class EmbeddingAgent:
         return models_by_provider
         
     def get_metrics(self) -> Dict[str, Any]:
-        """Get performance metrics."""
-        return self.metrics.copy()
+        """Get performance metrics including cache statistics."""
+        metrics = self.metrics.copy()
+        metrics.update(self.get_cache_stats())
+        return metrics
         
     async def build_vector_index(self,
                                 dataset_name: str,

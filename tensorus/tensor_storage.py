@@ -4,14 +4,16 @@ if __package__ in (None, ""):
     __package__ = "tensorus"
 
 import torch
-from typing import List, Dict, Callable, Optional, Any
+from typing import List, Dict, Callable, Optional, Any, Tuple
 import logging
 import time
 import uuid
 import random # Added for sampling
 import os
+import threading
 from pathlib import Path
 from io import BytesIO
+from contextlib import contextmanager
 
 try:
     import boto3  # Optional dependency for S3 support
@@ -40,9 +42,13 @@ _TYPE_MAP = {
     "dict": dict,
 }
 
+class TransactionError(Exception):
+    """Raised when a transaction cannot be completed."""
+    pass
+
 class TensorStorage:
     """
-    Manages datasets stored as collections of tensors in memory.
+    Manages datasets stored as collections of tensors in memory with transactional support.
     Optionally, can persist datasets to disk if a storage_path is provided.
     """
 
@@ -66,6 +72,11 @@ class TensorStorage:
         self._s3_bucket: Optional[str] = None
         self._s3_prefix: str = ""
         self._s3_client = None
+        
+        # Transactional support
+        self._transaction_lock = threading.RLock()
+        self._active_transactions: Dict[str, Dict[str, Any]] = {}  # transaction_id -> transaction_state
+        self._dataset_locks: Dict[str, threading.RLock] = {}  # dataset_name -> lock
 
         if storage_path:
             # Support S3 URI form: s3://bucket/prefix (prefix optional)
@@ -89,6 +100,11 @@ class TensorStorage:
                     self.storage_path = None # Fallback to in-memory if directory creation fails
         else:
             logging.info("TensorStorage initialized (In-Memory only mode).")
+            
+        # Initialize dataset locks for any existing datasets
+        for dataset_name in self.datasets.keys():
+            if dataset_name not in self._dataset_locks:
+                self._dataset_locks[dataset_name] = threading.RLock()
 
     # --- S3 Helpers ---
     def _configure_s3_backend(self, uri: str) -> None:
@@ -117,6 +133,104 @@ class TensorStorage:
             logging.error(f"Failed to initialize S3 client: {e}. Falling back to in-memory mode.")
             self._use_s3 = False
 
+    def _get_dataset_lock(self, dataset_name: str) -> threading.RLock:
+        """Get or create a lock for a dataset."""
+        if dataset_name not in self._dataset_locks:
+            with self._transaction_lock:
+                if dataset_name not in self._dataset_locks:
+                    self._dataset_locks[dataset_name] = threading.RLock()
+        return self._dataset_locks[dataset_name]
+        
+    @contextmanager
+    def transaction(self, dataset_names: List[str], transaction_id: Optional[str] = None):
+        """Context manager for atomic multi-tensor operations.
+        
+        Args:
+            dataset_names: List of dataset names involved in the transaction
+            transaction_id: Optional custom transaction ID
+            
+        Yields:
+            str: Transaction ID for tracking
+            
+        Raises:
+            TransactionError: If transaction cannot be completed
+        """
+        if transaction_id is None:
+            transaction_id = str(uuid.uuid4())
+            
+        # Sort dataset names to prevent deadlocks
+        sorted_datasets = sorted(set(dataset_names))
+        locks = [self._get_dataset_lock(name) for name in sorted_datasets]
+        
+        # Acquire locks in sorted order
+        acquired_locks = []
+        try:
+            for lock in locks:
+                lock.acquire()
+                acquired_locks.append(lock)
+                
+            # Initialize transaction state
+            with self._transaction_lock:
+                self._active_transactions[transaction_id] = {
+                    'datasets': sorted_datasets,
+                    'operations': [],
+                    'rollback_data': {},
+                    'committed': False
+                }
+                
+            # Store rollback data
+            for dataset_name in sorted_datasets:
+                if dataset_name in self.datasets:
+                    self._active_transactions[transaction_id]['rollback_data'][dataset_name] = {
+                        'tensors': [t.clone() for t in self.datasets[dataset_name]['tensors']],
+                        'metadata': [m.copy() for m in self.datasets[dataset_name]['metadata']],
+                        'schema': self.datasets[dataset_name].get('schema')
+                    }
+                    
+            yield transaction_id
+            
+            # Commit transaction
+            self._commit_transaction(transaction_id)
+            
+        except Exception as e:
+            # Rollback transaction
+            self._rollback_transaction(transaction_id)
+            raise TransactionError(f"Transaction {transaction_id} failed: {str(e)}")
+        finally:
+            # Release locks in reverse order
+            for lock in reversed(acquired_locks):
+                lock.release()
+            # Clean up transaction state
+            with self._transaction_lock:
+                self._active_transactions.pop(transaction_id, None)
+                
+    def _commit_transaction(self, transaction_id: str) -> None:
+        """Commit a transaction by persisting all changes."""
+        transaction = self._active_transactions.get(transaction_id)
+        if not transaction:
+            return
+            
+        # Save all modified datasets
+        for dataset_name in transaction['datasets']:
+            if dataset_name in self.datasets:
+                self._save_dataset(dataset_name)
+                
+        transaction['committed'] = True
+        logging.debug(f"Transaction {transaction_id} committed successfully")
+        
+    def _rollback_transaction(self, transaction_id: str) -> None:
+        """Rollback a transaction by restoring original data."""
+        transaction = self._active_transactions.get(transaction_id)
+        if not transaction or transaction.get('committed'):
+            return
+            
+        # Restore original data
+        for dataset_name, rollback_data in transaction['rollback_data'].items():
+            if dataset_name in self.datasets:
+                self.datasets[dataset_name] = rollback_data
+                
+        logging.debug(f"Transaction {transaction_id} rolled back")
+        
     def _s3_key_for_dataset(self, dataset_name: str) -> str:
         return f"{self._s3_prefix}{dataset_name}.pt"
 
@@ -303,13 +417,14 @@ class TensorStorage:
         Raises:
             ValueError: If a dataset with the same name already exists.
         """
-        if name in self.datasets:
-            logging.warning(f"Attempted to create dataset '{name}' which already exists.")
-            raise ValueError(f"Dataset '{name}' already exists.")
+        with self._get_dataset_lock(name):
+            if name in self.datasets:
+                logging.warning(f"Attempted to create dataset '{name}' which already exists.")
+                raise ValueError(f"Dataset '{name}' already exists.")
 
-        self.datasets[name] = {"tensors": [], "metadata": [], "schema": schema}
-        logging.info(f"Dataset '{name}' created successfully.")
-        self._save_dataset(name) # Save after creation
+            self.datasets[name] = {"tensors": [], "metadata": [], "schema": schema}
+            logging.info(f"Dataset '{name}' created successfully.")
+            self._save_dataset(name) # Save after creation
  
     def insert(self, name: str, tensor: torch.Tensor, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
@@ -748,8 +863,64 @@ class TensorStorage:
                 self._save_dataset(dataset_name) # Save after tensor deletion
                 return True
 
-        logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for deletion.")
-        raise TensorNotFoundError(f"Tensor '{record_id}' not found in dataset '{dataset_name}'.")
+            logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for deletion.")
+            raise TensorNotFoundError(f"Tensor '{record_id}' not found in dataset '{dataset_name}'.")
+            
+    def batch_insert(self, dataset_name: str, tensors_and_metadata: List[Tuple[torch.Tensor, Optional[Dict[str, Any]]]]) -> List[str]:
+        """Insert multiple tensors atomically within a single transaction.
+        
+        Args:
+            dataset_name: Name of the target dataset
+            tensors_and_metadata: List of (tensor, metadata) tuples
+            
+        Returns:
+            List of record IDs for inserted tensors
+            
+        Raises:
+            TransactionError: If the batch insertion fails
+        """
+        with self.transaction([dataset_name]):
+            record_ids = []
+            for tensor, metadata in tensors_and_metadata:
+                record_id = self.insert(dataset_name, tensor, metadata)
+                record_ids.append(record_id)
+            return record_ids
+            
+    def batch_update_metadata(self, dataset_name: str, updates: List[Tuple[str, Dict[str, Any]]]) -> bool:
+        """Update metadata for multiple tensors atomically.
+        
+        Args:
+            dataset_name: Name of the target dataset
+            updates: List of (record_id, new_metadata) tuples
+            
+        Returns:
+            bool: True if all updates succeeded
+            
+        Raises:
+            TransactionError: If any update fails
+        """
+        with self.transaction([dataset_name]):
+            for record_id, new_metadata in updates:
+                self.update_tensor_metadata(dataset_name, record_id, new_metadata)
+            return True
+            
+    def batch_delete_tensors(self, dataset_name: str, record_ids: List[str]) -> bool:
+        """Delete multiple tensors atomically.
+        
+        Args:
+            dataset_name: Name of the target dataset
+            record_ids: List of record IDs to delete
+            
+        Returns:
+            bool: True if all deletions succeeded
+            
+        Raises:
+            TransactionError: If any deletion fails
+        """
+        with self.transaction([dataset_name]):
+            for record_id in record_ids:
+                self.delete_tensor(dataset_name, record_id)
+            return True
 
 # Public API exports
 __all__ = ["TensorStorage", "DatasetNotFoundError", "TensorNotFoundError"]

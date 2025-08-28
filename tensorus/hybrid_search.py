@@ -21,6 +21,7 @@ import logging
 import numpy as np
 import torch
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union, Tuple, Callable
@@ -56,6 +57,11 @@ class HybridQuery:
     k: int = 10
     namespace: str = "default"
     tenant_id: str = "default"
+    # Pagination and parallelization parameters
+    offset: int = 0
+    limit: Optional[int] = None
+    max_workers: int = 4
+    enable_parallel_scoring: bool = True
     
 
 @dataclass
@@ -245,20 +251,25 @@ class HybridSearchEngine:
     def __init__(self,
                  tensor_storage: TensorStorage,
                  embedding_agent: EmbeddingAgent,
-                 tensor_ops: TensorOps):
+                 tensor_ops: TensorOps,
+                 max_workers: int = 4):
         
         self.tensor_storage = tensor_storage
         self.embedding_agent = embedding_agent
         self.tensor_ops = tensor_ops
         self.computational_scorer = ComputationalScorer(tensor_ops)
         self.lineage_tracker = LineageTracker()
+        self.max_workers = max_workers
+        self.thread_pool = ThreadPoolExecutor(max_workers=max_workers)
         
         # Search performance metrics
         self.metrics = {
             "total_searches": 0,
             "average_search_time": 0.0,
             "semantic_search_ratio": 0.0,
-            "computational_search_ratio": 0.0
+            "computational_search_ratio": 0.0,
+            "parallel_operations": 0,
+            "sequential_operations": 0
         }
         
     async def hybrid_search(self, query: HybridQuery, dataset_name: str) -> List[HybridSearchResult]:
@@ -289,39 +300,23 @@ class HybridSearchEngine:
             for result in semantic_search_results:
                 semantic_results[result["record_id"]] = result["similarity_score"]
                 
-        # Phase 2: Computational Relevance Scoring
+        # Phase 2: Computational Relevance Scoring with Pagination
         logger.info("Computing tensor operation compatibility scores")
         
-        # Get all tensors in dataset (or subset from semantic search)
-        candidate_tensor_ids = list(semantic_results.keys()) if semantic_results else None
+        # Get candidate tensor IDs with pagination support
+        candidate_tensor_ids = self._get_candidate_tensor_ids(
+            semantic_results, dataset_name, query.offset, query.limit
+        )
         
-        if candidate_tensor_ids is None:
-            # No semantic search, evaluate all tensors in dataset
-            if dataset_name in self.tensor_storage.datasets:
-                candidate_tensor_ids = list(self.tensor_storage.datasets[dataset_name].keys())
-            else:
-                candidate_tensor_ids = []
-                
-        # Score computational relevance
-        for tensor_id in candidate_tensor_ids:
-            try:
-                tensor_record = self.tensor_storage.get_tensor_by_id(dataset_name, tensor_id)
-                tensor = tensor_record["tensor"]
-                
-                # Compute property-based score
-                property_score = self.computational_scorer.score_tensor_properties(tensor, query)
-                
-                # Compute operation compatibility score
-                operation_score = self.computational_scorer.score_operation_compatibility(
-                    tensor, query.tensor_operations
-                )
-                
-                # Combined computational score
-                computational_scores[tensor_id] = (property_score + operation_score) / 2
-                
-            except Exception as e:
-                logger.warning(f"Failed to score tensor {tensor_id}: {e}")
-                computational_scores[tensor_id] = 0.0
+        # Score computational relevance (with parallel processing if enabled)
+        if query.enable_parallel_scoring and len(candidate_tensor_ids) > 10:
+            computational_scores = await self._score_tensors_parallel(
+                candidate_tensor_ids, dataset_name, query
+            )
+        else:
+            computational_scores = self._score_tensors_sequential(
+                candidate_tensor_ids, dataset_name, query
+            )
                 
         # Phase 3: Hybrid Score Combination
         logger.info("Combining semantic and computational scores")
@@ -372,23 +367,38 @@ class HybridSearchEngine:
             except Exception as e:
                 logger.warning(f"Failed to create result for tensor {tensor_id}: {e}")
                 
-        # Phase 4: Ranking and Filtering
+        # Phase 4: Ranking and Filtering with Pagination
         logger.info("Ranking and filtering results")
         
         # Sort by hybrid score
         hybrid_results.sort(key=lambda x: x.hybrid_score, reverse=True)
         
-        # Assign ranks and limit results
-        for i, result in enumerate(hybrid_results[:query.k]):
-            result.rank = i + 1
+        # Apply pagination to results
+        total_results = len(hybrid_results)
+        start_idx = query.offset
+        end_idx = start_idx + query.k if query.limit is None else min(start_idx + query.k, start_idx + query.limit)
+        
+        paginated_results = hybrid_results[start_idx:end_idx]
+        
+        # Assign ranks based on overall ranking (not just paginated subset)
+        for i, result in enumerate(paginated_results):
+            result.rank = start_idx + i + 1
             
         # Update metrics
         search_time = (datetime.utcnow() - start_time).total_seconds()
-        self._update_metrics(search_time, bool(query.text_query), bool(query.tensor_operations))
+        self._update_metrics(
+            search_time, 
+            bool(query.text_query), 
+            bool(query.tensor_operations),
+            query.enable_parallel_scoring
+        )
         
-        logger.info(f"Hybrid search completed: {len(hybrid_results[:query.k])} results in {search_time:.3f}s")
+        logger.info(
+            f"Hybrid search completed: {len(paginated_results)} results (of {total_results} total) "
+            f"in {search_time:.3f}s, offset={query.offset}"
+        )
         
-        return hybrid_results[:query.k]
+        return paginated_results
         
     async def execute_tensor_workflow(self, 
                                     workflow_query: str,
@@ -469,9 +479,13 @@ class HybridSearchEngine:
                             "created_at": datetime.utcnow().isoformat()
                         }
                         
-                        self.tensor_storage.add_tensor(
-                            dataset_name=f"{dataset_name}_workflow_intermediates",
-                            record_id=result_tensor_id,
+                        # Create intermediate dataset if needed
+                        intermediate_dataset = f"{dataset_name}_workflow_intermediates"
+                        if not self.tensor_storage.dataset_exists(intermediate_dataset):
+                            self.tensor_storage.create_dataset(intermediate_dataset)
+                            
+                        self.tensor_storage.insert(
+                            name=intermediate_dataset,
                             tensor=result_tensor,
                             metadata=intermediate_metadata
                         )
@@ -545,7 +559,150 @@ class HybridSearchEngine:
         
         return workflow_results
         
-    def _update_metrics(self, search_time: float, has_semantic: bool, has_computational: bool) -> None:
+    def _get_candidate_tensor_ids(self, semantic_results: Dict[str, float], 
+                                 dataset_name: str, offset: int, limit: Optional[int]) -> List[str]:
+        """Get candidate tensor IDs with pagination support."""
+        if semantic_results:
+            # Use semantic search results
+            sorted_results = sorted(semantic_results.items(), key=lambda x: x[1], reverse=True)
+            candidate_tensor_ids = [tid for tid, _ in sorted_results]
+        else:
+            # Get all tensors in dataset with pagination
+            if dataset_name in self.tensor_storage.datasets:
+                all_metadata = self.tensor_storage.datasets[dataset_name]["metadata"]
+                candidate_tensor_ids = [meta["record_id"] for meta in all_metadata]
+            else:
+                candidate_tensor_ids = []
+                
+        # Apply pagination to candidate list
+        if limit is not None:
+            end_idx = offset + limit
+            candidate_tensor_ids = candidate_tensor_ids[offset:end_idx]
+        elif offset > 0:
+            candidate_tensor_ids = candidate_tensor_ids[offset:]
+            
+        return candidate_tensor_ids
+        
+    def _score_tensors_sequential(self, tensor_ids: List[str], dataset_name: str, 
+                                query: HybridQuery) -> Dict[str, float]:
+        """Score tensors sequentially (original method)."""
+        computational_scores = {}
+        
+        for tensor_id in tensor_ids:
+            try:
+                tensor_record = self.tensor_storage.get_tensor_by_id(dataset_name, tensor_id)
+                tensor = tensor_record["tensor"]
+                
+                # Compute property-based score
+                property_score = self.computational_scorer.score_tensor_properties(tensor, query)
+                
+                # Compute operation compatibility score
+                operation_score = self.computational_scorer.score_operation_compatibility(
+                    tensor, query.tensor_operations
+                )
+                
+                # Combined computational score
+                computational_scores[tensor_id] = (property_score + operation_score) / 2
+                
+            except Exception as e:
+                logger.warning(f"Failed to score tensor {tensor_id}: {e}")
+                computational_scores[tensor_id] = 0.0
+                
+        return computational_scores
+        
+    async def _score_tensors_parallel(self, tensor_ids: List[str], dataset_name: str,
+                                     query: HybridQuery) -> Dict[str, float]:
+        """Score tensors in parallel for better performance."""
+        computational_scores = {}
+        
+        def score_single_tensor(tensor_id: str) -> Tuple[str, float]:
+            try:
+                tensor_record = self.tensor_storage.get_tensor_by_id(dataset_name, tensor_id)
+                tensor = tensor_record["tensor"]
+                
+                # Compute property-based score
+                property_score = self.computational_scorer.score_tensor_properties(tensor, query)
+                
+                # Compute operation compatibility score
+                operation_score = self.computational_scorer.score_operation_compatibility(
+                    tensor, query.tensor_operations
+                )
+                
+                # Combined computational score
+                score = (property_score + operation_score) / 2
+                return (tensor_id, score)
+                
+            except Exception as e:
+                logger.warning(f"Failed to score tensor {tensor_id}: {e}")
+                return (tensor_id, 0.0)
+                
+        # Submit scoring tasks to thread pool
+        loop = asyncio.get_event_loop()
+        futures = []
+        
+        for tensor_id in tensor_ids:
+            future = loop.run_in_executor(self.thread_pool, score_single_tensor, tensor_id)
+            futures.append(future)
+            
+        # Wait for all scoring to complete
+        results = await asyncio.gather(*futures)
+        
+        # Collect results
+        for tensor_id, score in results:
+            computational_scores[tensor_id] = score
+            
+        return computational_scores
+        
+    async def paginated_search(self, query: HybridQuery, dataset_name: str, 
+                              page_size: int = 50) -> Dict[str, Any]:
+        """Perform paginated hybrid search for large result sets."""
+        original_k = query.k
+        original_offset = query.offset
+        
+        # Collect paginated results
+        all_results = []
+        current_offset = 0
+        total_processed = 0
+        
+        while total_processed < original_k:
+            # Update query for this page
+            query.offset = current_offset
+            query.k = min(page_size, original_k - total_processed)
+            
+            # Get page results
+            page_results = await self.hybrid_search(query, dataset_name)
+            
+            if not page_results:
+                break  # No more results
+                
+            all_results.extend(page_results)
+            total_processed += len(page_results)
+            current_offset += page_size
+            
+            # Break if we got fewer results than page size (indicating end of data)
+            if len(page_results) < page_size:
+                break
+                
+        # Restore original query parameters
+        query.k = original_k
+        query.offset = original_offset
+        
+        # Apply final offset and limit
+        start_idx = original_offset
+        end_idx = start_idx + original_k
+        final_results = all_results[start_idx:end_idx]
+        
+        return {
+            "results": final_results,
+            "total_found": len(all_results),
+            "page_size": page_size,
+            "offset": original_offset,
+            "limit": original_k,
+            "has_more": len(all_results) >= end_idx
+        }
+        
+    def _update_metrics(self, search_time: float, has_semantic: bool, 
+                       has_computational: bool, used_parallel: bool = False) -> None:
         """Update search performance metrics."""
         self.metrics["total_searches"] += 1
         
@@ -565,6 +722,12 @@ class HybridSearchEngine:
                 (self.metrics["computational_search_ratio"] * (total_searches - 1) + 1.0) / total_searches
             )
             
+        # Update parallel vs sequential operation counts
+        if used_parallel:
+            self.metrics["parallel_operations"] += 1
+        else:
+            self.metrics["sequential_operations"] += 1
+            
     def get_metrics(self) -> Dict[str, Any]:
         """Get hybrid search performance metrics."""
         return self.metrics.copy()
@@ -579,3 +742,15 @@ class HybridSearchEngine:
                 for tid in self.lineage_tracker.lineage_graph.keys()
             ]) if self.lineage_tracker.lineage_graph else 0
         }
+        
+    def cleanup_resources(self) -> None:
+        """Clean up thread pool resources."""
+        if hasattr(self, 'thread_pool'):
+            self.thread_pool.shutdown(wait=True)
+            
+    def __del__(self):
+        """Ensure resources are cleaned up when object is destroyed."""
+        try:
+            self.cleanup_resources()
+        except:
+            pass  # Ignore errors during cleanup
