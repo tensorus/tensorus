@@ -20,16 +20,19 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 *   **Tensor Storage:** Efficiently store and retrieve PyTorch tensors with associated metadata.
 *   **Dataset Schemas:** Optional per-dataset schemas enforce required metadata fields and tensor shape/dtype.
 *   **Natural Query Language (NQL):** Query your tensor data using a simple, natural language-like syntax.
+*   **Vector Database Capabilities:** Advanced vector similarity search with multi-provider embedding generation, geometric partitioning, and hybrid semantic-computational search.
 *   **Agent Framework:** A foundation for building and integrating intelligent agents that interact with your data.
     *   **Data Ingestion Agent:** Automatically monitors a directory for new files and ingests them as tensors.
     *   **RL Agent:** A Deep Q-Network (DQN) agent that can learn from experiences stored in TensorStorage.
     *   **AutoML Agent:** Performs hyperparameter optimization for a dummy model using random search.
+    *   **Embedding Agent:** Multi-provider embedding generation with intelligent caching and vector indexing.
 *   **API-Driven:** A FastAPI backend provides a RESTful API for interacting with Tensorus.
 *   **Streamlit UI:** A user-friendly Streamlit frontend for exploring data and controlling agents.
 *   **Tensor Operations:** A comprehensive library of robust tensor operations for common manipulations. See [Basic Tensor Operations](#basic-tensor-operations) for details.
 *   **Model System:** Optional model registry with example models provided in a
     separate package. See [Tensorus Models](https://github.com/tensorus/models).
 *   **Metadata System:** Rich Pydantic schemas and storage backends for semantic, lineage, computational, quality, relational, and usage metadata.
+*   **Computational Lineage:** Track tensor transformations and mathematical operations for reproducible scientific workflows.
 *   **Extensible:** Designed to be extended with more advanced agents, storage backends, and query capabilities.
 *   **Model Context Protocol (MCP) Integration:** Available as a separate package at [tensorus/mcp](https://github.com/tensorus/mcp) for AI agents and LLMs that need standardized protocol access to Tensorus capabilities.
 
@@ -44,6 +47,9 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
     *   `tensorus/api.py`: The FastAPI application providing the backend API for Tensorus.
     *   `tensorus/tensor_storage.py`: Core TensorStorage implementation for managing tensor data.
     *   `tensorus/tensor_ops.py`: Library of functions for tensor manipulations.
+    *   `tensorus/vector_database.py`: Advanced vector indexing with geometric partitioning and freshness layers.
+    *   `tensorus/embedding_agent.py`: Multi-provider embedding generation and vector database integration.
+    *   `tensorus/hybrid_search.py`: Hybrid search engine combining semantic similarity with computational tensor properties.
     *   `tensorus/nql_agent.py`: Agent for processing Natural Query Language queries.
     *   `tensorus/ingestion_agent.py`: Agent for ingesting data from various sources.
     *   `tensorus/rl_agent.py`: Agent for Reinforcement Learning tasks.
@@ -102,6 +108,13 @@ graph TD
         NQLA[NQL Agent]
         RLA[RL Agent]
         AutoMLA[AutoML Agent]
+        EA[Embedding Agent]
+    end
+
+    %% Vector Database Layer
+    subgraph Vector_Layer ["Vector Database"]
+        VDB[Vector Index Manager]
+        HSE[Hybrid Search Engine]
     end
 
     %% Model System
@@ -123,8 +136,14 @@ graph TD
     API -->|Command Dispatch| NQLA
     API -->|Command Dispatch| RLA
     API -->|Command Dispatch| AutoMLA
+    API -->|Vector Operations| EA
     API -->|Model Training| Registry
     API -->|Direct Query| TS_query
+
+    %% Vector Database Integration
+    EA -->|Vector Indexing| VDB
+    HSE -->|Hybrid Search| VDB
+    API -->|Search Requests| HSE
 
     %% Model System Interactions
     Registry -->|Uses Models| ModelsPkg
@@ -144,10 +163,14 @@ graph TD
     AutoMLA -->|Trial Storage| TS_insert
     AutoMLA -->|Data Retrieval| TS_query
 
+    EA -->|Embedding Storage| TS_insert
+    EA -->|Vector Retrieval| TS_query
+
     %% Computational Operations
     NQLA -->|Vector Operations| TOps
     RLA -->|Policy Evaluation| TOps
     AutoMLA -->|Model Optimization| TOps
+    HSE -->|Tensor Analysis| TOps
 
     %% Indirect Storage Write-back
     TOps -.->|Intermediate Results| TS_insert
@@ -166,6 +189,8 @@ graph TD
 *   Requests
 *   Pillow (for image preprocessing)
 *   Matplotlib (optional, for plotting RL rewards)
+*   Sentence Transformers (optional, for embedding generation)
+*   FAISS (optional, for vector indexing)
 
 ### Installation
 
@@ -484,6 +509,16 @@ The API provides the following main endpoints:
     *   `GET /datasets`: List all available datasets.
 *   **Querying:**
     *   `POST /query`: Execute an NQL query.
+*   **Vector Database:**
+    *   `POST /api/v1/vector/embed`: Generate and store embeddings from text.
+    *   `POST /api/v1/vector/search`: Perform vector similarity search.
+    *   `POST /api/v1/vector/hybrid-search`: Execute hybrid semantic-computational search.
+    *   `POST /api/v1/vector/tensor-workflow`: Run tensor workflow with lineage tracking.
+    *   `POST /api/v1/vector/index/build`: Build vector indexes with geometric partitioning.
+    *   `GET /api/v1/vector/models`: List available embedding models.
+    *   `GET /api/v1/vector/stats/{dataset}`: Get embedding statistics for a dataset.
+    *   `GET /api/v1/vector/metrics`: Get performance metrics.
+    *   `DELETE /api/v1/vector/vectors/{dataset}`: Delete vectors from a dataset.
 *   **Agents:**
     *   `GET /agents`: List all registered agents.
     *   `GET /agents/{agent_id}/status`: Get the status of a specific agent.
@@ -492,6 +527,60 @@ The API provides the following main endpoints:
     *   `GET /agents/{agent_id}/logs`: Get recent logs for an agent.
 *   **Metrics & Monitoring:**
     *   `GET /metrics/dashboard`: Get aggregated dashboard metrics.
+
+### Vector Database Examples
+
+#### Generate & Store Embeddings
+```bash
+curl -X POST "http://localhost:7860/api/v1/vector/embed" \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "texts": ["Machine learning algorithms", "Deep neural networks"],
+    "dataset_name": "ai_research",
+    "model_name": "all-mpnet-base-v2",
+    "namespace": "research",
+    "tenant_id": "team_alpha"
+  }'
+```
+
+#### Semantic Similarity Search
+```bash
+curl -X POST "http://localhost:7860/api/v1/vector/search" \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "artificial intelligence models",
+    "dataset_name": "ai_research",
+    "k": 5,
+    "similarity_threshold": 0.7,
+    "namespace": "research"
+  }'
+```
+
+#### Hybrid Computational Search
+```bash
+curl -X POST "http://localhost:7860/api/v1/vector/hybrid-search" \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text_query": "neural network weights",
+    "dataset_name": "model_tensors", 
+    "tensor_operations": [
+      {
+        "operation_name": "svd",
+        "description": "Singular value decomposition",
+        "parameters": {}
+      }
+    ],
+    "similarity_weight": 0.7,
+    "computation_weight": 0.3,
+    "filters": {
+      "preferred_shape": [512, 512],
+      "sparsity_preference": 0.1
+    }
+  }'
+```
 
 ### Dataset Schemas
 
@@ -593,6 +682,17 @@ rewritten into a structured NQL query by Gemini.
     *   `output_dim`: Output dimension for the model.
     *   `task_type`: Type of task ('regression' or 'classification').
     *   `results_dataset`: Dataset name for storing results.
+
+### Embedding Agent
+
+*   **Functionality:** Multi-provider embedding generation with intelligent caching and vector database integration.
+*   **Providers:** Supports Sentence Transformers, OpenAI, and extensible architecture for additional providers.
+*   **Features:** Automatic batching, embedding caching, vector indexing, and performance monitoring.
+*   **Configuration:**
+    *   `default_provider`: Default embedding provider to use.
+    *   `default_model`: Default model for embedding generation.
+    *   `batch_size`: Batch size for embedding generation.
+    *   `cache_ttl`: Time-to-live for embedding cache entries.
 
 
 ### Tensorus Models
@@ -700,20 +800,59 @@ available in TensorLy and related libraries.
 Examples of how to call these methods are provided in
 [`tensorus/tensor_decompositions.py`](tensorus/tensor_decompositions.py).
 
+## Vector Database Features
+
+### Embedding Generation
+
+Tensorus supports multiple embedding providers for generating high-quality vector representations of text:
+
+*   **Sentence Transformers**: Local models including all-MiniLM-L6-v2, all-mpnet-base-v2, and specialized models
+*   **OpenAI**: Cloud-based models like text-embedding-3-small and text-embedding-3-large
+*   **Extensible Architecture**: Easy integration of additional embedding providers
+
+### Vector Indexing
+
+Advanced vector indexing capabilities for efficient similarity search:
+
+*   **Geometric Partitioning**: Automatic distribution of vectors across partitions using k-means clustering
+*   **Freshness Layers**: Real-time updates without requiring full index rebuilds
+*   **FAISS Integration**: High-performance similarity search with multiple distance metrics
+*   **Multi-tenancy**: Namespace and tenant isolation for secure multi-user deployments
+
+### Hybrid Search
+
+Unique hybrid search capabilities that combine semantic similarity with computational tensor properties:
+
+*   **Semantic Scoring**: Traditional vector similarity search based on text embeddings
+*   **Computational Scoring**: Mathematical property evaluation including shape compatibility, sparsity, rank analysis
+*   **Operation Compatibility**: Scoring tensors based on suitability for specific mathematical operations
+*   **Combined Ranking**: Weighted combination of semantic and computational relevance scores
+
+### Tensor Workflows
+
+Execute complex mathematical workflows with full computational lineage tracking:
+
+*   **Workflow Execution**: Chain multiple tensor operations with intermediate result storage
+*   **Lineage Tracking**: Complete provenance tracking of tensor transformations
+*   **Scientific Reproducibility**: Full audit trail of computational steps for research applications
+*   **Intermediate Storage**: Optional preservation of intermediate results for analysis
+
 
 ## Completed Features
 
 The current codebase implements all of the items listed in
 [Key Features](#key-features). Tensorus already provides efficient tensor
 storage with optional file persistence, a natural query language, a flexible
-agent framework, a RESTful API, a Streamlit UI, and robust tensor operations. 
-The modular architecture makes future extensions straightforward.
+agent framework, a RESTful API, a Streamlit UI, robust tensor operations, and
+advanced vector database capabilities. The modular architecture makes future
+extensions straightforward.
 
 ## Future Implementation
 
 *   **Enhanced NQL:** Integrate a local or remote LLM for more robust natural language understanding.
 *   **Advanced Agents:** Develop more sophisticated agents for specific tasks (e.g., anomaly detection, forecasting).
 *   **Persistent Storage Backend:** Replace/augment current file-based persistence with more robust database or cloud storage solutions (e.g., PostgreSQL, S3, MinIO).
+*   **Advanced Vector Indexing:** Implement HNSW and IVF-PQ algorithms for even more efficient similarity search.
 *   **Scalability & Performance:**
     *   Implement tensor chunking for very large tensors.
     *   Optimize query performance with indexing.
@@ -730,6 +869,8 @@ The modular architecture makes future extensions straightforward.
 *   **Resource Management:** Add tools and controls for monitoring and managing the resource consumption (CPU, memory) of agents.
 *   **Improved UI/UX:** Continuously refine the Streamlit UI for better usability and richer visualizations.
 *   **Comprehensive Testing:** Expand unit, integration, and end-to-end tests.
+*   **Multi-modal Embeddings:** Support for image, audio, and video embeddings alongside text.
+*   **Distributed Architecture:** Multi-node deployments for large-scale vector search workloads.
 
 ## Contributing
 

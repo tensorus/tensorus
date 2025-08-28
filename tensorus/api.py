@@ -33,6 +33,10 @@ from tensorus.api.endpoints import (
 )
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
+# Import routers
+from tensorus.api.routers.query import router as query_router
+from tensorus.api.routers.vector import router as vector_router
+
 # Import security functions
 from tensorus.api.security import verify_api_key
 
@@ -1992,6 +1996,10 @@ app.include_router(router_analytics)
 
 # Include the tensor operations router defined above
 app.include_router(ops_router)
+
+# Include specialized routers
+app.include_router(query_router, prefix="/api/v1", tags=["Query"])
+app.include_router(vector_router, prefix="/api/v1/vector", tags=["Vector Database"])
 
 # --- Root Endpoint ---
 @app.get("/", include_in_schema=False)
