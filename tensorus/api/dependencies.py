@@ -1,5 +1,7 @@
 from tensorus.metadata import storage_instance as globally_configured_storage_instance
 from tensorus.metadata.storage_abc import MetadataStorage
+from ..tensor_storage import TensorStorage
+from ..nql_agent import NQLAgent
 
 # Note: The `storage_instance` imported here is already configured (InMemory or Postgres)
 # based on the logic in `tensorus/metadata/__init__.py` which reads `tensorus.config.settings`.
@@ -34,3 +36,23 @@ def get_storage_instance() -> MetadataStorage:
 # This is generally fine for many applications unless the configuration needs to change without restarting.
 # The FastAPI `Depends` system will call `get_storage_instance` for each request that uses it,
 # but this function will always return the same globally initialized `storage_instance`.
+
+# Global instances initialized once
+_tensor_storage_instance = None
+_nql_agent_instance = None
+
+def get_tensor_storage() -> TensorStorage:
+    """FastAPI dependency to get the TensorStorage instance."""
+    global _tensor_storage_instance
+    if _tensor_storage_instance is None:
+        _tensor_storage_instance = TensorStorage()
+    return _tensor_storage_instance
+
+def get_nql_agent() -> NQLAgent:
+    """FastAPI dependency to get the NQLAgent instance."""
+    global _nql_agent_instance, _tensor_storage_instance
+    if _nql_agent_instance is None:
+        if _tensor_storage_instance is None:
+            _tensor_storage_instance = TensorStorage()
+        _nql_agent_instance = NQLAgent(_tensor_storage_instance)
+    return _nql_agent_instance

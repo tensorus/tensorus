@@ -381,6 +381,10 @@ class EmbeddingAgent:
         # Generate embeddings
         embeddings, model_info = await self.generate_embeddings(texts, model_name, provider)
         
+        # Ensure dataset exists
+        if not self.tensor_storage.dataset_exists(dataset_name):
+            self.tensor_storage.create_dataset(dataset_name)
+        
         # Create tensor storage records
         record_ids = []
         vector_entries = {}
@@ -405,9 +409,8 @@ class EmbeddingAgent:
             if metadata:
                 storage_metadata.update(metadata)
                 
-            self.tensor_storage.add_tensor(
-                dataset_name=dataset_name,
-                record_id=record_id,
+            self.tensor_storage.insert(
+                name=dataset_name,
                 tensor=tensor,
                 metadata=storage_metadata
             )

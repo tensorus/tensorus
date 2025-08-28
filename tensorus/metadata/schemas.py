@@ -248,3 +248,12 @@ class UsageMetadata(BaseModel):
 
         return self
 
+
+class EmbeddingModelInfo(BaseModel):
+    """Information about an embedding model."""
+    model_name: str
+    provider: str
+    dimension: int
+    max_sequence_length: Optional[int] = None
+    config: Optional[Dict[str, Any]] = None
+

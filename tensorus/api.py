@@ -37,6 +37,12 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from tensorus.api.routers.query import router as query_router
 from tensorus.api.routers.vector import router as vector_router
 
+# Import models
+from tensorus.api.models import NQLQueryRequest, NQLResponse, TensorOutput
+
+# Import dependencies
+from tensorus.api.dependencies import get_nql_agent, get_tensor_storage
+
 # Import security functions
 from tensorus.api.security import verify_api_key
 
@@ -435,21 +441,6 @@ class TensorInput(BaseModel):
     data: Union[List[Any], int, float] = Field(..., description="Tensor data as a nested list for multi-dim tensors, or a single number for scalars.", json_schema_extra={"example": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]})
     metadata: Optional[Dict[str, Any]] = Field(None, description="Optional key-value metadata.", json_schema_extra={"example": {"source": "api_ingest", "timestamp": 1678886400}})
 
-class NQLQueryRequest(BaseModel):
-    query: str = Field(..., description="Natural language query string.", json_schema_extra={"example": "find image tensors from 'my_image_dataset' where metadata.source = 'web_scrape'"})
-
-class TensorOutput(BaseModel):
-    record_id: str = Field(..., description="Unique record ID assigned during ingestion.")
-    shape: List[int] = Field(..., description="Shape of the retrieved tensor.")
-    dtype: str = Field(..., description="Data type of the retrieved tensor.")
-    data: Union[List[Any], int, float] = Field(..., description="Tensor data (nested list or scalar).")
-    metadata: Dict[str, Any] = Field(..., description="Associated metadata.")
-
-class NQLResponse(BaseModel):
-    success: bool = Field(..., description="Indicates if the query was successfully processed (syntax, execution).")
-    message: str = Field(..., description="Status message (e.g., 'Query successful', 'Error parsing query').")
-    count: Optional[int] = Field(None, description="Number of matching records found.")
-    results: Optional[List[TensorOutput]] = Field(None, description="List of matching tensor records.")
 
 class ApiResponse(BaseModel):
     success: bool = Field(..., description="Indicates if the API operation was successful.")
@@ -633,15 +624,6 @@ async def get_tensor_storage() -> TensorStorage:
         logger.error(f"Failed to get TensorStorage instance: {e}", exc_info=True)
         raise APIError(status_code=500, detail="Failed to initialize storage")
 
-async def get_nql_agent() -> NQLAgent:
-    """Get the global NQLAgent instance with error handling."""
-    try:
-        if not hasattr(get_nql_agent, '_instance'):
-            get_nql_agent._instance = nql_agent_instance
-        return get_nql_agent._instance
-    except Exception as e:
-        logger.error(f"Failed to get NQLAgent instance: {e}", exc_info=True)
-        raise APIError(status_code=500, detail="Failed to initialize query agent")
 
 
 # --- API Endpoints ---

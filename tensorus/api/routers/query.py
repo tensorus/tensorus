@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Any, Dict, List
 
-from ..utils import tensor_to_list
+from ...utils import tensor_to_list
 from ...nql_agent import NQLAgent
-from ...tensor_storage import TensorStorage
-from ...api import NQLQueryRequest, NQLResponse, get_nql_agent
+from ..models import NQLQueryRequest, NQLResponse
+from ..dependencies import get_nql_agent
 from ..security import verify_api_key
 
 router = APIRouter()
