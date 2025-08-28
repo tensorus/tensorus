@@ -52,7 +52,7 @@ class TestEmbeddingEndpoints:
                 "tenant_id": "tenant_1"
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -94,7 +94,7 @@ class TestEmbeddingEndpoints:
                 "provider": "openai"
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -113,7 +113,7 @@ class TestEmbeddingEndpoints:
                 "dataset_name": "test_dataset"
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 400
         assert "empty" in response.json()["detail"].lower()
@@ -172,7 +172,7 @@ class TestSimilaritySearchEndpoints:
                 "namespace": "test_namespace"
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -219,7 +219,7 @@ class TestSimilaritySearchEndpoints:
                 "include_vectors": True
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 200
         
@@ -274,7 +274,7 @@ class TestHybridSearchEndpoints:
                 "k": 5
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -307,7 +307,7 @@ class TestHybridSearchEndpoints:
                 "computation_weight": 0.3  # Sum = 1.1, should fail
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 400
         assert "sum to 1.0" in response.json()["detail"]
@@ -368,7 +368,7 @@ class TestTensorWorkflowEndpoints:
                 "save_intermediates": True
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -420,7 +420,7 @@ class TestVectorIndexEndpoints:
                 "num_partitions": 8
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -675,7 +675,7 @@ class TestErrorHandling:
                 "dataset_name": "test_dataset"
             },
             headers=auth_headers
-        , headers=auth_headers)
+        )
         
         assert response.status_code == 500
         assert "failed" in response.json()["detail"].lower()
