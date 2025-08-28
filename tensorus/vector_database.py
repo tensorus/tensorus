@@ -451,6 +451,10 @@ class HierarchicalVectorIndex:
             partitions=len(self.shards),
             last_updated=datetime.utcnow()
         )
+        
+    def get_stats(self) -> IndexStats:
+        """Get combined statistics across all shards (compatibility method)."""
+        return self.get_hierarchical_stats()
 
 
 class PartitionedVectorIndex:
