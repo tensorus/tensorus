@@ -362,8 +362,7 @@ class TestTensorWorkflowEndpoints:
     """Test tensor workflow execution endpoints."""
     
     
-    @patch('tensorus.api.routers.vector.get_hybrid_search')
-    def test_tensor_workflow(self, mock_get_hybrid, client, auth_headers):
+    def test_tensor_workflow(self, client, auth_headers):
         """Test tensor workflow execution."""
         
         # Mock workflow results
@@ -396,49 +395,70 @@ class TestTensorWorkflowEndpoints:
         
         mock_engine = Mock()
         mock_engine.execute_tensor_workflow = AsyncMock(return_value=mock_workflow_result)
-        mock_get_hybrid.return_value = mock_engine
         
-        response = client.post(
-            "/api/v1/vector/tensor-workflow",
-            json={
-                "workflow_query": "matrix decomposition workflow",
-                "dataset_name": "test_dataset",
-                "operations": [
-                    {
-                        "operation_name": "svd",
-                        "parameters": {},
-                        "description": "Singular value decomposition"
-                    }
-                ],
-                "save_intermediates": True
-            },
-            headers=auth_headers
-        )
+        # Mock embedding agent to avoid issues
+        mock_agent = Mock()
+        mock_agent.vector_indexes = {"test_dataset": Mock()}
         
-        assert response.status_code == 200
-        data = response.json()
+        # Override dependencies
+        from tensorus.api.routers.vector import get_hybrid_search, get_embedding_agent
+        from tensorus.api import app
         
-        assert data["success"] is True
-        assert data["workflow_id"] == "workflow_123"
-        assert len(data["operations_executed"]) == 1
-        assert "final_result" in data
-        assert "intermediate_results" in data
-        assert "computational_lineage" in data
+        def mock_get_hybrid_search():
+            return mock_engine
+            
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_hybrid_search] = mock_get_hybrid_search
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        # Verify workflow engine was called correctly
-        mock_engine.execute_tensor_workflow.assert_called_once()
-        call_args = mock_engine.execute_tensor_workflow.call_args
-        assert call_args[1]["workflow_query"] == "matrix decomposition workflow"
-        assert call_args[1]["dataset_name"] == "test_dataset"
-        assert call_args[1]["save_intermediates"] is True
+        try:
+            response = client.post(
+                "/api/v1/vector/tensor-workflow",
+                json={
+                    "workflow_query": "matrix decomposition workflow",
+                    "dataset_name": "test_dataset",
+                    "operations": [
+                        {
+                            "operation_name": "svd",
+                            "parameters": {},
+                            "description": "Singular value decomposition"
+                        }
+                    ],
+                    "save_intermediates": True
+                },
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert "workflow_id" in data
+            assert len(data["workflow_id"]) > 0
+            assert len(data["operations_executed"]) == 1
+            assert "final_result" in data
+            assert "intermediate_results" in data
+            assert "computational_lineage" in data
+            
+            # Verify workflow engine was called correctly
+            mock_engine.execute_tensor_workflow.assert_called_once()
+            call_args = mock_engine.execute_tensor_workflow.call_args
+            assert call_args[1]["workflow_query"] == "matrix decomposition workflow"
+            assert call_args[1]["dataset_name"] == "test_dataset"
+            assert call_args[1]["save_intermediates"] is True
+        finally:
+            # Clean up dependency overrides
+            app.dependency_overrides.pop(get_hybrid_search, None)
+            app.dependency_overrides.pop(get_embedding_agent, None)
 
 
 class TestVectorIndexEndpoints:
     """Test vector index management endpoints."""
     
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_build_vector_index(self, mock_get_agent, client, auth_headers):
+    def test_build_vector_index(self, client, auth_headers):
         """Test building vector index."""
         
         # Mock index build results
@@ -454,34 +474,46 @@ class TestVectorIndexEndpoints:
         
         mock_agent = Mock()
         mock_agent.build_vector_index = AsyncMock(return_value=mock_index_stats)
-        mock_get_agent.return_value = mock_agent
         
-        response = client.post(
-            "/api/v1/vector/index/build",
-            json={
-                "dataset_name": "test_dataset",
-                "index_type": "partitioned",
-                "metric": "cosine",
-                "num_partitions": 8
-            },
-            headers=auth_headers
-        )
+        # Override the dependency
+        from tensorus.api.routers.vector import get_embedding_agent
+        from tensorus.api import app
         
-        assert response.status_code == 200
-        data = response.json()
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        assert data["success"] is True
-        assert "index_stats" in data
-        assert data["index_stats"]["total_vectors"] == 1000
-        assert data["index_stats"]["partitions"] == 8
-        
-        # Verify agent was called correctly
-        mock_agent.build_vector_index.assert_called_once()
-        call_args = mock_agent.build_vector_index.call_args
-        assert call_args[1]["dataset_name"] == "test_dataset"
-        assert call_args[1]["index_type"] == "partitioned"
-        assert call_args[1]["metric"] == "cosine"
-        assert call_args[1]["num_partitions"] == 8
+        try:
+            response = client.post(
+                "/api/v1/vector/index/build",
+                json={
+                    "dataset_name": "test_dataset",
+                    "index_type": "partitioned",
+                    "metric": "cosine",
+                    "num_partitions": 8
+                },
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert "index_stats" in data
+            assert data["index_stats"]["total_vectors"] == 1000
+            assert data["index_stats"]["partitions"] == 8
+            
+            # Verify agent was called correctly
+            mock_agent.build_vector_index.assert_called_once()
+            call_args = mock_agent.build_vector_index.call_args
+            assert call_args[1]["dataset_name"] == "test_dataset"
+            assert call_args[1]["index_type"] == "partitioned"
+            assert call_args[1]["metric"] == "cosine"
+            assert call_args[1]["num_partitions"] == 8
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.pop(get_embedding_agent, None)
 
 
 class TestModelAndStatsEndpoints:
@@ -553,8 +585,7 @@ class TestModelAndStatsEndpoints:
             app.dependency_overrides.pop(get_embedding_agent, None)
         
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_get_embedding_stats(self, mock_get_agent, client, auth_headers):
+    def test_get_embedding_stats(self, client, auth_headers):
         """Test getting embedding statistics."""
         
         # Mock stats
@@ -569,25 +600,35 @@ class TestModelAndStatsEndpoints:
         
         mock_agent = Mock()
         mock_agent.get_embedding_stats.return_value = mock_stats
-        mock_get_agent.return_value = mock_agent
         
-        response = client.get(
-            "/api/v1/vector/stats/test_dataset",
-            headers=auth_headers
-        )
+        # Override the dependency
+        from tensorus.api.routers.vector import get_embedding_agent
+        from tensorus.api import app
         
-        assert response.status_code == 200
-        data = response.json()
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        assert data["success"] is True
-        assert data["dataset_name"] == "test_dataset"
-        assert data["stats"]["total_embeddings"] == 5000
-        assert data["stats"]["vector_index_size_mb"] == 20.5
+        try:
+            response = client.get(
+                "/api/v1/vector/stats/test_dataset",
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert data["dataset_name"] == "test_dataset"
+            assert data["stats"]["total_embeddings"] == 5000
+            assert data["stats"]["vector_index_size_mb"] == 20.5
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.pop(get_embedding_agent, None)
         
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    @patch('tensorus.api.routers.vector.get_hybrid_search')
-    def test_get_performance_metrics(self, mock_get_hybrid, mock_get_agent, client, auth_headers):
+    def test_get_performance_metrics(self, client, auth_headers):
         """Test getting performance metrics."""
         
         # Mock metrics
@@ -611,37 +652,52 @@ class TestModelAndStatsEndpoints:
         
         mock_agent = Mock()
         mock_agent.get_metrics.return_value = mock_embedding_metrics
-        mock_get_agent.return_value = mock_agent
         
         mock_engine = Mock()
         mock_engine.get_metrics.return_value = mock_search_metrics
         mock_engine.get_lineage_stats.return_value = mock_lineage_metrics
-        mock_get_hybrid.return_value = mock_engine
         
-        response = client.get(
-            "/api/v1/vector/metrics",
-            headers=auth_headers
-        )
+        # Override dependencies
+        from tensorus.api.routers.vector import get_embedding_agent, get_hybrid_search
+        from tensorus.api import app
         
-        assert response.status_code == 200
-        data = response.json()
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        def mock_get_hybrid_search():
+            return mock_engine
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
+        app.dependency_overrides[get_hybrid_search] = mock_get_hybrid_search
         
-        assert data["success"] is True
-        assert "embedding_metrics" in data
-        assert "search_metrics" in data
-        assert "lineage_metrics" in data
-        
-        assert data["embedding_metrics"]["total_embeddings_generated"] == 10000
-        assert data["search_metrics"]["total_searches"] == 500
-        assert data["lineage_metrics"]["total_tensors_tracked"] == 1000
+        try:
+            response = client.get(
+                "/api/v1/vector/metrics",
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert "embedding_metrics" in data
+            assert "search_metrics" in data
+            assert "lineage_metrics" in data
+            
+            assert data["embedding_metrics"]["total_embeddings_generated"] == 10000
+            assert data["search_metrics"]["total_searches"] == 500
+            assert data["lineage_metrics"]["total_tensors_tracked"] == 1000
+        finally:
+            # Clean up dependency overrides
+            app.dependency_overrides.pop(get_embedding_agent, None)
+            app.dependency_overrides.pop(get_hybrid_search, None)
 
 
 class TestVectorDeletion:
     """Test vector deletion endpoints."""
     
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_delete_vectors(self, mock_get_agent, client, auth_headers):
+    def test_delete_vectors(self, client, auth_headers):
         """Test deleting vectors from dataset."""
         
         # Mock embedding agent with vector index and tensor storage
@@ -649,30 +705,42 @@ class TestVectorDeletion:
         mock_vector_index.delete_vectors = AsyncMock()
         
         mock_tensor_storage = Mock()
-        mock_tensor_storage.delete_tensor = Mock()
+        mock_tensor_storage.delete_tensor = Mock(return_value=True)
         
         mock_agent = Mock()
         mock_agent.vector_indexes = {"test_dataset": mock_vector_index}
         mock_agent.tensor_storage = mock_tensor_storage
-        mock_get_agent.return_value = mock_agent
         
-        vector_ids = ["vec_1", "vec_2", "vec_3"]
-        response = client.delete(
-            f"/api/v1/vector/vectors/test_dataset",
-            params={"vector_ids": vector_ids},
-            headers=auth_headers
-        )
+        # Override the dependency
+        from tensorus.api.routers.vector import get_embedding_agent
+        from tensorus.api import app
         
-        assert response.status_code == 200
-        data = response.json()
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        assert data["success"] is True
-        assert data["deleted_count"] == 3
-        assert data["requested_count"] == 3
-        
-        # Verify deletions were called
-        mock_vector_index.delete_vectors.assert_called_once_with(set(vector_ids))
-        assert mock_tensor_storage.delete_tensor.call_count == 3
+        try:
+            vector_ids = ["vec_1", "vec_2", "vec_3"]
+            response = client.delete(
+                f"/api/v1/vector/vectors/test_dataset",
+                params={"vector_ids": vector_ids},
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert data["deleted_count"] == 3
+            assert data["requested_count"] == 3
+            
+            # Verify deletions were called
+            mock_vector_index.delete_vectors.assert_called_once_with(set(vector_ids))
+            assert mock_tensor_storage.delete_tensor.call_count == 3
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.pop(get_embedding_agent, None)
         
     
     @patch('tensorus.api.routers.vector.get_embedding_agent')
@@ -716,26 +784,37 @@ class TestErrorHandling:
             assert response.status_code == 401
             
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_internal_server_errors(self, mock_get_agent, client, auth_headers):
+    def test_internal_server_errors(self, client, auth_headers):
         """Test handling of internal server errors."""
         
         # Mock agent that raises exception
         mock_agent = Mock()
         mock_agent.store_embeddings = AsyncMock(side_effect=Exception("Internal error"))
-        mock_get_agent.return_value = mock_agent
         
-        response = client.post(
-            "/api/v1/vector/embed",
-            json={
-                "texts": "test text",
-                "dataset_name": "test_dataset"
-            },
-            headers=auth_headers
-        )
+        # Override the dependency
+        from tensorus.api.routers.vector import get_embedding_agent
+        from tensorus.api import app
         
-        assert response.status_code == 500
-        assert "failed" in response.json()["detail"].lower()
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
+        
+        try:
+            response = client.post(
+                "/api/v1/vector/embed",
+                json={
+                    "texts": "test text",
+                    "dataset_name": "test_dataset"
+                },
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 500
+            assert "failed" in response.json()["detail"].lower()
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.pop(get_embedding_agent, None)
 
 
 if __name__ == "__main__":

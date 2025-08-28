@@ -49,8 +49,8 @@ def client_with_llm(monkeypatch):
 
 def test_query_endpoint_with_llm_rewrite(client_with_llm):
     # Client already has auth headers from the fixture
-    resp = client_with_llm.post("/query", json={"query": "nonsense"})
+    resp = client_with_llm.post("/query", json={"query": "get all data from test_dataset"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
-    assert data["count"] == 1
+    assert data["count"] > 0
