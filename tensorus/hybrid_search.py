@@ -305,7 +305,7 @@ class HybridSearchEngine:
         # Score computational relevance
         for tensor_id in candidate_tensor_ids:
             try:
-                tensor_record = self.tensor_storage.get_tensor(dataset_name, tensor_id)
+                tensor_record = self.tensor_storage.get_tensor_by_id(dataset_name, tensor_id)
                 tensor = tensor_record["tensor"]
                 
                 # Compute property-based score
@@ -347,7 +347,7 @@ class HybridSearchEngine:
             
             # Get tensor metadata
             try:
-                tensor_record = self.tensor_storage.get_tensor(dataset_name, tensor_id)
+                tensor_record = self.tensor_storage.get_tensor_by_id(dataset_name, tensor_id)
                 tensor = tensor_record["tensor"]
                 metadata = tensor_record.get("metadata", {})
                 
@@ -524,9 +524,13 @@ class HybridSearchEngine:
             "created_at": datetime.utcnow().isoformat()
         }
         
-        self.tensor_storage.add_tensor(
-            dataset_name=f"{dataset_name}_workflow_results",
-            record_id=final_tensor_id,
+        # Create dataset if it doesn't exist
+        results_dataset = f"{dataset_name}_workflow_results"
+        if not self.tensor_storage.dataset_exists(results_dataset):
+            self.tensor_storage.create_dataset(results_dataset)
+        
+        final_tensor_id = self.tensor_storage.insert(
+            name=results_dataset,
             tensor=current_tensor,
             metadata=final_metadata
         )

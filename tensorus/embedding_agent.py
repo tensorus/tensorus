@@ -390,10 +390,7 @@ class EmbeddingAgent:
         vector_entries = {}
         
         for i, (text, embedding) in enumerate(zip(texts, embeddings)):
-            record_id = str(uuid4())
-            record_ids.append(record_id)
-            
-            # Store in tensor storage
+            # Store in tensor storage - let it generate the record_id
             tensor = torch.from_numpy(embedding).float()
             
             storage_metadata = {
@@ -409,11 +406,12 @@ class EmbeddingAgent:
             if metadata:
                 storage_metadata.update(metadata)
                 
-            self.tensor_storage.insert(
+            record_id = self.tensor_storage.insert(
                 name=dataset_name,
                 tensor=tensor,
                 metadata=storage_metadata
             )
+            record_ids.append(record_id)
             
             # Prepare for vector index
             vector_metadata = VectorMetadata(
@@ -490,7 +488,7 @@ class EmbeddingAgent:
             
             # Get tensor from storage
             try:
-                tensor_record = self.tensor_storage.get_tensor(dataset_name, result.vector_id)
+                tensor_record = self.tensor_storage.get_tensor_by_id(dataset_name, result.vector_id)
                 result_dict["tensor"] = tensor_record["tensor"]
             except Exception as e:
                 logger.warning(f"Could not retrieve tensor for {result.vector_id}: {e}")

@@ -52,7 +52,7 @@ class TestEmbeddingEndpoints:
                 "tenant_id": "tenant_1"
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -94,7 +94,7 @@ class TestEmbeddingEndpoints:
                 "provider": "openai"
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -113,7 +113,7 @@ class TestEmbeddingEndpoints:
                 "dataset_name": "test_dataset"
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 400
         assert "empty" in response.json()["detail"].lower()
@@ -125,8 +125,7 @@ class TestEmbeddingEndpoints:
             json={
                 "texts": "Hello world",
                 "dataset_name": "test_dataset"
-            }
-        )
+            })
         
         assert response.status_code == 401
 
@@ -134,11 +133,9 @@ class TestEmbeddingEndpoints:
 class TestSimilaritySearchEndpoints:
     """Test similarity search endpoints."""
     
-    @patch('tensorus.api.security.verify_api_key')
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_similarity_search(self, mock_get_agent, mock_verify_key, client):
+    def test_similarity_search(self, mock_get_agent, client, auth_headers):
         """Test basic similarity search."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock search results
         mock_results = [
@@ -175,7 +172,7 @@ class TestSimilaritySearchEndpoints:
                 "namespace": "test_namespace"
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -201,11 +198,10 @@ class TestSimilaritySearchEndpoints:
         assert call_args[1]["k"] == 5
         assert call_args[1]["namespace"] == "test_namespace"
         
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_similarity_search_with_filters(self, mock_get_agent, mock_verify_key, client):
+    def test_similarity_search_with_filters(self, mock_get_agent, client, auth_headers):
         """Test similarity search with filters."""
-        mock_verify_key.return_value = "test-key"
         
         mock_agent = Mock()
         mock_agent.similarity_search = AsyncMock(return_value=[])
@@ -223,7 +219,7 @@ class TestSimilaritySearchEndpoints:
                 "include_vectors": True
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 200
         
@@ -237,11 +233,10 @@ class TestSimilaritySearchEndpoints:
 class TestHybridSearchEndpoints:
     """Test hybrid search endpoints combining semantic and computational relevance."""
     
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_hybrid_search')
-    def test_hybrid_search(self, mock_get_hybrid, mock_verify_key, client):
+    def test_hybrid_search(self, mock_get_hybrid, client, auth_headers):
         """Test hybrid search functionality."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock hybrid search results
         mock_results = [
@@ -279,7 +274,7 @@ class TestHybridSearchEndpoints:
                 "k": 5
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -299,10 +294,9 @@ class TestHybridSearchEndpoints:
         assert "tensor_shape" in result
         assert "computational_lineage" in result
         
-    @patch('tensorus.api.security.verify_api_key')
-    def test_hybrid_search_invalid_weights(self, mock_verify_key, client):
+    
+    def test_hybrid_search_invalid_weights(self, client, auth_headers):
         """Test hybrid search with invalid weight sum."""
-        mock_verify_key.return_value = "test-key"
         
         response = client.post(
             "/api/v1/vector/hybrid-search",
@@ -313,7 +307,7 @@ class TestHybridSearchEndpoints:
                 "computation_weight": 0.3  # Sum = 1.1, should fail
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 400
         assert "sum to 1.0" in response.json()["detail"]
@@ -322,11 +316,10 @@ class TestHybridSearchEndpoints:
 class TestTensorWorkflowEndpoints:
     """Test tensor workflow execution endpoints."""
     
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_hybrid_search')
-    def test_tensor_workflow(self, mock_get_hybrid, mock_verify_key, client):
+    def test_tensor_workflow(self, mock_get_hybrid, client, auth_headers):
         """Test tensor workflow execution."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock workflow results
         mock_workflow_result = {
@@ -375,7 +368,7 @@ class TestTensorWorkflowEndpoints:
                 "save_intermediates": True
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -398,11 +391,10 @@ class TestTensorWorkflowEndpoints:
 class TestVectorIndexEndpoints:
     """Test vector index management endpoints."""
     
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_build_vector_index(self, mock_get_agent, mock_verify_key, client):
+    def test_build_vector_index(self, mock_get_agent, client, auth_headers):
         """Test building vector index."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock index build results
         mock_index_stats = {
@@ -428,7 +420,7 @@ class TestVectorIndexEndpoints:
                 "num_partitions": 8
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -450,11 +442,10 @@ class TestVectorIndexEndpoints:
 class TestModelAndStatsEndpoints:
     """Test model listing and statistics endpoints."""
     
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_list_models(self, mock_get_agent, mock_verify_key, client):
+    def test_list_models(self, mock_get_agent, client, auth_headers):
         """Test listing available models."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock model list
         mock_models = {
@@ -504,11 +495,10 @@ class TestModelAndStatsEndpoints:
         assert st_model["name"] == "all-MiniLM-L6-v2"
         assert st_model["dimension"] == 384
         
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_get_embedding_stats(self, mock_get_agent, mock_verify_key, client):
+    def test_get_embedding_stats(self, mock_get_agent, client, auth_headers):
         """Test getting embedding statistics."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock stats
         mock_stats = {
@@ -537,12 +527,11 @@ class TestModelAndStatsEndpoints:
         assert data["stats"]["total_embeddings"] == 5000
         assert data["stats"]["vector_index_size_mb"] == 20.5
         
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
     @patch('tensorus.api.routers.vector.get_hybrid_search')
-    def test_get_performance_metrics(self, mock_get_hybrid, mock_get_agent, mock_verify_key, client):
+    def test_get_performance_metrics(self, mock_get_hybrid, mock_get_agent, client, auth_headers):
         """Test getting performance metrics."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock metrics
         mock_embedding_metrics = {
@@ -593,11 +582,10 @@ class TestModelAndStatsEndpoints:
 class TestVectorDeletion:
     """Test vector deletion endpoints."""
     
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_delete_vectors(self, mock_get_agent, mock_verify_key, client):
+    def test_delete_vectors(self, mock_get_agent, client, auth_headers):
         """Test deleting vectors from dataset."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock embedding agent with vector index and tensor storage
         mock_vector_index = Mock()
@@ -629,11 +617,10 @@ class TestVectorDeletion:
         mock_vector_index.delete_vectors.assert_called_once_with(set(vector_ids))
         assert mock_tensor_storage.delete_tensor.call_count == 3
         
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_delete_vectors_no_index(self, mock_get_agent, mock_verify_key, client):
+    def test_delete_vectors_no_index(self, mock_get_agent, client, auth_headers):
         """Test deleting vectors when no index exists."""
-        mock_verify_key.return_value = "test-key"
         
         mock_agent = Mock()
         mock_agent.vector_indexes = {}  # No index for dataset
@@ -665,17 +652,16 @@ class TestErrorHandling:
         
         for endpoint, method in endpoints:
             if method == "POST":
-                response = client.post(endpoint, json={})
+                response = client.post(endpoint, json={}, headers=auth_headers)
             else:
-                response = client.get(endpoint)
+                response = client.get(endpoint, headers=auth_headers)
                 
             assert response.status_code == 401
             
-    @patch('tensorus.api.security.verify_api_key')
+    
     @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_internal_server_errors(self, mock_get_agent, mock_verify_key, client):
+    def test_internal_server_errors(self, mock_get_agent, client, auth_headers):
         """Test handling of internal server errors."""
-        mock_verify_key.return_value = "test-key"
         
         # Mock agent that raises exception
         mock_agent = Mock()
@@ -689,7 +675,7 @@ class TestErrorHandling:
                 "dataset_name": "test_dataset"
             },
             headers=auth_headers
-        )
+        , headers=auth_headers)
         
         assert response.status_code == 500
         assert "failed" in response.json()["detail"].lower()

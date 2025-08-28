@@ -360,7 +360,7 @@ class TestEmbeddingAgent:
         
         # Check tensor storage
         for record_id in record_ids:
-            tensor_record = embedding_agent.tensor_storage.get_tensor(dataset_name, record_id)
+            tensor_record = embedding_agent.tensor_storage.get_tensor_by_id(dataset_name, record_id)
             assert tensor_record["tensor"].shape[0] == 384
             assert "source_text" in tensor_record["metadata"]
             
@@ -574,9 +574,11 @@ class TestHybridSearchEngine:
         
         # Store a matrix for testing
         matrix = torch.randn(4, 4)
-        hybrid_search_engine.tensor_storage.add_tensor(
-            dataset_name=dataset_name,
-            record_id="matrix_1",
+        if not hybrid_search_engine.tensor_storage.dataset_exists(dataset_name):
+            hybrid_search_engine.tensor_storage.create_dataset(dataset_name)
+        
+        record_id = hybrid_search_engine.tensor_storage.insert(
+            name=dataset_name,
             tensor=matrix,
             metadata={
                 "source_text": "Random matrix for testing",
