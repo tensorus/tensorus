@@ -33,6 +33,13 @@ except ImportError:
     FAISS_AVAILABLE = False
     faiss = None
 
+try:
+    from sklearn.cluster import KMeans
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    KMeans = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,8 +98,12 @@ class GeometricPartitioner:
         if len(vectors) < self.num_partitions:
             self.num_partitions = max(1, len(vectors))
             
+        if not SKLEARN_AVAILABLE:
+            # Fallback to random centroids when sklearn is not available
+            self.centroids = np.random.randn(self.num_partitions, self.dimension).astype(np.float32)
+            return
+            
         # Use k-means clustering to find optimal centroids
-        from sklearn.cluster import KMeans
         kmeans = KMeans(n_clusters=self.num_partitions, random_state=42, n_init=10)
         kmeans.fit(vectors)
         self.centroids = kmeans.cluster_centers_
@@ -187,125 +198,144 @@ class VectorIndex(ABC):
         pass
 
 
-class FAISSVectorIndex(VectorIndex):
-    """FAISS-based vector index implementation."""
-    
-    def __init__(self, dimension: int, metric: str = "cosine"):
-        if not FAISS_AVAILABLE:
+if FAISS_AVAILABLE:
+    class FAISSVectorIndex(VectorIndex):
+        """FAISS-based vector index implementation."""
+        
+        def __init__(self, dimension: int, metric: str = "cosine"):
+            if not FAISS_AVAILABLE:
+                raise ImportError("FAISS not available. Install with: pip install faiss-cpu")
+                
+            self.dimension = dimension
+            self.metric = metric
+            self.index = self._create_index()
+            self.vector_metadata: Dict[int, VectorMetadata] = {}
+            self.id_to_index: Dict[str, int] = {}
+            self.index_to_id: Dict[int, str] = {}
+            self.next_index = 0
+        
+        def _create_index(self):
+            """Create FAISS index based on metric."""
+            if self.metric == "cosine":
+                # Normalize vectors and use inner product for cosine similarity
+                index = faiss.IndexFlatIP(self.dimension)
+            elif self.metric == "euclidean":
+                index = faiss.IndexFlatL2(self.dimension)
+            else:
+                raise ValueError(f"Unsupported metric: {self.metric}")
+                
+            return index
+            
+        async def add_vectors(self, vectors: Dict[str, Tuple[np.ndarray, VectorMetadata]]) -> None:
+            """Add vectors to FAISS index."""
+            if not vectors:
+                return
+                
+            # Prepare vectors for FAISS
+            vector_array = np.array([vec.astype(np.float32) for vec, _ in vectors.values()])
+            
+            if self.metric == "cosine":
+                # Normalize for cosine similarity
+                faiss.normalize_L2(vector_array)
+                
+            # Add to index
+            start_idx = self.index.ntotal
+            self.index.add(vector_array)
+            
+            # Update metadata mappings
+            for i, (vector_id, (_, metadata)) in enumerate(vectors.items()):
+                idx = start_idx + i
+                self.vector_metadata[idx] = metadata
+                self.id_to_index[vector_id] = idx
+                self.index_to_id[idx] = vector_id
+                
+        async def search(self, query_vector: np.ndarray, k: int = 10,
+                        filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
+            """Search FAISS index for similar vectors."""
+            if self.index.ntotal == 0:
+                return []
+                
+            query = query_vector.astype(np.float32).reshape(1, -1)
+            if self.metric == "cosine":
+                faiss.normalize_L2(query)
+                
+            # Search index
+            scores, indices = self.index.search(query, min(k, self.index.ntotal))
+            
+            results = []
+            for rank, (score, idx) in enumerate(zip(scores[0], indices[0])):
+                if idx == -1:  # Invalid index
+                    continue
+                    
+                vector_id = self.index_to_id.get(idx)
+                if not vector_id:
+                    continue
+                    
+                metadata = self.vector_metadata.get(idx)
+                if not metadata:
+                    continue
+                    
+                # Apply filters if specified
+                if filters and not self._matches_filters(metadata, filters):
+                    continue
+                    
+                results.append(SearchResult(
+                    vector_id=vector_id,
+                    score=float(score),
+                    rank=rank + 1,
+                    metadata=metadata
+                ))
+                
+            return results
+            
+        async def delete_vectors(self, vector_ids: Set[str]) -> None:
+            """Delete vectors from index (FAISS doesn't support true deletion)."""
+            # For FAISS, we mark as deleted in metadata
+            for vector_id in vector_ids:
+                if vector_id in self.id_to_index:
+                    idx = self.id_to_index[vector_id]
+                    self.vector_metadata.pop(idx, None)
+                    self.id_to_index.pop(vector_id, None)
+                    self.index_to_id.pop(idx, None)
+                    
+        def get_stats(self) -> IndexStats:
+            """Get FAISS index statistics."""
+            return IndexStats(
+                total_vectors=self.index.ntotal,
+                index_size_mb=self.index.ntotal * self.dimension * 4 / (1024 * 1024),  # 4 bytes per float32
+                partitions=1,
+                last_updated=datetime.utcnow()
+            )
+            
+        def _matches_filters(self, metadata: VectorMetadata, filters: Dict[str, Any]) -> bool:
+            """Check if metadata matches filters."""
+            for key, value in filters.items():
+                if key == "namespace" and metadata.namespace != value:
+                    return False
+                elif key == "tenant_id" and metadata.tenant_id != value:
+                    return False
+                elif key in metadata.metadata and metadata.metadata[key] != value:
+                    return False
+                    
+            return True
+
+else:
+    # Provide a stub class when FAISS is not available
+    class FAISSVectorIndex(VectorIndex):
+        def __init__(self, *args, **kwargs):
             raise ImportError("FAISS not available. Install with: pip install faiss-cpu")
-            
-        self.dimension = dimension
-        self.metric = metric
-        self.index = self._create_index()
-        self.vector_metadata: Dict[int, VectorMetadata] = {}
-        self.id_to_index: Dict[str, int] = {}
-        self.index_to_id: Dict[int, str] = {}
-        self.next_index = 0
         
-    def _create_index(self) -> faiss.Index:
-        """Create FAISS index based on metric."""
-        if self.metric == "cosine":
-            # Normalize vectors and use inner product for cosine similarity
-            index = faiss.IndexFlatIP(self.dimension)
-        elif self.metric == "euclidean":
-            index = faiss.IndexFlatL2(self.dimension)
-        else:
-            raise ValueError(f"Unsupported metric: {self.metric}")
-            
-        return index
+        async def add_vectors(self, vectors):
+            raise ImportError("FAISS not available")
         
-    async def add_vectors(self, vectors: Dict[str, Tuple[np.ndarray, VectorMetadata]]) -> None:
-        """Add vectors to FAISS index."""
-        if not vectors:
-            return
-            
-        # Prepare vectors for FAISS
-        vector_array = np.array([vec.astype(np.float32) for vec, _ in vectors.values()])
+        async def search(self, query_vector, k=10, filters=None):
+            raise ImportError("FAISS not available")
         
-        if self.metric == "cosine":
-            # Normalize for cosine similarity
-            faiss.normalize_L2(vector_array)
-            
-        # Add to index
-        start_idx = self.index.ntotal
-        self.index.add(vector_array)
+        async def delete_vectors(self, vector_ids):
+            raise ImportError("FAISS not available")
         
-        # Update metadata mappings
-        for i, (vector_id, (_, metadata)) in enumerate(vectors.items()):
-            idx = start_idx + i
-            self.vector_metadata[idx] = metadata
-            self.id_to_index[vector_id] = idx
-            self.index_to_id[idx] = vector_id
-            
-    async def search(self, query_vector: np.ndarray, k: int = 10,
-                    filters: Optional[Dict[str, Any]] = None) -> List[SearchResult]:
-        """Search FAISS index for similar vectors."""
-        if self.index.ntotal == 0:
-            return []
-            
-        query = query_vector.astype(np.float32).reshape(1, -1)
-        if self.metric == "cosine":
-            faiss.normalize_L2(query)
-            
-        # Search index
-        scores, indices = self.index.search(query, min(k, self.index.ntotal))
-        
-        results = []
-        for rank, (score, idx) in enumerate(zip(scores[0], indices[0])):
-            if idx == -1:  # Invalid index
-                continue
-                
-            vector_id = self.index_to_id.get(idx)
-            if not vector_id:
-                continue
-                
-            metadata = self.vector_metadata.get(idx)
-            if not metadata:
-                continue
-                
-            # Apply filters if specified
-            if filters and not self._matches_filters(metadata, filters):
-                continue
-                
-            results.append(SearchResult(
-                vector_id=vector_id,
-                score=float(score),
-                rank=rank + 1,
-                metadata=metadata
-            ))
-            
-        return results
-        
-    async def delete_vectors(self, vector_ids: Set[str]) -> None:
-        """Delete vectors from index (FAISS doesn't support true deletion)."""
-        # For FAISS, we mark as deleted in metadata
-        for vector_id in vector_ids:
-            if vector_id in self.id_to_index:
-                idx = self.id_to_index[vector_id]
-                self.vector_metadata.pop(idx, None)
-                self.id_to_index.pop(vector_id, None)
-                self.index_to_id.pop(idx, None)
-                
-    def get_stats(self) -> IndexStats:
-        """Get FAISS index statistics."""
-        return IndexStats(
-            total_vectors=self.index.ntotal,
-            index_size_mb=self.index.ntotal * self.dimension * 4 / (1024 * 1024),  # 4 bytes per float32
-            partitions=1,
-            last_updated=datetime.utcnow()
-        )
-        
-    def _matches_filters(self, metadata: VectorMetadata, filters: Dict[str, Any]) -> bool:
-        """Check if metadata matches filters."""
-        for key, value in filters.items():
-            if key == "namespace" and metadata.namespace != value:
-                return False
-            elif key == "tenant_id" and metadata.tenant_id != value:
-                return False
-            elif key in metadata.metadata and metadata.metadata[key] != value:
-                return False
-                
-        return True
+        def get_stats(self):
+            raise ImportError("FAISS not available")
 
 
 class PartitionedVectorIndex:
