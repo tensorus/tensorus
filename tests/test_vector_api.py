@@ -90,8 +90,8 @@ class TestEmbeddingEndpoints:
             json={
                 "texts": texts,
                 "dataset_name": "test_dataset",
-                "model_name": "custom-model",
-                "provider": "openai"
+                "model_name": "all-MiniLM-L6-v2",
+                "provider": "sentence-transformers"
             },
             headers=auth_headers
         )
@@ -133,8 +133,7 @@ class TestEmbeddingEndpoints:
 class TestSimilaritySearchEndpoints:
     """Test similarity search endpoints."""
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_similarity_search(self, mock_get_agent, client, auth_headers):
+    def test_similarity_search(self, client, auth_headers):
         """Test basic similarity search."""
         
         # Mock search results
@@ -159,29 +158,43 @@ class TestSimilaritySearchEndpoints:
             }
         ]
         
+        # Create a mock embedding agent
         mock_agent = Mock()
         mock_agent.similarity_search = AsyncMock(return_value=mock_results)
-        mock_get_agent.return_value = mock_agent
+        mock_agent.vector_indexes = {"test_dataset": Mock()}
         
-        response = client.post(
-            "/api/v1/vector/search",
-            json={
-                "query": "test query",
-                "dataset_name": "test_dataset",
-                "k": 5,
-                "namespace": "test_namespace"
-            },
-            headers=auth_headers
-        )
+        # Override the dependency in the FastAPI app
+        from tensorus.api.routers.vector import get_embedding_agent
+        from tensorus.api import app
         
-        assert response.status_code == 200
-        data = response.json()
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        assert data["success"] is True
-        assert data["query"] == "test query"
-        assert len(data["results"]) == 2
-        assert data["total_results"] == 2
-        assert "search_time_ms" in data
+        try:
+            response = client.post(
+                "/api/v1/vector/search",
+                json={
+                    "query": "test query",
+                    "dataset_name": "test_dataset",
+                    "k": 5,
+                    "namespace": "test_namespace"
+                },
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert data["query"] == "test query"
+            assert len(data["results"]) == 2
+            assert data["total_results"] == 2
+            assert "search_time_ms" in data
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.pop(get_embedding_agent, None)
         
         # Check result structure
         result = data["results"][0]
@@ -199,43 +212,54 @@ class TestSimilaritySearchEndpoints:
         assert call_args[1]["namespace"] == "test_namespace"
         
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_similarity_search_with_filters(self, mock_get_agent, client, auth_headers):
+    def test_similarity_search_with_filters(self, client, auth_headers):
         """Test similarity search with filters."""
         
         mock_agent = Mock()
         mock_agent.similarity_search = AsyncMock(return_value=[])
-        mock_get_agent.return_value = mock_agent
+        mock_agent.vector_indexes = {"test_dataset": Mock()}
         
-        response = client.post(
-            "/api/v1/vector/search",
-            json={
-                "query": "test query",
-                "dataset_name": "test_dataset",
-                "k": 3,
-                "namespace": "prod",
-                "tenant_id": "tenant_123",
-                "similarity_threshold": 0.8,
-                "include_vectors": True
-            },
-            headers=auth_headers
-        )
+        # Override the dependency
+        from tensorus.api.routers.vector import get_embedding_agent
+        from tensorus.api import app
         
-        assert response.status_code == 200
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        # Verify filters were passed
-        call_args = mock_agent.similarity_search.call_args
-        assert call_args[1]["namespace"] == "prod"
-        assert call_args[1]["tenant_id"] == "tenant_123"
-        assert call_args[1]["similarity_threshold"] == 0.8
+        try:
+            response = client.post(
+                "/api/v1/vector/search",
+                json={
+                    "query": "test query",
+                    "dataset_name": "test_dataset",
+                    "k": 3,
+                    "namespace": "prod",
+                    "tenant_id": "tenant_123",
+                    "similarity_threshold": 0.8,
+                    "include_vectors": True
+                },
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            
+            # Verify filters were passed
+            call_args = mock_agent.similarity_search.call_args
+            assert call_args[1]["namespace"] == "prod"
+            assert call_args[1]["tenant_id"] == "tenant_123"
+            assert call_args[1]["similarity_threshold"] == 0.8
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.pop(get_embedding_agent, None)
 
 
 class TestHybridSearchEndpoints:
     """Test hybrid search endpoints combining semantic and computational relevance."""
     
     
-    @patch('tensorus.api.routers.vector.get_hybrid_search')
-    def test_hybrid_search(self, mock_get_hybrid, client, auth_headers):
+    def test_hybrid_search(self, client, auth_headers):
         """Test hybrid search functionality."""
         
         # Mock hybrid search results
@@ -255,44 +279,65 @@ class TestHybridSearchEndpoints:
         
         mock_engine = Mock()
         mock_engine.hybrid_search = AsyncMock(return_value=mock_results)
-        mock_get_hybrid.return_value = mock_engine
         
-        response = client.post(
-            "/api/v1/vector/hybrid-search",
-            json={
-                "text_query": "machine learning algorithms",
-                "dataset_name": "test_dataset",
-                "tensor_operations": [
-                    {
-                        "operation_name": "svd",
-                        "parameters": {},
-                        "description": "SVD decomposition"
-                    }
-                ],
-                "similarity_weight": 0.7,
-                "computation_weight": 0.3,
-                "k": 5
-            },
-            headers=auth_headers
-        )
+        # Mock the embedding agent to avoid vector index issues
+        mock_agent = Mock()
+        mock_agent.vector_indexes = {"test_dataset": Mock()}
         
-        assert response.status_code == 200
-        data = response.json()
+        # Override the dependencies
+        from tensorus.api.routers.vector import get_hybrid_search, get_embedding_agent
+        from tensorus.api import app
         
-        assert data["success"] is True
-        assert len(data["results"]) == 1
-        assert data["semantic_weight"] == 0.7
-        assert data["computation_weight"] == 0.3
-        assert "search_time_ms" in data
+        def mock_get_hybrid_search():
+            return mock_engine
+            
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_hybrid_search] = mock_get_hybrid_search
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        # Check result structure
-        result = data["results"][0]
-        assert "record_id" in result
-        assert "semantic_score" in result
-        assert "computational_score" in result
-        assert "hybrid_score" in result
-        assert "tensor_shape" in result
-        assert "computational_lineage" in result
+        try:
+            response = client.post(
+                "/api/v1/vector/hybrid-search",
+                json={
+                    "text_query": "machine learning algorithms",
+                    "dataset_name": "test_dataset",
+                    "tensor_operations": [
+                        {
+                            "operation_name": "svd",
+                            "parameters": {},
+                            "description": "SVD decomposition"
+                        }
+                    ],
+                    "similarity_weight": 0.7,
+                    "computation_weight": 0.3,
+                    "k": 5
+                },
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert len(data["results"]) == 1
+            assert data["semantic_weight"] == 0.7
+            assert data["computation_weight"] == 0.3
+            assert "search_time_ms" in data
+            
+            # Check result structure
+            result = data["results"][0]
+            assert "record_id" in result
+            assert "semantic_score" in result
+            assert "computational_score" in result
+            assert "hybrid_score" in result
+            assert "tensor_shape" in result
+            assert "computational_lineage" in result
+        finally:
+            # Clean up dependency overrides
+            app.dependency_overrides.pop(get_hybrid_search, None)
+            app.dependency_overrides.pop(get_embedding_agent, None)
         
     
     def test_hybrid_search_invalid_weights(self, client, auth_headers):
@@ -443,14 +488,14 @@ class TestModelAndStatsEndpoints:
     """Test model listing and statistics endpoints."""
     
     
-    @patch('tensorus.api.routers.vector.get_embedding_agent')
-    def test_list_models(self, mock_get_agent, client, auth_headers):
+    def test_list_models(self, client, auth_headers):
         """Test listing available models."""
         
-        # Mock model list
+        # Mock model list - using dicts instead of Mock objects for serialization
+        from tensorus.embedding_agent import EmbeddingModelInfo
         mock_models = {
             "sentence-transformers": [
-                Mock(
+                EmbeddingModelInfo(
                     name="all-MiniLM-L6-v2",
                     provider="sentence-transformers",
                     dimension=384,
@@ -461,7 +506,7 @@ class TestModelAndStatsEndpoints:
                 )
             ],
             "openai": [
-                Mock(
+                EmbeddingModelInfo(
                     name="text-embedding-3-small",
                     provider="openai",
                     dimension=1536,
@@ -475,25 +520,37 @@ class TestModelAndStatsEndpoints:
         
         mock_agent = Mock()
         mock_agent.list_available_models.return_value = mock_models
-        mock_get_agent.return_value = mock_agent
         
-        response = client.get(
-            "/api/v1/vector/models",
-            headers=auth_headers
-        )
+        # Override the dependency
+        from tensorus.api.routers.vector import get_embedding_agent
+        from tensorus.api import app
         
-        assert response.status_code == 200
-        data = response.json()
+        def mock_get_embedding_agent():
+            return mock_agent
+            
+        app.dependency_overrides[get_embedding_agent] = mock_get_embedding_agent
         
-        assert data["success"] is True
-        assert data["total_models"] == 2
-        assert "sentence-transformers" in data["providers"]
-        assert "openai" in data["providers"]
-        
-        # Check model structure
-        st_model = data["providers"]["sentence-transformers"][0]
-        assert st_model["name"] == "all-MiniLM-L6-v2"
-        assert st_model["dimension"] == 384
+        try:
+            response = client.get(
+                "/api/v1/vector/models",
+                headers=auth_headers
+            )
+            
+            assert response.status_code == 200
+            data = response.json()
+            
+            assert data["success"] is True
+            assert data["total_models"] == 2
+            assert "sentence-transformers" in data["providers"]
+            assert "openai" in data["providers"]
+            
+            # Check model structure
+            st_model = data["providers"]["sentence-transformers"][0]
+            assert st_model["name"] == "all-MiniLM-L6-v2"
+            assert st_model["dimension"] == 384
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.pop(get_embedding_agent, None)
         
     
     @patch('tensorus.api.routers.vector.get_embedding_agent')
@@ -652,9 +709,9 @@ class TestErrorHandling:
         
         for endpoint, method in endpoints:
             if method == "POST":
-                response = client.post(endpoint, json={}, headers=auth_headers)
+                response = client.post(endpoint, json={})
             else:
-                response = client.get(endpoint, headers=auth_headers)
+                response = client.get(endpoint)
                 
             assert response.status_code == 401
             

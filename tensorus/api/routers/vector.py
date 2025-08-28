@@ -247,6 +247,9 @@ async def embed_text(
             tenant_id=request.tenant_id
         )
         
+    except HTTPException as e:
+        # Re-raise HTTP exceptions (validation errors, etc.) with original status code
+        raise e
     except Exception as e:
         logger.error(f"Text embedding failed: {e}")
         raise HTTPException(
@@ -414,6 +417,9 @@ async def hybrid_search(
             computation_weight=request.computation_weight
         )
         
+    except HTTPException as e:
+        # Re-raise HTTP exceptions (validation errors, etc.) with original status code
+        raise e
     except Exception as e:
         logger.error(f"Hybrid search failed: {e}")
         raise HTTPException(
