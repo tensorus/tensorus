@@ -8,12 +8,45 @@ colorTo: yellow
 short_description: Tensorus Core
 ---
 
-
 # Tensorus: Agentic Tensor Database/Data Lake
 
 Tensorus is a specialized data platform focused on the management and agent-driven manipulation of tensor data. It offers a streamlined environment for storing, retrieving, and operating on tensors, laying the groundwork for advanced AI and machine learning workflows.
 
 The core purpose of Tensorus is to simplify and enhance how developers and AI agents interact with tensor datasets. By providing dedicated tools for tensor operations and a framework for agentic integration, Tensorus aims to accelerate tasks like automated data ingestion, reinforcement learning from stored experiences, and AutoML processes, ultimately enabling more efficient and intelligent data utilization in AI projects.
+
+## Table of Contents
+
+- [Key Features](#key-features)
+- [Project Structure](#project-structure)
+- [Demos](#demos)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Running the API Server](#running-the-api-server)
+  - [Running the Streamlit UI](#running-the-streamlit-ui)
+  - [Model Context Protocol Integration](#model-context-protocol-integration)
+  - [Running the Agents (Examples)](#running-the-agents-examples)
+- [Docker Deployment](#docker-deployment)
+- [Environment Configuration](#environment-configuration)
+- [Production Deployment](#production-deployment)
+- [Testing](#testing)
+- [Using Tensorus](#using-tensorus)
+  - [API Endpoints](#api-endpoints)
+  - [Vector Database Examples](#vector-database-examples)
+  - [Dataset Schemas](#dataset-schemas)
+- [Metadata System](#metadata-system)
+- [Streamlit UI](#streamlit-ui)
+- [Natural Query Language (NQL)](#natural-query-language-nql)
+- [Agent Details](#agent-details)
+- [Tensorus Models](#tensorus-models)
+- [Basic Tensor Operations](#basic-tensor-operations)
+- [Tensor Decomposition Operations](#tensor-decomposition-operations)
+- [Vector Database Features](#vector-database-features)
+- [Completed Features](#completed-features)
+- [Future Implementation](#future-implementation)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Key Features
 
@@ -62,7 +95,9 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 *   `LICENSE`: Project license file.
 *   `.gitignore`: Specifies intentionally untracked files that Git should ignore.
 
-## Huggingface Demo
+## Demos
+
+### Huggingface Demo
 
 You can try Tensorus online via Huggingface Spaces:
 
@@ -70,12 +105,13 @@ You can try Tensorus online via Huggingface Spaces:
 
 *   **Dashboard UI:** [Streamlit Dashboard](https://tensorus-dashboard.hf.space)
 
-## Demos
+### Model Context Protocol Integration
 
 For Model Context Protocol integration examples and demos, see the separate [Tensorus MCP repository](https://github.com/tensorus/mcp).
 
-## Tensorus Execution Cycle
+## Architecture
 
+### Tensorus Execution Cycle
 
 ```mermaid
 graph TD
@@ -263,7 +299,6 @@ graph TD
 
 For AI agents and LLMs that need standardized protocol access to Tensorus capabilities, see the separate [Tensorus MCP package](https://github.com/tensorus/mcp) which provides a complete MCP server implementation.
 
-
 ### Running the Agents (Examples)
 
 You can run the example agents directly from their respective files:
@@ -287,6 +322,8 @@ You can run the example agents directly from their respective files:
     ```
 
     *   Note: The Ingestion Agent will monitor the `temp_ingestion_source` directory (created automatically if it doesn't exist in the project root) for new files.
+
+## Docker Deployment
 
 ### Docker Quickstart
 
@@ -358,6 +395,8 @@ WSL2 tip: If you run Docker Desktop on Windows with WSL2, `localhost:7860` works
 #### GPU acceleration (optional)
 The default image uses CPU wheels. For GPUs, install the NVIDIA Container Toolkit and switch to CUDA‑enabled PyTorch wheels in your build (e.g., modify `setup.sh` or your Dockerfile). Pass `--gpus all` to `docker run`.
 
+## Environment Configuration
+
 ### Environment configuration (reference)
 Tensorus reads configuration from environment variables (prefix `TENSORUS_`). Common settings:
 
@@ -396,6 +435,8 @@ TENSORUS_POSTGRES_PASSWORD=change_me
 TENSORUS_POSTGRES_DB=tensorus_db
 TENSORUS_AUDIT_LOG_PATH=/app/tensorus_audit.log
 ```
+
+## Production Deployment
 
 ### Production deployment with Docker (step‑by‑step)
 This example uses Docker Compose with PostgreSQL. Adjust for your infra as needed.
@@ -447,6 +488,8 @@ Troubleshooting
 - DB connection errors: verify Postgres env, port conflicts (host 5433 vs local 5432), and that the DB user/database exist.
 - Windows/WSL2 volume performance: keep bind‑mounted files on the Linux filesystem for best performance.
 
+## Testing
+
 ### Preparing the Test Environment
 
 The tests expect all dependencies from both `requirements.txt` and
@@ -493,7 +536,6 @@ Tensorus includes Python unit tests. To set up the environment and run them:
     ```
 
     All tests should pass without errors when dependencies are properly installed.
-
 
 ## Using Tensorus
 
@@ -604,8 +646,7 @@ storage.insert("my_ds", torch.rand(3, 10), {"source": "sensor", "value": 5})
 
 Tensorus includes a detailed metadata subsystem for describing tensors beyond their raw data. Each tensor has a `TensorDescriptor` and can be associated with optional semantic, lineage, computational, quality, relational, and usage metadata. The metadata storage backend is pluggable, supporting in-memory storage for quick testing or PostgreSQL for persistence. Search and aggregation utilities allow querying across these metadata fields. See [metadata_schemas.md](docs/metadata_schemas.md) for schema details.
 
-### Streamlit UI
-
+## Streamlit UI
 
 The Streamlit UI provides a user-friendly interface for:
 
@@ -694,8 +735,7 @@ rewritten into a structured NQL query by Gemini.
     *   `batch_size`: Batch size for embedding generation.
     *   `cache_ttl`: Time-to-live for embedding cache entries.
 
-
-### Tensorus Models
+## Tensorus Models
 
 The collection of example models previously bundled with Tensorus now lives in
 a separate repository: [tensorus/models](https://github.com/tensorus/models).
@@ -836,7 +876,6 @@ Execute complex mathematical workflows with full computational lineage tracking:
 *   **Lineage Tracking**: Complete provenance tracking of tensor transformations
 *   **Scientific Reproducibility**: Full audit trail of computational steps for research applications
 *   **Intermediate Storage**: Optional preservation of intermediate results for analysis
-
 
 ## Completed Features
 
