@@ -47,7 +47,9 @@ ensures `fastapi>=0.110` is available so the API is compatible with Pydantic v2.
 6.  Set up the necessary environment variables (see Configuration below).
 7.  Run the application using Uvicorn:
     ```bash
-    uvicorn tensorus.api:app --host 0.0.0.0 --port 7860
+    uvicorn tensorus.api:app --reload --host 127.0.0.1 --port 7860
+    # For external access (e.g., Docker/WSL/other machines), use:
+    # uvicorn tensorus.api:app --host 0.0.0.0 --port 7860
     ```
 
     This exposes all dataset and agent endpoints at `http://localhost:7860`.
@@ -65,8 +67,13 @@ Tensorus is configured via environment variables. Key variables include:
 *   `TENSORUS_POSTGRES_PASSWORD`: Password for PostgreSQL.
 *   `TENSORUS_POSTGRES_DB`: Database name for PostgreSQL.
 *   `TENSORUS_POSTGRES_DSN`: Alternative DSN connection string for PostgreSQL.
-*   `TENSORUS_VALID_API_KEYS`: List of valid API keys. Values can be a comma-separated string (e.g., `key1,key2,anotherkey`) or a JSON array. If no keys are required, set this to `[]`.
-*   `TENSORUS_API_KEY_HEADER_NAME`: HTTP header name for the API key (default: `X-API-KEY`).
+*   Authentication (preferred):
+    *   `TENSORUS_AUTH_ENABLED`: Enable/disable authentication (default: `true`).
+    *   `TENSORUS_API_KEYS`: Comma-separated list of API keys (recommended).
+    *   Usage: send `Authorization: Bearer tsr_...` in requests.
+*   Legacy compatibility (backward-compatible):
+    *   `TENSORUS_VALID_API_KEYS`: List of valid API keys. Values can be a comma-separated string (e.g., `key1,key2,anotherkey`) or a JSON array. If no keys are required, set this to `[]`.
+    *   `TENSORUS_API_KEY_HEADER_NAME`: HTTP header name for the legacy API key (default: `X-API-KEY`).
 *   `TENSORUS_MINIMAL_IMPORT`: Set to any value to skip importing the optional
     `tensorus-models` package for a lightweight installation.
 *   `NQL_USE_LLM`: Set to `true` to enable the Gemini-based natural query

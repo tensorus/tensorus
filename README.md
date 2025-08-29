@@ -269,7 +269,9 @@ graph TD
 3.  Start the FastAPI backend server using:
 
     ```bash
-    uvicorn tensorus.api:app --host 0.0.0.0 --port 7860
+    uvicorn tensorus.api:app --reload --host 127.0.0.1 --port 7860
+    # For external access (e.g., Docker/WSL/other machines), use:
+    # uvicorn tensorus.api:app --host 0.0.0.0 --port 7860
     ```
 
     *   This command launches Uvicorn with the `app` instance defined in `tensorus/api.py`.
@@ -571,6 +573,8 @@ The API provides the following main endpoints:
     *   `GET /metrics/dashboard`: Get aggregated dashboard metrics.
 
 ### Vector Database Examples
+
+For an end-to-end quickstart with PowerShell-friendly curl commands and authentication setup, see `DEMO.md` → "Vector & Embedding API Quickstart".
 
 #### Generate & Store Embeddings
 ```bash

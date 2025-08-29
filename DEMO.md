@@ -6,11 +6,106 @@ This demo showcases the key capabilities of Tensorus, an agentic tensor database
 
 ## Prerequisites
 
-*   Tensorus backend API running (`uvicorn api:app --reload --host 127.0.0.1 --port 7860`)
+*   Tensorus backend API running (`uvicorn tensorus.api:app --reload --host 127.0.0.1 --port 7860`)
 *   Tensorus Streamlit UI running (`streamlit run app.py`)
 *   Tensorus MCP Server running (`python -m tensorus.mcp_server`)
 *   A terminal for API calls (e.g., using `curl`) or a tool like Postman.
 *   A web browser.
+*   API key configured for protected endpoints:
+    * Generate (if needed): `python generate_api_key.py`
+    * Use Bearer header (preferred): `Authorization: Bearer <api_key>`
+    * Legacy also supported: `X-API-KEY: <api_key>`
+
+## Vector & Embedding API Quickstart
+
+These endpoints are mounted under `prefix="/api/v1/vector"` in `tensorus/api.py`, and require auth via `Authorization: Bearer <api_key>` by default (see `tensorus/api/security.py`).
+
+Set your API key in PowerShell (Windows):
+
+```powershell
+$env:TENSORUS_API_KEY = "tsr_...your_key..."
+```
+
+### 1) Embed text(s) and store vectors
+
+```powershell
+curl -s -X POST "http://127.0.0.1:7860/api/v1/vector/embed" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d "{ \"texts\": [\"hello world\", \"tensorus vector db\"], \"dataset_name\": \"demo_vectors\" }"
+```
+
+Response includes `record_ids`, `embeddings_count`, and `model_info`.
+
+### 2) Similarity search
+
+```powershell
+curl -s -X POST "http://127.0.0.1:7860/api/v1/vector/search" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d "{ \"query\": \"hello world\", \"dataset_name\": \"demo_vectors\", \"k\": 5 }"
+```
+
+Optional fields: `model_name`, `provider`, `namespace`, `tenant_id`, `similarity_threshold`, `include_vectors`.
+
+### 3) Hybrid search (semantic + computational)
+
+```powershell
+curl -s -X POST "http://127.0.0.1:7860/api/v1/vector/hybrid-search" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d "{
+  \"text_query\": \"hello\",
+  \"dataset_name\": \"demo_vectors\",
+  \"tensor_operations\": [
+    { \"operation_name\": \"norm\", \"parameters\": { \"p\": 2 } }
+  ],
+  \"similarity_weight\": 0.7,
+  \"computation_weight\": 0.3,
+  \"k\": 5
+}"
+```
+
+Note: `similarity_weight + computation_weight` must equal `1.0`.
+
+### 4) Build vector index
+
+```powershell
+curl -s -X POST "http://127.0.0.1:7860/api/v1/vector/index/build" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d "{ \"dataset_name\": \"demo_vectors\", \"index_type\": \"partitioned\", \"metric\": \"cosine\", \"num_partitions\": 8 }"
+```
+
+### 5) List available embedding models
+
+```powershell
+curl -s -X GET "http://127.0.0.1:7860/api/v1/vector/models" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY"
+```
+
+### 6) Dataset embedding stats
+
+```powershell
+curl -s -X GET "http://127.0.0.1:7860/api/v1/vector/stats/demo_vectors" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY"
+```
+
+### 7) System performance metrics
+
+```powershell
+curl -s -X GET "http://127.0.0.1:7860/api/v1/vector/metrics" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY"
+```
+
+### 8) Delete vectors by IDs
+
+Use repeated `vector_ids` query params:
+
+```powershell
+curl -s -X DELETE "http://127.0.0.1:7860/api/v1/vector/vectors/demo_vectors?vector_ids=<id1>&vector_ids=<id2>" \
+ -H "Authorization: Bearer $env:TENSORUS_API_KEY"
+```
 
 ## Demo Scenarios
 
