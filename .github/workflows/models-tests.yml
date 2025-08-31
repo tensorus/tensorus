@@ -30,6 +30,8 @@ jobs:
         run: |
           cd models
           pip install -e .
+      - name: Install test dependencies
+        run: pip install pytest
       - name: Run models tests
         working-directory: models
         run: pytest -v tests
