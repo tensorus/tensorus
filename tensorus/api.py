@@ -30,6 +30,7 @@ from tensorus.api.endpoints import (
     router_io,
     router_management,
     router_analytics,
+    router_tensor_operations,  # NEW: Tensor operations router
 )
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
@@ -1975,6 +1976,7 @@ app.include_router(router_extended_metadata)
 app.include_router(router_io)
 app.include_router(router_management)
 app.include_router(router_analytics)
+app.include_router(router_tensor_operations)  # NEW: Include tensor operations router
 
 # Include the tensor operations router defined above
 app.include_router(ops_router)

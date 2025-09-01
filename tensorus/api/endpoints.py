@@ -479,6 +479,341 @@ async def patch_usage_metadata_ep(tensor_id: UUID=Path(...), updates: Dict[str,A
 async def delete_usage_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataStorage=Depends(get_storage_instance), api_key: str=Depends(verify_api_key)):
     return await _delete_extended_metadata(tensor_id, "Usage", storage, api_key)
 
+# --- Tensor Operations Router ---
+from tensorus.tensor_ops import TensorOps
+from tensorus.tensor_storage import TensorStorage
+from tensorus.api.dependencies import get_tensor_storage_instance
+from typing import Any, Optional, Union, List, Dict
+import inspect
+import time
+import torch
+from uuid import UUID
+from fastapi import HTTPException, status
+
+# Import security functions
+from tensorus.api.security import verify_api_key
+
+# Import metadata schemas
+from tensorus.metadata.schemas import TensorDescriptor
+
+router_tensor_operations = APIRouter(
+    prefix="/tensor-operations",
+    tags=["Tensor Operations"],
+    responses={404: {"description": "Tensor not found"}},
+)
+
+# Get all available TensorOps methods
+AVAILABLE_OPERATIONS = {
+    name: method
+    for name, method in inspect.getmembers(TensorOps, predicate=inspect.isfunction)
+    if not name.startswith('_')  # Exclude private methods
+}
+
+class TensorOperationRequest(BaseModel):
+    """Request model for tensor operations."""
+    operation_params: Optional[Dict[str, Any]] = {}
+    store_result: bool = False
+    result_dataset_name: Optional[str] = None
+    result_metadata: Optional[Dict[str, Any]] = {}
+
+class TensorOperationResponse(BaseModel):
+    """Response model for tensor operations."""
+    operation_name: str
+    input_tensor_id: str
+    input_tensor_shape: List[int]
+    input_tensor_dtype: str
+    result_tensor_shape: List[int]
+    result_tensor_dtype: str
+    result: Any  # The actual operation result (tensor data or scalar)
+    result_tensor_id: Optional[str] = None  # If result was stored
+    execution_time_ms: float
+
+@router_tensor_operations.post("/{tensor_id}/operations/{operation_name}",
+                                response_model=TensorOperationResponse,
+                                status_code=status.HTTP_200_OK)
+async def perform_tensor_operation(
+    tensor_id: str = Path(..., description="UUID of the tensor to operate on"),
+    operation_name: str = Path(..., description="Name of the tensor operation to perform"),
+    request: TensorOperationRequest = Body(...),
+    storage: MetadataStorage = Depends(get_storage_instance),
+    tensor_storage: TensorStorage = Depends(get_tensor_storage_instance),
+    api_key: str = Depends(verify_api_key)
+) -> TensorOperationResponse:
+    """
+    Perform a tensor operation on a stored tensor.
+
+    **Available Operations:**
+    - **Arithmetic:** add, subtract, multiply, divide, power, log
+    - **Matrix Operations:** matmul, dot, outer, cross
+    - **Reduction:** sum, mean, min, max
+    - **Reshaping:** reshape, transpose, permute, flatten, squeeze, unsqueeze
+    - **Concatenation:** concatenate, stack
+    - **Linear Algebra:** matrix_eigendecomposition, matrix_trace, tensor_trace, svd,
+                         qr_decomposition, lu_decomposition, cholesky_decomposition,
+                         matrix_inverse, matrix_determinant, matrix_rank
+    - **Convolution:** convolve_1d, convolve_2d, convolve_3d
+    - **Statistics:** variance, std, covariance, correlation, frobenius_norm,
+                     l1_norm, l2_norm, p_norm, nuclear_norm
+    - **Advanced:** einsum, compute_gradient, compute_jacobian
+    """
+    import time
+
+    start_time = time.time()
+
+    # Validate operation exists
+    if operation_name not in AVAILABLE_OPERATIONS:
+        available_ops = list(AVAILABLE_OPERATIONS.keys())
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Operation '{operation_name}' not found. Available operations: {available_ops}"
+        )
+
+    # Get tensor descriptor from metadata storage
+    tensor_descriptor = storage.get_tensor_descriptor(UUID(tensor_id))
+    if not tensor_descriptor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tensor with ID {tensor_id} not found in metadata storage"
+        )
+
+    # Get actual tensor from tensor storage
+    try:
+        tensor_data = tensor_storage.get_tensor_by_id(
+            tensor_descriptor.dataset_name,
+            tensor_id
+        )
+        if not tensor_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tensor with ID {tensor_id} not found in tensor storage"
+            )
+    except Exception as e:
+        log_audit_event("TENSOR_OPERATION_FAILED_LOAD", api_key, tensor_id,
+                       {"error": str(e), "operation": operation_name})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load tensor: {str(e)}"
+        )
+
+    tensor = tensor_data["tensor"]
+    operation_params = request.operation_params or {}
+
+    try:
+        # Get the operation method
+        operation_method = AVAILABLE_OPERATIONS[operation_name]
+
+        # Prepare arguments for the operation
+        # First argument is always the tensor, others come from operation_params
+        args = [tensor]
+
+        # Get method signature to understand parameters
+        sig = inspect.signature(operation_method)
+
+        # Map operation_params to method parameters (skip 'self' for static methods)
+        param_names = [p for p in sig.parameters.keys() if p != 'self']
+
+        # Handle special case where first param is the tensor (already added)
+        if len(param_names) > 0:
+            for param_name in param_names:
+                if param_name in operation_params:
+                    param_value = operation_params[param_name]
+
+                    # Handle special tensor parameters (convert to torch.Tensor if needed)
+                    if param_name in ['t1', 't2', 'tensor', 'matrix_A', 'signal_x', 'kernel_w',
+                                     'image_I', 'kernel_K', 'volume', 'kernel', 'matrix_X', 'matrix_Y']:
+                        if isinstance(param_value, list):
+                            param_value = torch.tensor(param_value)
+                        elif not isinstance(param_value, torch.Tensor):
+                            raise HTTPException(
+                                status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"Parameter '{param_name}' must be a tensor or list convertible to tensor"
+                            )
+
+                    args.append(param_value)
+                else:
+                    # Check if parameter has default value
+                    param_info = sig.parameters[param_name]
+                    if param_info.default == inspect.Parameter.empty:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Required parameter '{param_name}' not provided for operation '{operation_name}'"
+                        )
+
+        # Execute the operation
+        result = operation_method(*args)
+
+        # Calculate execution time
+        execution_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+
+        # Prepare response
+        response_data = {
+            "operation_name": operation_name,
+            "input_tensor_id": tensor_id,
+            "input_tensor_shape": list(tensor.shape),
+            "input_tensor_dtype": str(tensor.dtype),
+            "result_tensor_shape": list(result.shape) if hasattr(result, 'shape') else [],
+            "result_tensor_dtype": str(result.dtype) if hasattr(result, 'dtype') else str(type(result).__name__),
+            "result": result.tolist() if hasattr(result, 'tolist') else result,
+            "execution_time_ms": round(execution_time, 2)
+        }
+
+        # Store result if requested
+        if request.store_result and request.result_dataset_name:
+            try:
+                # Convert result back to tensor if it's a list
+                if isinstance(result, list):
+                    result_tensor = torch.tensor(result)
+                else:
+                    result_tensor = result
+
+                # Prepare metadata for stored result
+                result_metadata = request.result_metadata or {}
+                result_metadata.update({
+                    "operation_performed": operation_name,
+                    "input_tensor_id": tensor_id,
+                    "operation_params": operation_params,
+                    "execution_time_ms": execution_time,
+                    "created_by_operation": True
+                })
+
+                # Store the result tensor
+                result_tensor_id = tensor_storage.insert(
+                    request.result_dataset_name,
+                    result_tensor,
+                    result_metadata
+                )
+
+                response_data["result_tensor_id"] = result_tensor_id
+
+                # Update metadata storage with lineage information
+                result_descriptor = {
+                    "tensor_id": UUID(result_tensor_id),
+                    "dataset_name": request.result_dataset_name,
+                    "shape": list(result_tensor.shape),
+                    "data_type": tensor_descriptor.data_type,  # Inherit data type
+                    "owner": tensor_descriptor.owner,
+                    "created_by_operation": True,
+                    "operation_details": {
+                        "operation_name": operation_name,
+                        "input_tensor_id": tensor_id,
+                        "operation_params": operation_params
+                    }
+                }
+
+                storage.add_tensor_descriptor(TensorDescriptor(**result_descriptor))
+
+                log_audit_event("TENSOR_OPERATION_COMPLETED_STORED", api_key, tensor_id,
+                               {"operation": operation_name, "result_id": result_tensor_id})
+
+            except Exception as e:
+                log_audit_event("TENSOR_OPERATION_FAILED_STORE", api_key, tensor_id,
+                               {"error": str(e), "operation": operation_name})
+                # Don't fail the operation if storage fails, just log it
+
+        else:
+            log_audit_event("TENSOR_OPERATION_COMPLETED", api_key, tensor_id,
+                           {"operation": operation_name})
+
+        return TensorOperationResponse(**response_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        execution_time = (time.time() - start_time) * 1000
+        log_audit_event("TENSOR_OPERATION_FAILED", api_key, tensor_id,
+                       {"error": str(e), "operation": operation_name})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Tensor operation '{operation_name}' failed: {str(e)}"
+        )
+
+@router_tensor_operations.get("/operations",
+                              response_model=Dict[str, Dict[str, Any]],
+                              summary="List Available Tensor Operations")
+async def list_tensor_operations():
+    """
+    Get a list of all available tensor operations with their signatures and descriptions.
+    """
+    operations_info = {}
+
+    for name, method in AVAILABLE_OPERATIONS.items():
+        try:
+            sig = inspect.signature(method)
+            doc = method.__doc__ or "No description available"
+
+            # Get parameter information
+            params = {}
+            for param_name, param_info in sig.parameters.items():
+                if param_name == 'self':  # Skip self for static methods
+                    continue
+
+                param_data = {
+                    "type": str(param_info.annotation) if param_info.annotation != inspect.Parameter.empty else "Any",
+                    "default": str(param_info.default) if param_info.default != inspect.Parameter.empty else None,
+                    "required": param_info.default == inspect.Parameter.empty
+                }
+                params[param_name] = param_data
+
+            operations_info[name] = {
+                "description": doc.strip(),
+                "parameters": params,
+                "signature": str(sig)
+            }
+
+        except Exception as e:
+            operations_info[name] = {
+                "description": f"Error getting operation info: {str(e)}",
+                "parameters": {},
+                "signature": "Unknown"
+            }
+
+    return operations_info
+
+@router_tensor_operations.get("/{tensor_id}/operations/history",
+                              response_model=List[Dict[str, Any]],
+                              summary="Get Tensor Operation History")
+async def get_tensor_operation_history(
+    tensor_id: str = Path(..., description="UUID of the tensor"),
+    storage: MetadataStorage = Depends(get_storage_instance)
+):
+    """
+    Get the operation history for a specific tensor by examining its lineage metadata.
+    """
+    try:
+        lineage = storage.get_lineage_metadata(UUID(tensor_id))
+        if not lineage:
+            return []
+
+        # Extract operation history from lineage
+        operation_history = []
+
+        # Check if this tensor was created by an operation
+        if hasattr(lineage, 'source') and lineage.source:
+            if lineage.source.identifier == "operation_result":
+                operation_history.append({
+                    "operation_type": "tensor_creation",
+                    "details": lineage.source.details if hasattr(lineage.source, 'details') else {},
+                    "timestamp": getattr(lineage, 'version', 'unknown')
+                })
+
+        # Add parent tensor relationships as operation inputs
+        for parent in lineage.parent_tensors:
+            if parent.relationship and "operation" in parent.relationship.lower():
+                operation_history.append({
+                    "operation_type": "operation_input",
+                    "parent_tensor_id": str(parent.tensor_id),
+                    "relationship": parent.relationship,
+                    "details": parent.details if hasattr(parent, 'details') else {}
+                })
+
+        return operation_history
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve operation history: {str(e)}"
+        )
+
 # --- I/O Router for Export/Import ---
 router_io = APIRouter(prefix="/tensors", tags=["Import/Export"])
 

@@ -41,7 +41,7 @@ def get_storage_instance() -> MetadataStorage:
 _tensor_storage_instance = None
 _nql_agent_instance = None
 
-def get_tensor_storage() -> TensorStorage:
+def get_tensor_storage_instance() -> TensorStorage:
     """FastAPI dependency to get the TensorStorage instance."""
     global _tensor_storage_instance
     if _tensor_storage_instance is None:
