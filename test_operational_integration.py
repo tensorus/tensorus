@@ -28,7 +28,7 @@ from tensorus.tensorus_operational_core import (
 from tensorus.tensor_operations_integrated import OperationalStorage
 from tensorus.tensor_streaming_pipeline import StreamingOperationManager
 from tensorus.tensor_operation_api import TensorOperationAPI, TensorQuery
-from tensorus.metadata.index_manager import IndexManager
+from tensorus.metadata.indexing import IndexManager
 from tensorus.tensor_chunking import TensorChunkingConfig
 
 

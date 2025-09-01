@@ -26,7 +26,7 @@ import operator
 
 from tensorus.tensor_operations_integrated import OperationalStorage, OperationalTensor
 from tensorus.tensor_streaming_pipeline import StreamingOperationManager
-from tensorus.metadata.index_manager import IndexManager
+from tensorus.metadata.indexing import IndexManager
 
 
 class QueryOperation(Enum):
