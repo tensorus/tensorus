@@ -452,8 +452,8 @@ class TensorStorage:
             TypeError: If the provided `tensor` object is not a PyTorch tensor.
         """
         if name not in self.datasets:
-            logging.error(f"Dataset '{name}' not found for insertion.")
-            raise DatasetNotFoundError(f"Dataset '{name}' not found.")
+            self.datasets[name] = {"tensors": [], "metadata": [], "schema": None}
+            logging.info(f"Dataset '{name}' created automatically for insertion.")
 
         if not isinstance(tensor, torch.Tensor):
             logging.error(f"Attempted to insert non-tensor data into dataset '{name}'.")
