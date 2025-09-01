@@ -482,7 +482,7 @@ async def delete_usage_metadata_ep(tensor_id: UUID=Path(...), storage: MetadataS
 # --- Tensor Operations Router ---
 from tensorus.tensor_ops import TensorOps
 from tensorus.tensor_storage import TensorStorage
-from tensorus.api.dependencies import get_tensor_storage_instance
+from tensorus.api.dependencies import get_tensor_storage
 from typing import Any, Optional, Union, List, Dict
 import inspect
 import time
@@ -536,7 +536,7 @@ async def perform_tensor_operation(
     operation_name: str = Path(..., description="Name of the tensor operation to perform"),
     request: TensorOperationRequest = Body(...),
     storage: MetadataStorage = Depends(get_storage_instance),
-    tensor_storage: TensorStorage = Depends(get_tensor_storage_instance),
+    tensor_storage: TensorStorage = Depends(get_tensor_storage),
     api_key: str = Depends(verify_api_key)
 ) -> TensorOperationResponse:
     """

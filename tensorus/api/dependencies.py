@@ -2,57 +2,45 @@ from tensorus.metadata import storage_instance as globally_configured_storage_in
 from tensorus.metadata.storage_abc import MetadataStorage
 from ..tensor_storage import TensorStorage
 from ..nql_agent import NQLAgent
-
-# Note: The `storage_instance` imported here is already configured (InMemory or Postgres)
-# based on the logic in `tensorus/metadata/__init__.py` which reads `tensorus.config.settings`.
+from ..embedding_agent import EmbeddingAgent
+from ..hybrid_search import HybridSearchEngine
+from ..tensor_ops import TensorOps
 
 def get_storage_instance() -> MetadataStorage:
-    """
-    FastAPI dependency to get the currently configured metadata storage instance.
-    """
     return globally_configured_storage_instance
 
-# If we needed to re-initialize or pass settings directly to the storage for each request
-# (e.g. for request-scoped sessions or dynamic configuration per request, which is not the case here),
-# this function would be more complex. For now, it just returns the global instance.
-#
-# Example of re-initializing if storage_instance could change or needs request context:
-# from tensorus.metadata import get_configured_storage_instance, ConfigurationError
-# from tensorus.config import settings
-#
-# def get_storage_instance_dynamic() -> MetadataStorage:
-#     try:
-#         # This would re-evaluate settings and re-create the instance per request if needed,
-#         # or could access request-specific config.
-#         # For our current setup, the global instance is fine.
-#         return get_configured_storage_instance()
-#     except ConfigurationError as e:
-#         # This would ideally be caught by a global exception handler in FastAPI
-#         # to return a 500 error if configuration is bad during a request.
-#         # However, configuration should typically be validated at startup.
-#         raise RuntimeError(f"Storage configuration error: {e}")
-
-# The current `storage_instance` is initialized once when `tensorus.metadata` is first imported.
-# This is generally fine for many applications unless the configuration needs to change without restarting.
-# The FastAPI `Depends` system will call `get_storage_instance` for each request that uses it,
-# but this function will always return the same globally initialized `storage_instance`.
-
-# Global instances initialized once
 _tensor_storage_instance = None
 _nql_agent_instance = None
+_embedding_agent_instance = None
+_hybrid_search_instance = None
+_tensor_ops_instance = None
 
-def get_tensor_storage_instance() -> TensorStorage:
-    """FastAPI dependency to get the TensorStorage instance."""
+def get_tensor_storage() -> TensorStorage:
     global _tensor_storage_instance
     if _tensor_storage_instance is None:
         _tensor_storage_instance = TensorStorage()
     return _tensor_storage_instance
 
 def get_nql_agent() -> NQLAgent:
-    """FastAPI dependency to get the NQLAgent instance."""
-    global _nql_agent_instance, _tensor_storage_instance
+    global _nql_agent_instance
     if _nql_agent_instance is None:
-        if _tensor_storage_instance is None:
-            _tensor_storage_instance = TensorStorage()
-        _nql_agent_instance = NQLAgent(_tensor_storage_instance)
+        _nql_agent_instance = NQLAgent(get_tensor_storage())
     return _nql_agent_instance
+
+def get_embedding_agent() -> EmbeddingAgent:
+    global _embedding_agent_instance
+    if _embedding_agent_instance is None:
+        _embedding_agent_instance = EmbeddingAgent(get_tensor_storage())
+    return _embedding_agent_instance
+
+def get_tensor_ops() -> TensorOps:
+    global _tensor_ops_instance
+    if _tensor_ops_instance is None:
+        _tensor_ops_instance = TensorOps()
+    return _tensor_ops_instance
+
+def get_hybrid_search() -> HybridSearchEngine:
+    global _hybrid_search_instance
+    if _hybrid_search_instance is None:
+        _hybrid_search_instance = HybridSearchEngine(get_tensor_storage(), get_embedding_agent(), get_tensor_ops())
+    return _hybrid_search_instance

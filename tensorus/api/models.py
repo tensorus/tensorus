@@ -21,3 +21,12 @@ class NQLResponse(BaseModel):
     message: str = Field(..., description="Status message (e.g., 'Query successful', 'Error parsing query').")
     count: Optional[int] = Field(None, description="Number of matching records found.")
     results: Optional[List[TensorOutput]] = Field(None, description="List of matching tensor records.")
+
+class VectorSearchQuery(BaseModel):
+    query: str = Field(..., description="The query text to search for.")
+    dataset_name: str = Field(..., description="The name of the dataset to search in.")
+    k: int = Field(5, description="The number of top results to return.")
+    namespace: Optional[str] = Field(None, description="The namespace to search in.")
+    tenant_id: Optional[str] = Field(None, description="The tenant ID to search in.")
+    similarity_threshold: Optional[float] = Field(None, description="The similarity threshold.")
+    include_vectors: bool = Field(False, description="Whether to include vectors in the response.")

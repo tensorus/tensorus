@@ -18,7 +18,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tensorus.tensor_storage import TensorStorage
-from tensorus.api.dependencies import get_tensor_storage_instance
+from tensorus.api.dependencies import get_tensor_storage
 
 class TensorOperationsAPITest:
     """Test class for tensor operations API endpoints."""
@@ -27,7 +27,7 @@ class TensorOperationsAPITest:
         self.base_url = base_url
         self.api_key = "test-api-key"  # In a real scenario, this would be obtained properly
         self.test_dataset = "api_test_operations"
-        self.storage = get_tensor_storage_instance()
+        self.storage = get_tensor_storage()
 
     def setup_test_data(self):
         """Set up test tensors in the storage."""
