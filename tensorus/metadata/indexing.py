@@ -156,8 +156,13 @@ class HashIndex(BaseIndex):
             # Create composite key if multiple properties
             if len(self.indexed_properties) == 1:
                 key = tensor_data.get(self.indexed_properties[0])
+                # Convert list to tuple if it's a list
+                if isinstance(key, list):
+                    key = tuple(key)
             else:
                 key = tuple(tensor_data.get(prop) for prop in self.indexed_properties)
+                # Ensure all parts of the composite key are hashable
+                key = tuple(tuple(k) if isinstance(k, list) else k for k in key)
 
             if key is not None:
                 self.index[key].add(tensor_id)
@@ -186,9 +191,14 @@ class HashIndex(BaseIndex):
             # Simple equality search
             if len(self.indexed_properties) == 1:
                 key = conditions.get(self.indexed_properties[0])
+                # Convert list to tuple if it's a list
+                if isinstance(key, list):
+                    key = tuple(key)
                 return self.index.get(key, set()).copy()
             else:
                 key = tuple(conditions.get(prop) for prop in self.indexed_properties)
+                # Ensure all parts of the composite key are hashable
+                key = tuple(tuple(k) if isinstance(k, list) else k for k in key)
                 return self.index.get(key, set()).copy()
 
     def update(self, tensor_id: str, old_data: Dict[str, Any],

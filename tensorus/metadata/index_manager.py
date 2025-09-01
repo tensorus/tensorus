@@ -12,7 +12,7 @@ This module provides:
 import time
 import threading
 import pickle
-from typing import Dict, List, Set, Optional, Any, Tuple, Iterator
+from typing import Dict, List, Set, Optional, Any, Tuple, Iterator, Union
 from collections import defaultdict, OrderedDict
 from dataclasses import dataclass, field
 import heapq
@@ -66,7 +66,8 @@ class IndexManager:
         self.metadata_storage: Optional[MetadataStorage] = None
 
         # Initialize default indexes
-        self._create_default_indexes()
+        if self.config.auto_create_indexes: # Add this check
+            self._create_default_indexes()
 
     def set_metadata_storage(self, storage: MetadataStorage) -> None:
         """Set the metadata storage backend."""
@@ -94,9 +95,9 @@ class IndexManager:
             self.indexes["owner_data_type"] = CompositeIndex("owner_data_type", ["owner", "data_type"])
             self.indexes["data_type_shape"] = CompositeIndex("data_type_shape", ["data_type", "shape"])
 
-    def create_index(self, name: str, index_type: IndexType,
+    def create_index(self, name: str, index_type: Union[IndexType, str],
                     indexed_properties: List[str],
-                    structure: IndexStructure = IndexStructure.HASH_MAP) -> bool:
+                    structure: Union[IndexStructure, str] = IndexStructure.HASH_MAP) -> bool:
         """
         Create a new index.
 
@@ -113,6 +114,20 @@ class IndexManager:
             if name in self.indexes:
                 return False
 
+            # Convert string to IndexType enum if necessary
+            if isinstance(index_type, str):
+                try:
+                    index_type = IndexType(index_type)
+                except ValueError:
+                    return False
+
+            # Convert string to IndexStructure enum if necessary
+            if isinstance(structure, str):
+                try:
+                    structure = IndexStructure(structure)
+                except ValueError:
+                    return False
+
             try:
                 if index_type == IndexType.PROPERTY:
                     if structure == IndexStructure.HASH_MAP:
@@ -127,6 +142,10 @@ class IndexManager:
                     index = SpatialIndex(name)
                 elif index_type == IndexType.RANGE:
                     index = BTreeIndex(name, indexed_properties)
+                elif index_type == IndexType.TEXT:
+                    return False
+                elif index_type == IndexType.PRIMARY:
+                    return False
                 else:
                     return False
 
@@ -134,7 +153,7 @@ class IndexManager:
                 self.statistics["indexes_created"] += 1
                 return True
 
-            except Exception:
+            except Exception as e:
                 return False
 
     def drop_index(self, name: str) -> bool:
@@ -209,14 +228,17 @@ class IndexManager:
             self.query_cache.move_to_end(query_hash)
             self.statistics["cache_hits"] += 1
 
+            print(f"[DEBUG] Query Cache Hit for {conditions}: {len(cached_result.results)} results")
             return list(cached_result.results)[:limit] if limit else list(cached_result.results)
 
         # Generate query plan
         query_plan = self._generate_query_plan(conditions)
+        print(f"[DEBUG] Query Plan for {conditions}: {query_plan.index_name if query_plan else 'No Plan'}")
 
         if not query_plan:
             # Fallback to full scan if no suitable indexes
             results = self._full_scan_query(conditions)
+            print(f"[DEBUG] Full Scan Fallback for {conditions}: {len(results)} results")
         else:
             # Execute query using selected index
             index = self.indexes[query_plan.index_name]
@@ -291,7 +313,7 @@ class IndexManager:
 
         # For composite indexes, all properties must be covered
         if index.index_type == IndexType.COMPOSITE:
-            return required_props.issubset(indexed_props)
+            return required_props == indexed_props
 
         # For property indexes, at least one property should be covered
         if index.index_type == IndexType.PROPERTY:
@@ -346,17 +368,38 @@ class IndexManager:
         stats = index.get_statistics()
         efficiency = stats.get("index_efficiency", 1.0)
 
-        return base_cost * result_factor / efficiency
+        # Factor in query specificity
+        specificity_factor = 1.0
+        # Ensure required_props is defined for composite index check
+        required_props = set(conditions.keys())
+        indexed_props = set(index.indexed_properties)
+
+        if index.index_type == IndexType.PROPERTY and len(conditions) == 1 and list(conditions.keys())[0] in index.indexed_properties:
+            specificity_factor = 0.1 # Highly specific, lower cost
+        elif index.index_type == IndexType.COMPOSITE and required_props == indexed_props: # Exact match for all composite properties
+            specificity_factor = 0.2 # Exact composite match, lower cost
+        elif index.index_type == IndexType.COMPOSITE and required_props.issubset(indexed_props):
+            specificity_factor = 0.5 # Partial composite match, medium cost
+
+        return base_cost * result_factor / efficiency * specificity_factor
 
     def _full_scan_query(self, conditions: Dict[str, Any]) -> Set[str]:
         """Fallback query method when no suitable index is available."""
         if not self.metadata_storage:
             return set()
 
-        # This would typically query the underlying storage
-        # For now, return empty set as this should be implemented by subclasses
         self.statistics["full_scans"] += 1
-        return set()
+        all_tensor_descriptors = self.metadata_storage.list_tensor_descriptors()
+        matching_tensor_ids = set()
+        for descriptor in all_tensor_descriptors:
+            match = True
+            for key, value in conditions.items():
+                if not hasattr(descriptor, key) or getattr(descriptor, key) != value:
+                    match = False
+                    break
+            if match:
+                matching_tensor_ids.add(str(descriptor.tensor_id))
+        return matching_tensor_ids
 
     def _sort_results(self, tensor_ids: List[str], sort_by: str) -> List[str]:
         """Sort tensor results by a property."""

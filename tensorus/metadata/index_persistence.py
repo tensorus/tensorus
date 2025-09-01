@@ -19,6 +19,7 @@ from typing import Dict, List, Set, Optional, Any, Tuple
 from pathlib import Path
 from dataclasses import asdict
 from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict
 
 from .index_manager import IndexManager, IndexManagerConfig
 from .indexing import BaseIndex, IndexMetadata
@@ -116,8 +117,10 @@ class IndexPersistenceManager:
                 properties = index_data["properties"]
 
                 # Create index using IndexManager
-                if index_manager.create_index(index_name, index_type, properties, structure):
-                    index = index_manager.indexes[index_name]
+                if create_success:
+                    index = index_manager.indexes.get(index_name)
+                    if index is None:
+                        return None
 
                     # Restore index data
                     self._deserialize_index_data(index, index_data["data"])
@@ -128,7 +131,7 @@ class IndexPersistenceManager:
                     return index
 
             except Exception as e:
-                print(f"Failed to load index {index_name}: {e}")
+                print(f"[DEBUG] IndexPersistenceManager.load_index: Failed to load index {index_name}: {e}")
 
             return None
 
@@ -155,8 +158,9 @@ class IndexPersistenceManager:
     def _deserialize_index_data(self, index: BaseIndex, data: Dict[str, Any]) -> None:
         """Deserialize and restore index-specific data."""
         if hasattr(index, 'index') and 'index' in data:
-            index.index.update(data['index'])
-            index.reverse_index.update(data['reverse_index'])
+            # Re-initialize as defaultdict to preserve behavior
+            index.index = defaultdict(set, data['index'])
+            index.reverse_index = data['reverse_index'] # This is a regular dict, no defaultdict needed
         elif hasattr(index, 'shape_index') and 'shape_index' in data:
             # Restore spatial index
             for shape_str, tensor_ids in data['shape_index'].items():
