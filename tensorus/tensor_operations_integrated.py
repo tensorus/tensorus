@@ -40,7 +40,7 @@ import torch
 from tensorus.tensor_ops import TensorOps
 from tensorus.tensor_storage import TensorStorage
 from tensorus.tensor_chunking import TensorChunker, TensorChunkingConfig
-from tensorus.metadata.indexing import IndexManager
+from tensorus.metadata.index_manager import IndexManager
 
 
 class OperationType(Enum):
@@ -214,7 +214,7 @@ class OperationChain:
     def _chain_binary_op(self, other: Union[OperationalTensor, torch.Tensor],
                         operation: Callable) -> 'OperationChain':
         """Chain a binary operation."""
-        new_chain = OperationChain([self], operation, OperationType.BINARY)
+        new_chain = OperationChain([self, other], operation, OperationType.BINARY)
         new_chain._previous_chain = self
         return new_chain
 
@@ -421,7 +421,7 @@ class OperationExecutor:
 
             # Cache the result
             cache_metadata = {
-                "operation": request.operation_spec.name,
+                "operation": request.operation_spec.name if request.operation_spec else "unknown",
                 "input_tensor_ids": request.input_tensor_ids,
                 "parameters": request.parameters,
                 "execution_time": result.execution_time
