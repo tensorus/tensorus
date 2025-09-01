@@ -117,7 +117,26 @@ class IndexPersistenceManager:
                 properties = index_data["properties"]
 
                 # Create index using IndexManager
+                create_success = index_manager.create_index(
+                    name=index_name,
+                    index_type=index_type,
+                    indexed_properties=properties,
+                    structure=structure
+                )
                 if create_success:
+                    index = index_manager.indexes.get(index_name)
+                    if index is None:
+                        return None
+
+                    # Restore index data
+                    self._deserialize_index_data(index, index_data["data"])
+
+                    # Restore metadata
+                    index.metadata = IndexMetadata(**metadata)
+
+                    return index
+                else:
+                    return None
                     index = index_manager.indexes.get(index_name)
                     if index is None:
                         return None
