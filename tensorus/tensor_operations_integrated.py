@@ -562,8 +562,6 @@ class OperationalStorage:
         # Operation registry
         self.operation_specs: Dict[str, OperationSpec] = {}
         self._register_operations()
-        # Internal map from tensor_id to dataset name for correct retrieval
-        self._tensor_dataset_map: Dict[str, str] = {}
 
     def _register_operations(self) -> None:
         """Register available tensor operations."""
@@ -601,27 +599,16 @@ class OperationalStorage:
 
     def load_tensor(self, tensor_id: str) -> torch.Tensor:
         """Load tensor from storage."""
-        dataset = self._tensor_dataset_map.get(tensor_id, "default")
-        return self.tensor_storage.get_tensor_by_id(dataset, tensor_id)["tensor"]
+        return self.tensor_storage.get_tensor_by_id("default", tensor_id)["tensor"]
 
     def save_tensor(self, tensor: torch.Tensor, dataset: str = "default") -> str:
         """Save tensor to storage."""
-        # Ensure dataset exists before insert
-        try:
-            if not self.tensor_storage.dataset_exists(dataset):
-                self.tensor_storage.create_dataset(dataset)
-        except Exception as e:
-            logging.warning(f"Failed to ensure dataset '{dataset}' exists before saving: {e}")
-        tensor_id = self.tensor_storage.insert(dataset, tensor)
-        # Track dataset for this tensor id
-        self._tensor_dataset_map[tensor_id] = dataset
-        return tensor_id
+        return self.tensor_storage.insert(dataset, tensor)
 
     def get_tensor_metadata(self, tensor_id: str) -> Dict[str, Any]:
         """Get tensor metadata."""
         try:
-            dataset = self._tensor_dataset_map.get(tensor_id, "default")
-            tensor_data = self.tensor_storage.get_tensor_by_id(dataset, tensor_id)
+            tensor_data = self.tensor_storage.get_tensor_by_id("default", tensor_id)
             return tensor_data.get("metadata", {})
         except Exception:
             return {}
