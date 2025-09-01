@@ -217,7 +217,7 @@ class StreamingTensorProcessor:
         start_time = time.time()
 
         if not self.chunker.should_chunk_tensor(tensor):
-            result = operation(initial_value, tensor) if initial_value is not None else operation(tensor)
+            result = operation(initial_value, tensor)
             processing_time = time.time() - start_time
             self._processing_stats["small_tensor_reductions"] = {
                 "count": self._processing_stats.get("small_tensor_reductions", {}).get("count", 0) + 1,
@@ -484,7 +484,7 @@ class EnhancedTensorChunker:
             optimized_config.max_memory_usage_mb = 1024
             optimized_config.compression_level = 6
         elif tensor_size_mb > 100:
-            optimized_config.chunk_size_mb = 50
+            optimized_config.chunk_size_mb = 150
             optimized_config.max_memory_usage_mb = 512
             optimized_config.compression_level = 4
 

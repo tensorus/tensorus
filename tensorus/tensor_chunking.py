@@ -107,6 +107,19 @@ class TensorChunker:
     - Stream chunks for memory-efficient processing
     """
 
+    @staticmethod
+    def _compression_available(algorithm: CompressionAlgorithm) -> bool:
+        """Check if a compression algorithm is available."""
+        if algorithm == CompressionAlgorithm.LZ4:
+            return LZ4_AVAILABLE
+        elif algorithm == CompressionAlgorithm.ZSTD:
+            return ZSTD_AVAILABLE
+        elif algorithm == CompressionAlgorithm.GZIP:
+            return GZIP_AVAILABLE
+        elif algorithm == CompressionAlgorithm.NONE:
+            return True
+        return False
+
     def __init__(self, config: Optional[TensorChunkingConfig] = None):
         self.config = config or TensorChunkingConfig()
         self._chunk_cache: Dict[str, bytes] = {}

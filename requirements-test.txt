@@ -15,10 +15,9 @@ tensorly
 transformers
 psycopg2-binary
 python-jose[cryptography]
-langchain-core>=0.1.0
-langchain-google>=0.1.1
-langchain-google-genai>=2.1.5
 # Optional dependencies for vector database features
 faiss-cpu>=1.7.0
 sentence-transformers>=2.2.0
 scikit-learn>=1.0.0
+psutil
+lz4
