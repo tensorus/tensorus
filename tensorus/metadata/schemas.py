@@ -257,3 +257,50 @@ class EmbeddingModelInfo(BaseModel):
     max_sequence_length: Optional[int] = None
     config: Optional[Dict[str, Any]] = None
 
+
+# --- Operation History Metadata ---
+
+class OperationHistoryMetadata(BaseModel):
+    """Metadata for tracking operations performed on tensors."""
+    tensor_id: UUID
+    operation_count: int = Field(default=0, ge=0)
+    last_operation_id: Optional[UUID] = None
+    last_operation_type: Optional[str] = None
+    last_operation_timestamp: Optional[datetime] = None
+    creation_operation_id: Optional[UUID] = None  # Operation that created this tensor
+    lineage_depth: int = Field(default=0, ge=0)  # Distance from root tensors
+    has_children: bool = Field(default=False)  # Whether this tensor was used as input to other operations
+    operation_tags: List[str] = Field(default_factory=list)  # Tags from operations
+    
+    @field_validator('operation_count')
+    def validate_operation_count(cls, v):
+        if v < 0:
+            raise ValueError('Operation count cannot be negative')
+        return v
+    
+    @field_validator('lineage_depth')
+    def validate_lineage_depth(cls, v):
+        if v < 0:
+            raise ValueError('Lineage depth cannot be negative')
+        return v
+
+
+class LineageReference(BaseModel):
+    """Reference to lineage information for a tensor."""
+    tensor_id: UUID
+    parent_tensor_count: int = Field(default=0, ge=0)
+    child_tensor_count: int = Field(default=0, ge=0)
+    ancestor_tensor_count: int = Field(default=0, ge=0)
+    descendant_tensor_count: int = Field(default=0, ge=0)
+    root_tensor_ids: List[UUID] = Field(default_factory=list)
+    leaf_tensor_ids: List[UUID] = Field(default_factory=list)
+    operation_chain_length: int = Field(default=0, ge=0)  # Total operations in longest path
+    branching_factor: int = Field(default=0, ge=0)  # Number of immediate children
+    
+    @field_validator('parent_tensor_count', 'child_tensor_count', 'ancestor_tensor_count', 
+                    'descendant_tensor_count', 'operation_chain_length', 'branching_factor')
+    def validate_counts(cls, v):
+        if v < 0:
+            raise ValueError('Count values cannot be negative')
+        return v
+

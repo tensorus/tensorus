@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from .schemas import (
     TensorDescriptor, SemanticMetadata,
     LineageMetadata, ComputationalMetadata, QualityMetadata,
-    RelationalMetadata, UsageMetadata
+    RelationalMetadata, UsageMetadata, OperationHistoryMetadata, LineageReference
 )
 
 class TensorusExportEntry(BaseModel):
@@ -17,6 +17,8 @@ class TensorusExportEntry(BaseModel):
     quality_metadata: Optional[QualityMetadata] = None
     relational_metadata: Optional[RelationalMetadata] = None
     usage_metadata: Optional[UsageMetadata] = None
+    operation_history_metadata: Optional[OperationHistoryMetadata] = None
+    lineage_reference: Optional[LineageReference] = None
 
 class TensorusExportData(BaseModel):
     export_format_version: str = Field(default="1.0") # Renamed for clarity
