@@ -594,14 +594,7 @@ class OperationalStorage:
 
     def save_tensor(self, tensor: torch.Tensor, dataset: str = "default") -> str:
         """Save tensor to storage."""
-        if not self.tensor_storage.dataset_exists(dataset):
-            self.tensor_storage.create_dataset(dataset)
         return self.tensor_storage.insert(dataset, tensor)
-
-    def add_tensor(self, tensor_id: str, metadata: Dict[str, Any]) -> None:
-        """Add tensor metadata to the index."""
-        if self.index_manager:
-            self.index_manager.add_tensor(tensor_id, metadata)
 
     def get_tensor_metadata(self, tensor_id: str) -> Dict[str, Any]:
         """Get tensor metadata."""
