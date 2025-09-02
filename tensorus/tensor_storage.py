@@ -444,6 +444,31 @@ class TensorStorage:
                                                 metadata about the tensor.
 
         Returns:
+            str: A unique ID assigned to the inserted tensor record. This ID is
+                 system-generated.
+
+        Raises:
+            DatasetNotFoundError: If the dataset `name` is not found.
+            TypeError: If the provided `tensor` object is not a PyTorch tensor.
+        """
+        if name not in self.datasets:
+            logging.error(f"Dataset '{name}' not found for insertion.")
+            raise DatasetNotFoundError(f"Dataset '{name}' not found.")
+
+        if not isinstance(tensor, torch.Tensor):
+            logging.error(f"Attempted to insert non-tensor data into dataset '{name}'.")
+            raise TypeError("Data to be inserted must be a torch.Tensor.")
+
+        # Ensure metadata consistency if not provided
+        if metadata is None:
+            metadata = {}
+        else:
+            # Make a copy to avoid modifying the caller's dictionary
+            metadata = metadata.copy()
+
+        # Validate against dataset schema if present
+        schema = self.datasets[name].get("schema")
+        if schema:
             if "shape" in schema and tuple(tensor.shape) != tuple(schema["shape"]):
                 raise SchemaValidationError(
                     f"Tensor shape {tuple(tensor.shape)} does not match schema shape {schema['shape']} for dataset '{name}'."
