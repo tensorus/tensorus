@@ -36,7 +36,6 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, Future
 import numpy as np
 import torch
-import logging
 
 from tensorus.tensor_ops import TensorOps
 from tensorus.tensor_storage import TensorStorage
@@ -545,14 +544,6 @@ class OperationalStorage:
         self.tensor_storage = tensor_storage
         self.index_manager = index_manager
         self.chunking_config = chunking_config or TensorChunkingConfig()
-
-        # Ensure a default dataset exists for operations/tests that assume it
-        try:
-            if not self.tensor_storage.dataset_exists("default"):
-                self.tensor_storage.create_dataset("default")
-                logging.info("Created missing 'default' dataset in TensorStorage during OperationalStorage init")
-        except Exception as e:
-            logging.warning(f"Failed to ensure 'default' dataset exists: {e}")
 
         # Initialize components
         self.chunker = TensorChunker(self.chunking_config)
