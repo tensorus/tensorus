@@ -121,6 +121,7 @@ class TensorusOperationalCore:
             "tensor_id": tensor_id,
             "shape": list(tensor.shape),
             "dtype": str(tensor.dtype),
+            "data_type": str(tensor.dtype),  # Add data_type for backward compatibility
             "byte_size": tensor.numel() * tensor.element_size(),
             "created_at": time.time(),
             "dataset": dataset
@@ -160,10 +161,11 @@ class TensorusOperationalCore:
             List of tensor IDs
         """
         if conditions:
-            return self.index_manager.query_tensors(conditions, limit=limit)
+            # Use index manager for filtered queries
+            return list(self.index_manager.query_tensors(conditions, limit=limit))
         else:
-            # Return all tensors (simplified - in practice would use storage)
-            return []
+            # Get all tensor IDs from storage
+            return list(self.operational_storage.storage.list_tensors(limit=limit))
 
     # ===== OPERATIONS =====
 
@@ -230,17 +232,12 @@ class TensorusOperationalCore:
         else:
             raise RuntimeError(f"Binary operation {operation} failed")
 
-    def _execute_unary_operation(self, operation: str,
-                               tensor: Union[str, torch.Tensor],
-                               parameters: Dict[str, Any]) -> 'OperationalTensor':
-        """Execute unary operation."""
-        tensor_ids = self._resolve_tensor_inputs([tensor])
-        result = self.operational_storage.execute_operation(
-            operation, tensor_ids, parameters, "operations"
-        )
-        if isinstance(result, OperationChain):
-            executed = result.execute()
-            if isinstance(executed, torch.Tensor):
+    def _execute_unary_operation(self, op_name: str, tensor: Union[str, torch.Tensor],
+                            params: Dict[str, Any]) -> 'OperationalTensor':
+        """Execute a unary operation."""
+        if isinstance(tensor, str):
+            tensor = self.get_tensor(tensor)
+        return getattr(tensor, op_name)(**params)
                 tensor_id = self.store_tensor(executed)
                 return OperationalTensor(tensor_id, self)
             elif isinstance(executed, str):

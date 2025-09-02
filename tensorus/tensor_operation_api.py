@@ -285,12 +285,15 @@ class TensorQueryExecutor:
         Returns:
             QueryResult or operation ID (for async)
         """
+        print(f"[DEBUG] execute_query called with query: {query}")
         start_time = time.time()
 
         # Parse query if it's a string
         if isinstance(query, str):
+            print(f"[DEBUG] Parsing query string: {query}")
             parser = TensorQueryParser()
             query = parser.parse_query(query)
+            print(f"[DEBUG] Parsed query: {query}")
 
         # Check cache
         cache_key = self._get_query_cache_key(query)
@@ -529,6 +532,29 @@ class TensorOperationAPI:
         self.streaming_manager = streaming_manager
         self.query_executor = TensorQueryExecutor(operational_storage, streaming_manager)
 
+    def _format_conditions(self, conditions: Dict[str, Any]) -> str:
+        """Format conditions into a query string.
+        
+        Args:
+            conditions: Dictionary of conditions {field: value}
+            
+        Returns:
+            Formatted conditions string
+        """
+        if not conditions:
+            return "1=1"  # Always true condition
+            
+        conditions_list = []
+        for field, value in conditions.items():
+            if isinstance(value, str):
+                # Handle string equality
+                conditions_list.append(f"{field} = '{value}'")
+            else:
+                # Handle other types directly
+                conditions_list.append(f"{field} = {value}")
+                
+        return " AND ".join(conditions_list)
+        
     def select_tensors(self, conditions: Dict[str, Any],
                       operations: Optional[List[str]] = None,
                       limit: Optional[int] = None) -> List[OperationalTensor]:
@@ -543,8 +569,10 @@ class TensorOperationAPI:
         Returns:
             List of OperationalTensor objects
         """
+        print(f"[DEBUG] select_tensors called with conditions: {conditions}")
         # Build query
         query_str = f"SELECT tensors WHERE {self._format_conditions(conditions)}"
+        print(f"[DEBUG] Generated query string: {query_str}")
 
         if operations:
             operation_str = " COMPUTE " + " AND ".join(operations)

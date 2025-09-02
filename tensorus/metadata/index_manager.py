@@ -74,19 +74,19 @@ class IndexManager:
         self.metadata_storage = storage
 
     def _create_default_indexes(self) -> None:
-        """Create default indexes for common queries."""
+        """Create default indexes for common query patterns."""
         with self._lock:
-            # Primary ID index (fast tensor lookup)
+            # Create basic indexes for common fields
             self.indexes["tensor_id"] = HashIndex("tensor_id", ["tensor_id"])
-
-            # Property indexes for common queries
             self.indexes["owner"] = HashIndex("owner", ["owner"])
             self.indexes["data_type"] = HashIndex("data_type", ["data_type"])
-            self.indexes["tags"] = HashIndex("tags", ["tags"])  # For tag-based queries
+            self.indexes["created_at"] = BTreeIndex("created_at", ["created_at"])
+            self.indexes["size"] = BTreeIndex("size", ["size"])
+            self.indexes["category"] = HashIndex("category", ["category"])  # Add index for category field
 
-            # Range indexes for numerical properties
-            self.indexes["byte_size"] = BTreeIndex("byte_size", ["byte_size"])
-            self.indexes["creation_timestamp"] = BTreeIndex("creation_timestamp", ["creation_timestamp"])
+            # Create composite indexes for common query patterns
+            self.indexes["owner_data_type"] = CompositeIndex("owner_data_type", ["owner", "data_type"])
+            self.indexes["data_type_shape"] = CompositeIndex("data_type_shape", ["data_type", "shape"])
 
             # Spatial index for shape queries
             self.indexes["shape"] = SpatialIndex("shape")
