@@ -10,7 +10,7 @@ except ImportError as e:
 # Test tensorus imports
 try:
     from tensorus.tensorus_operational_core import create_tensorus_core, TensorusOperationalCore
-    print("✅ Tensorus core imports successful"
+    print("✅ Tensorus core imports successful")
     
     # Test creating a core instance
     try:
