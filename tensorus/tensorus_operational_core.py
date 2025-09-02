@@ -237,17 +237,16 @@ class TensorusOperationalCore:
         """Execute a unary operation."""
         if isinstance(tensor, str):
             tensor = self.get_tensor(tensor)
-        return getattr(tensor, op_name)(**params)
-                tensor_id = self.store_tensor(executed)
-                return OperationalTensor(tensor_id, self)
-            elif isinstance(executed, str):
-                return OperationalTensor(executed, self)
-            else:
-                raise RuntimeError(f"Unexpected execute result type: {type(executed)}")
-        if hasattr(result, 'result_tensor_ids') and result.result_tensor_ids:
-            return OperationalTensor(result.result_tensor_ids[0], self)
+        # Execute the operation
+        executed = getattr(tensor, op_name)(**params)
+        
+        if isinstance(executed, torch.Tensor):
+            tensor_id = self.store_tensor(executed)
+            return OperationalTensor(tensor_id, self)
+        elif isinstance(executed, str):
+            return OperationalTensor(executed, self)
         else:
-            raise RuntimeError(f"Unary operation {operation} failed")
+            raise RuntimeError(f"Unexpected execute result type: {type(executed)}")
 
     def _resolve_tensor_inputs(self, inputs: List[Union[str, torch.Tensor]]) -> List[str]:
         """Resolve tensor inputs to tensor IDs."""
