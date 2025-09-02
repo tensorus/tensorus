@@ -81,7 +81,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get("/operations/recent?limit=10")
+                response = client.get("/api/v1/operations/recent?limit=10")
         
         assert response.status_code == 200
         data = response.json()
@@ -104,7 +104,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get("/operations/recent?operation_type=add&status=completed")
+                response = client.get("/api/v1/operations/recent?operation_type=add&status=completed")
         
         assert response.status_code == 200
     
@@ -115,7 +115,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get("/operations/recent?operation_type=invalid_type")
+                response = client.get("/api/v1/operations/recent?operation_type=invalid_type")
         
         assert response.status_code == 400
         assert "Invalid operation type" in response.json()["detail"]
@@ -149,7 +149,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get(f"/operations/tensor/{tensor_id}")
+                response = client.get(f"/api/v1/operations/tensor/{tensor_id}")
         
         assert response.status_code == 200
         data = response.json()
@@ -208,7 +208,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get(f"/lineage/tensor/{tensor_id}")
+                response = client.get(f"/api/v1/lineage/tensor/{tensor_id}")
         
         assert response.status_code == 200
         data = response.json()
@@ -231,7 +231,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get(f"/lineage/tensor/{tensor_id}")
+                response = client.get(f"/api/v1/lineage/tensor/{tensor_id}")
         
         assert response.status_code == 404
         assert "No lineage found" in response.json()["detail"]
@@ -252,7 +252,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get(f"/lineage/tensor/{tensor_id}/dot")
+                response = client.get(f"/api/v1/lineage/tensor/{tensor_id}/dot")
         
         assert response.status_code == 200
         data = response.json()
@@ -281,7 +281,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get(f"/lineage/tensor/{source_id}/path/{target_id}")
+                response = client.get(f"/api/v1/lineage/tensor/{source_id}/path/{target_id}")
         
         assert response.status_code == 200
         data = response.json()
@@ -308,7 +308,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get(f"/lineage/tensor/{source_id}/path/{target_id}")
+                response = client.get(f"/api/v1/lineage/tensor/{source_id}/path/{target_id}")
         
         assert response.status_code == 200
         data = response.json()
@@ -337,7 +337,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.return_value = mock_storage
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get("/operations/statistics")
+                response = client.get("/api/v1/operations/statistics")
         
         assert response.status_code == 200
         data = response.json()
@@ -350,7 +350,7 @@ class TestOperationHistoryAPI:
     def test_get_operation_types(self, client):
         """Test getting available operation types."""
         with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-            response = client.get("/operations/types")
+            response = client.get("/api/v1/operations/types")
         
         assert response.status_code == 200
         data = response.json()
@@ -365,7 +365,7 @@ class TestOperationHistoryAPI:
     def test_get_operation_statuses(self, client):
         """Test getting available operation statuses."""
         with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-            response = client.get("/operations/statuses")
+            response = client.get("/api/v1/operations/statuses")
         
         assert response.status_code == 200
         data = response.json()
@@ -380,12 +380,12 @@ class TestOperationHistoryAPI:
     def test_api_authentication(self, client):
         """Test API authentication requirement."""
         # Test without API key
-        response = client.get("/operations/recent")
+        response = client.get("/api/v1/operations/recent")
         assert response.status_code == 403  # Should require authentication
         
         # Test with invalid API key
         with patch('tensorus.api.routers.operations.verify_api_key', side_effect=Exception("Invalid API key")):
-            response = client.get("/operations/recent", headers={"Authorization": "Bearer invalid_key"})
+            response = client.get("/api/v1/operations/recent", headers={"Authorization": "Bearer invalid_key"})
             assert response.status_code == 500
     
     def test_error_handling(self, client):
@@ -395,7 +395,7 @@ class TestOperationHistoryAPI:
             mock_get_storage.side_effect = Exception("Storage error")
             
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
-                response = client.get("/operations/recent")
+                response = client.get("/api/v1/operations/recent")
         
         assert response.status_code == 500
         assert "Storage error" in response.json()["detail"]
@@ -439,7 +439,7 @@ class TestOperationHistoryAPIIntegration:
         with patch('tensorus.api.routers.operations.get_storage_with_history', return_value=storage_with_history):
             with patch('tensorus.api.routers.operations.verify_api_key', return_value="test_key"):
                 # Test recent operations
-                response = client.get("/operations/recent?limit=10")
+                response = client.get("/api/v1/operations/recent?limit=10")
                 assert response.status_code == 200
                 
                 data = response.json()
@@ -455,7 +455,7 @@ class TestOperationHistoryAPIIntegration:
                 assert add_op["status"] == "completed"
                 
                 # Test tensor operations
-                response = client.get(f"/operations/tensor/{result_id}")
+                response = client.get(f"/api/v1/operations/tensor/{result_id}")
                 assert response.status_code == 200
                 
                 data = response.json()
@@ -463,7 +463,7 @@ class TestOperationHistoryAPIIntegration:
                 assert data["count"] >= 1
                 
                 # Test tensor lineage
-                response = client.get(f"/lineage/tensor/{result_id}")
+                response = client.get(f"/api/v1/lineage/tensor/{result_id}")
                 assert response.status_code == 200
                 
                 data = response.json()
@@ -472,7 +472,7 @@ class TestOperationHistoryAPIIntegration:
                 assert data["total_operations"] >= 1
                 
                 # Test DOT export
-                response = client.get(f"/lineage/tensor/{result_id}/dot")
+                response = client.get(f"/api/v1/lineage/tensor/{result_id}/dot")
                 assert response.status_code == 200
                 
                 data = response.json()
@@ -480,7 +480,7 @@ class TestOperationHistoryAPIIntegration:
                 assert "digraph TensorLineage" in data["dot_graph"]
                 
                 # Test statistics
-                response = client.get("/operations/statistics")
+                response = client.get("/api/v1/operations/statistics")
                 assert response.status_code == 200
                 
                 data = response.json()
