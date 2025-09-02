@@ -444,32 +444,15 @@ class TensorStorage:
                                                 metadata about the tensor.
 
         Returns:
-            str: The unique record ID of the inserted tensor.
-
-        Raises:
-            DatasetNotFoundError: If the dataset is not found.
-            SchemaValidationError: If the tensor or metadata doesn't match the dataset schema.
-        """
-        # Initialize metadata if None
-        if metadata is None:
-            metadata = {}
-        
-        # Validate tensor type
-        if not isinstance(tensor, torch.Tensor):
-            raise TypeError(f"Expected torch.Tensor, got {type(tensor).__name__}")
-        
-        # Schema validation
-        if name in self.datasets and "schema" in self.datasets[name]:
-            schema = self.datasets[name]["schema"]
-            if schema and "shape" in schema and tuple(tensor.shape) != tuple(schema["shape"]):
+            if "shape" in schema and tuple(tensor.shape) != tuple(schema["shape"]):
                 raise SchemaValidationError(
                     f"Tensor shape {tuple(tensor.shape)} does not match schema shape {schema['shape']} for dataset '{name}'."
                 )
-            if schema and "dtype" in schema and str(tensor.dtype) != schema["dtype"]:
+            if "dtype" in schema and str(tensor.dtype) != schema["dtype"]:
                 raise SchemaValidationError(
                     f"Tensor dtype {tensor.dtype} does not match schema dtype {schema['dtype']} for dataset '{name}'."
                 )
-            if schema and "metadata" in schema:
+            if "metadata" in schema:
                 for field, type_name in schema["metadata"].items():
                     if field not in metadata:
                         raise SchemaValidationError(
@@ -481,10 +464,6 @@ class TensorStorage:
                             f"Metadata field '{field}' expected type {type_name}, got {type(metadata[field]).__name__}."
                         )
 
-        # Check if dataset exists
-        if name not in self.datasets:
-            raise DatasetNotFoundError(f"Dataset '{name}' not found.")
-        
         # Generate essential metadata fields
         system_record_id = str(uuid.uuid4())
         current_version = len(self.datasets[name]["tensors"]) + 1
@@ -883,8 +862,7 @@ class TensorStorage:
             return record_ids
             
     def batch_update_metadata(self, dataset_name: str, updates: List[Tuple[str, Dict[str, Any]]]) -> bool:
-        """
-        Update metadata for multiple tensors atomically.
+        """Update metadata for multiple tensors atomically.
         
         Args:
             dataset_name: Name of the target dataset
