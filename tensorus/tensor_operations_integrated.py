@@ -613,6 +613,18 @@ class OperationalStorage:
         except Exception:
             return {}
 
+    def add_tensor(self, tensor_id: str, metadata: Dict[str, Any]) -> None:
+        """Add a tensor's metadata to indexes via IndexManager.
+
+        Delegates to IndexManager.add_tensor. No-op if no index manager is configured.
+        """
+        if not self.index_manager:
+            return
+        try:
+            self.index_manager.add_tensor(tensor_id, metadata)
+        except Exception as e:
+            logging.warning(f"Failed to add tensor {tensor_id} to indexes: {e}")
+
     def execute_operation(self, operation_name: str, input_tensor_ids: List[str],
                          parameters: Optional[Dict[str, Any]] = None,
                          output_dataset: Optional[str] = None,
