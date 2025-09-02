@@ -4,7 +4,7 @@ if __package__ in (None, ""):
     __package__ = "tensorus"
 
 import torch
-from typing import List, Dict, Callable, Optional, Any, Tuple
+from typing import List, Dict, Callable, Optional, Any, Tuple, Union
 import logging
 import time
 import uuid
@@ -1426,6 +1426,129 @@ class TensorStorage:
         except Exception as e:
             logging.error(f"Failed to rebuild indexes for dataset '{dataset_name}': {e}")
             return False
+
+    # === Storage-Connected Operations ===
+    
+    def create_ops_interface(self):
+        """
+        Create a StorageConnectedTensorOps interface for this storage instance.
+        
+        Returns:
+            StorageConnectedTensorOps: Operations interface connected to this storage
+        """
+        from .storage_ops import StorageConnectedTensorOps
+        return StorageConnectedTensorOps(self)
+    
+    def tensor_add(self, dataset_name: str, tensor_id1: str, tensor_id2: Union[str, float, int],
+                  store_result: bool = True, result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """
+        Add two stored tensors or a tensor and scalar.
+        
+        Args:
+            dataset_name: Name of the dataset containing the tensors
+            tensor_id1: ID of the first tensor
+            tensor_id2: ID of the second tensor or a scalar value
+            store_result: Whether to store the result in the dataset
+            result_metadata: Additional metadata for the result
+            
+        Returns:
+            str: Record ID of stored result if store_result=True
+            OperationResult: Operation result if store_result=False
+        """
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.add(dataset_name, tensor_id1, tensor_id2, store_result, result_metadata)
+    
+    def tensor_subtract(self, dataset_name: str, tensor_id1: str, tensor_id2: Union[str, float, int],
+                       store_result: bool = True, result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """Subtract two stored tensors or a tensor and scalar."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.subtract(dataset_name, tensor_id1, tensor_id2, store_result, result_metadata)
+    
+    def tensor_multiply(self, dataset_name: str, tensor_id1: str, tensor_id2: Union[str, float, int],
+                       store_result: bool = True, result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """Multiply two stored tensors or a tensor and scalar."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.multiply(dataset_name, tensor_id1, tensor_id2, store_result, result_metadata)
+    
+    def tensor_matmul(self, dataset_name: str, tensor_id1: str, tensor_id2: str,
+                     store_result: bool = True, result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """Matrix multiply two stored tensors."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.matmul(dataset_name, tensor_id1, tensor_id2, store_result, result_metadata)
+    
+    def tensor_sum(self, dataset_name: str, tensor_id: str, dim: Optional[Union[int, Tuple[int, ...]]] = None,
+                  keepdim: bool = False, store_result: bool = True, 
+                  result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """Sum elements of a stored tensor."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.sum(dataset_name, tensor_id, dim, keepdim, store_result, result_metadata)
+    
+    def tensor_mean(self, dataset_name: str, tensor_id: str, dim: Optional[Union[int, Tuple[int, ...]]] = None,
+                   keepdim: bool = False, store_result: bool = True,
+                   result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """Compute mean of a stored tensor."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.mean(dataset_name, tensor_id, dim, keepdim, store_result, result_metadata)
+    
+    def tensor_reshape(self, dataset_name: str, tensor_id: str, shape: Tuple[int, ...],
+                      store_result: bool = True, result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """Reshape a stored tensor."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.reshape(dataset_name, tensor_id, shape, store_result, result_metadata)
+    
+    def tensor_transpose(self, dataset_name: str, tensor_id: str, dim0: int, dim1: int,
+                        store_result: bool = True, result_metadata: Optional[Dict[str, Any]] = None) -> Union[str, Any]:
+        """Transpose dimensions of a stored tensor."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.transpose(dataset_name, tensor_id, dim0, dim1, store_result, result_metadata)
+    
+    def tensor_svd(self, dataset_name: str, tensor_id: str, store_result: bool = True,
+                  result_metadata: Optional[Dict[str, Any]] = None) -> Union[Tuple[str, str, str], Tuple[Any, Any, Any]]:
+        """Perform SVD on a stored matrix."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.svd(dataset_name, tensor_id, store_result, result_metadata)
+    
+    def batch_tensor_operation(self, dataset_name: str, operation: str, tensor_ids: List[str],
+                              **operation_kwargs) -> List[str]:
+        """Apply an operation to multiple tensors in batch."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.batch_operation(dataset_name, operation, tensor_ids, **operation_kwargs)
+    
+    def enable_operation_caching(self, max_size: int = 100):
+        """Enable result caching for tensor operations."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        self._ops_interface.enable_caching(max_size)
+    
+    def disable_operation_caching(self):
+        """Disable result caching for tensor operations."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        self._ops_interface.disable_caching()
+    
+    def get_operation_cache_stats(self) -> Dict[str, Any]:
+        """Get operation cache statistics."""
+        if not hasattr(self, '_ops_interface'):
+            return {"enabled": False, "size": 0, "max_size": 0, "operations_cached": []}
+        return self._ops_interface.get_cache_stats()
+    
+    def benchmark_tensor_operation(self, dataset_name: str, operation: str, tensor_id: str,
+                                  iterations: int = 10, **kwargs) -> Dict[str, float]:
+        """Benchmark a tensor operation."""
+        if not hasattr(self, '_ops_interface'):
+            self._ops_interface = self.create_ops_interface()
+        return self._ops_interface.benchmark_operation(dataset_name, operation, tensor_id, iterations, **kwargs)
+
 
 # Public API exports
 __all__ = ["TensorStorage", "DatasetNotFoundError", "TensorNotFoundError", "SchemaValidationError", "TransactionError"]
