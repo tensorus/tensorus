@@ -17,7 +17,7 @@ mock_storage_with_history = Mock()
 
 with patch('tensorus.api.dependencies.get_storage_instance', return_value=mock_storage):
     with patch('tensorus.api.dependencies.get_storage_with_history', return_value=mock_storage_with_history):
-        from tensorus.api.endpoints import app
+        from tensorus.api import app
 
 from tensorus.operation_history import (
     OperationRecord, OperationType, OperationStatus, TensorLineage, OperationHistory

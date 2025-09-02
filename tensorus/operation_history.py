@@ -388,11 +388,14 @@ class OperationHistory(BaseModel):
         
         for operation in self.operations.values():
             # Check if tensor was an input
+            tensor_involved = False
             for inp in operation.inputs:
                 if inp.tensor_id and str(inp.tensor_id) == tensor_str:
                     result.append(operation)
+                    tensor_involved = True
                     break
-            else:
+            
+            if not tensor_involved:
                 # Check if tensor was an output
                 for out in operation.outputs:
                     if out.tensor_id and str(out.tensor_id) == tensor_str:

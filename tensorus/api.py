@@ -37,6 +37,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 # Import routers
 from tensorus.api.routers.query import router as query_router
 from tensorus.api.routers.vector import router as vector_router
+from tensorus.api.routers.operations import router as operations_router
 
 # Import models
 from tensorus.api.models import NQLQueryRequest, NQLResponse, TensorOutput
@@ -1984,6 +1985,7 @@ app.include_router(ops_router)
 # Include specialized routers
 app.include_router(query_router, prefix="/api/v1", tags=["Query"])
 app.include_router(vector_router, prefix="/api/v1/vector", tags=["Vector Database"])
+app.include_router(operations_router, prefix="/api/v1", tags=["Operation History"])
 
 # --- Root Endpoint ---
 @app.get("/", include_in_schema=False)

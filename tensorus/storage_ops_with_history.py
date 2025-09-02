@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 from datetime import datetime
 
 from .storage_ops import OperationResult, StorageConnectedTensorOps
+from .tensor_ops import TensorOps
 from .operation_history import (
     OperationRecord, OperationInput, OperationOutput, OperationExecutionInfo,
     OperationType, OperationStatus, OperationHistory, TensorLineage
@@ -175,6 +176,24 @@ class StorageConnectedTensorOpsWithHistory(StorageConnectedTensorOps):
             thread_id=str(self._system_info.get("thread_id"))
         )
     
+    def _retrieve_tensor(self, dataset_name: str, tensor_id: str) -> torch.Tensor:
+        """Retrieve a tensor from storage with enhanced error handling."""
+        try:
+            result = self.storage.get_tensor_by_id(dataset_name, tensor_id)
+            if isinstance(result, dict) and "tensor" in result:
+                return result["tensor"]
+            elif isinstance(result, torch.Tensor):
+                return result
+            else:
+                # Fallback for different storage formats
+                if hasattr(result, 'tensor'):
+                    return result.tensor
+                else:
+                    raise ValueError(f"Unexpected tensor format from storage: {type(result)}")
+        except Exception as e:
+            logging.error(f"Failed to retrieve tensor {tensor_id} from dataset {dataset_name}: {e}")
+            raise e
+
     def _record_operation(self, operation: OperationRecord, input_tensor_ids: List[UUID],
                          output_tensor_ids: List[UUID]) -> None:
         """Record an operation in the history."""
@@ -339,17 +358,17 @@ class StorageConnectedTensorOpsWithHistory(StorageConnectedTensorOps):
                 operation_record=operation
             )
             
-            # Complete operation record
-            if operation:
-                output = self._create_operation_output(None, result_tensor)
-                operation.mark_completed([output], execution_info)
-            
             # Cache the result
             self._cache_result(cache_key, result)
             
             # Store or return result
             if store_result:
                 result_id = self._store_result_with_history(dataset_name, result, result_metadata)
+                
+                # Complete operation record with actual result tensor ID
+                if operation:
+                    output = self._create_operation_output(result_id, result_tensor)
+                    operation.mark_completed([output], execution_info)
                 
                 # Record operation in history
                 if operation and self.enable_history:
@@ -359,8 +378,13 @@ class StorageConnectedTensorOpsWithHistory(StorageConnectedTensorOps):
                     self._record_operation(operation, input_ids, [UUID(result_id)])
                 
                 return result_id
-            
-            return result
+            else:
+                # Complete operation record without tensor ID
+                if operation:
+                    output = self._create_operation_output(None, result_tensor)
+                    operation.mark_completed([output], execution_info)
+                
+                return result
             
         except Exception as e:
             # Record operation failure
@@ -454,19 +478,29 @@ class StorageConnectedTensorOpsWithHistory(StorageConnectedTensorOps):
                 operation_record=operation
             )
             
-            if operation:
-                output = self._create_operation_output(None, result_tensor)
-                operation.mark_completed([output], execution_info)
-            
+            # Cache the result
             self._cache_result(cache_key, result)
             
             if store_result:
                 result_id = self._store_result_with_history(dataset_name, result, result_metadata)
+                
+                # Complete operation record with actual result tensor ID
+                if operation:
+                    output = self._create_operation_output(result_id, result_tensor)
+                    operation.mark_completed([output], execution_info)
+                
+                # Record operation in history
                 if operation and self.enable_history:
                     self._record_operation(operation, [UUID(tensor_id1), UUID(tensor_id2)], [UUID(result_id)])
+                
                 return result_id
-            
-            return result
+            else:
+                # Complete operation record without tensor ID
+                if operation:
+                    output = self._create_operation_output(None, result_tensor)
+                    operation.mark_completed([output], execution_info)
+                
+                return result
             
         except Exception as e:
             if operation:
