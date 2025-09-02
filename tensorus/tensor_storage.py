@@ -16,6 +16,13 @@ from io import BytesIO
 from contextlib import contextmanager
 
 try:
+    from .compression import TensorCompression, CompressionConfig, get_compression_preset
+except ImportError:
+    TensorCompression = None
+    CompressionConfig = None
+    get_compression_preset = None
+
+try:
     import boto3  # Optional dependency for S3 support
     from botocore.exceptions import ClientError
 except Exception:  # pragma: no cover - boto3 is optional at runtime
@@ -52,7 +59,10 @@ class TensorStorage:
     Optionally, can persist datasets to disk if a storage_path is provided.
     """
 
-    def __init__(self, storage_path: Optional[str] = "tensor_data"):
+    def __init__(self, 
+                 storage_path: Optional[str] = "tensor_data",
+                 compression_config: Optional[CompressionConfig] = None,
+                 compression_preset: Optional[str] = None):
         """
         Initializes the TensorStorage.
 
@@ -65,6 +75,8 @@ class TensorStorage:
             storage_path (Optional[str]): Path to a directory for storing datasets.
                                          If None, storage is in-memory only.
                                          Defaults to "tensor_data".
+            compression_config (Optional[CompressionConfig]): Compression configuration.
+            compression_preset (Optional[str]): Named compression preset (overrides config).
         """
         self.datasets: Dict[str, Dict[str, List[Any]]] = {}
         self.storage_path: Optional[Path] = None
@@ -72,6 +84,22 @@ class TensorStorage:
         self._s3_bucket: Optional[str] = None
         self._s3_prefix: str = ""
         self._s3_client = None
+        
+        # Compression support
+        self._compression_enabled = TensorCompression is not None
+        if self._compression_enabled:
+            if compression_preset:
+                self.compression_config = get_compression_preset(compression_preset)
+            elif compression_config:
+                self.compression_config = compression_config
+            else:
+                self.compression_config = CompressionConfig()  # No compression by default
+            self.tensor_compression = self.compression_config.create_tensor_compression()
+            logging.info(f"TensorStorage compression enabled: {self.compression_config.compression}/{self.compression_config.quantization}")
+        else:
+            self.compression_config = None
+            self.tensor_compression = None
+            logging.warning("TensorStorage compression module not available")
         
         # Transactional support
         self._transaction_lock = threading.RLock()
@@ -105,6 +133,30 @@ class TensorStorage:
         for dataset_name in self.datasets.keys():
             if dataset_name not in self._dataset_locks:
                 self._dataset_locks[dataset_name] = threading.RLock()
+                
+    def _decompress_tensor_if_needed(self, tensor_data: Any, metadata: Dict[str, Any]) -> torch.Tensor:
+        """Helper method to decompress tensor data if it's compressed."""
+        if not metadata.get("compressed", False):
+            # Not compressed, return as-is
+            if isinstance(tensor_data, torch.Tensor):
+                return tensor_data
+            elif isinstance(tensor_data, (list, tuple)):
+                return torch.tensor(tensor_data)
+            else:
+                # Handle other data types
+                return tensor_data
+            
+        if not self._compression_enabled or not self.tensor_compression:
+            logging.error("Cannot decompress tensor: compression module not available")
+            raise RuntimeError("Cannot decompress tensor: compression module not available")
+            
+        try:
+            compression_metadata = metadata.get("compression_metadata", {})
+            decompressed_tensor = self.tensor_compression.decompress_tensor(tensor_data, compression_metadata)
+            return decompressed_tensor
+        except Exception as e:
+            logging.error(f"Failed to decompress tensor {metadata.get('record_id', 'unknown')}: {e}")
+            raise RuntimeError(f"Failed to decompress tensor: {e}")
 
     # --- S3 Helpers ---
     def _configure_s3_backend(self, uri: str) -> None:
@@ -249,11 +301,28 @@ class TensorStorage:
         if (not self.storage_path and not self._use_s3) or dataset_name not in self.datasets:
             # Do nothing if persistence is not enabled or dataset doesn't exist (e.g., during deletion)
             return
-        # Prepare data for saving
+        # Prepare data for saving with compression support
+        dataset = self.datasets[dataset_name]
+        
+        # Handle tensors based on compression state
+        tensors_data = []
+        for i, tensor_data in enumerate(dataset["tensors"]):
+            metadata = dataset["metadata"][i]
+            if metadata.get("compressed", False):
+                # Already compressed data (bytes)
+                tensors_data.append(tensor_data)
+            else:
+                # Raw tensor data
+                if isinstance(tensor_data, torch.Tensor):
+                    tensors_data.append(tensor_data.clone().cpu())
+                else:
+                    tensors_data.append(tensor_data)
+            
         data_to_save = {
-            "tensors": [t.clone().cpu() for t in self.datasets[dataset_name]["tensors"]],
-            "metadata": self.datasets[dataset_name]["metadata"],
-            "schema": self.datasets[dataset_name].get("schema")
+            "tensors": tensors_data,
+            "metadata": dataset["metadata"],
+            "schema": dataset.get("schema"),
+            "compression_config": self.compression_config.to_dict() if self.compression_config else None
         }
 
         try:
@@ -302,7 +371,8 @@ class TensorStorage:
                                     self.datasets[dataset_name] = {
                                         "tensors": loaded_data["tensors"],
                                         "metadata": loaded_data["metadata"],
-                                        "schema": loaded_data.get("schema")
+                                        "schema": loaded_data.get("schema"),
+                                        "compression_config": loaded_data.get("compression_config")
                                     }
                                     logging.info(f"Dataset '{dataset_name}' loaded successfully from s3://{self._s3_bucket}/{key}")
                                 else:
@@ -321,7 +391,8 @@ class TensorStorage:
                         self.datasets[dataset_name] = {
                             "tensors": loaded_data["tensors"],
                             "metadata": loaded_data["metadata"],
-                            "schema": loaded_data.get("schema")
+                            "schema": loaded_data.get("schema"),
+                            "compression_config": loaded_data.get("compression_config")
                         }
                         logging.info(f"Dataset '{dataset_name}' loaded successfully from {file_path}")
                     else:
@@ -513,13 +584,35 @@ class TensorStorage:
         final_metadata["dtype"] = metadata.get("dtype", str(tensor.dtype))
         final_metadata["version"] = current_version # Version is system-controlled.
 
-        # --- Placeholder for Chunking Logic ---
-        # In a real-world scenario, large tensors might be split into chunks here.
-        # Each chunk would be stored, and metadata would track these chunks.
-        # For this example, the entire tensor is stored directly.
-        # ------------------------------------
+        # --- Compression and Storage ---
+        # Apply compression if enabled and algorithms are not 'none'
+        should_compress = (
+            self._compression_enabled and 
+            self.tensor_compression and
+            (self.compression_config.compression != "none" or self.compression_config.quantization != "none")
+        )
+        
+        if should_compress:
+            try:
+                compressed_bytes, compression_metadata = self.tensor_compression.compress_tensor(tensor.clone())
+                # Store compressed data instead of raw tensor
+                tensor_to_store = compressed_bytes
+                # Add compression metadata to tensor metadata
+                final_metadata.update({
+                    "compressed": True,
+                    "compression_metadata": compression_metadata
+                })
+                logging.debug(f"Tensor compressed: {compression_metadata['original_size']} -> {compression_metadata['compressed_size']} bytes")
+            except Exception as e:
+                logging.warning(f"Compression failed for tensor {metadata_record_id}: {e}. Storing uncompressed.")
+                tensor_to_store = tensor.clone()
+                final_metadata["compressed"] = False
+        else:
+            # Store raw tensor (backward compatibility)
+            tensor_to_store = tensor.clone()
+            final_metadata["compressed"] = False
 
-        self.datasets[name]["tensors"].append(tensor.clone()) # Store a copy of the tensor to prevent external modifications
+        self.datasets[name]["tensors"].append(tensor_to_store)
         self.datasets[name]["metadata"].append(final_metadata)
         
         # Log the record_id actually stored (either user provided or generated)
@@ -548,10 +641,15 @@ class TensorStorage:
             raise DatasetNotFoundError(f"Dataset '{name}' not found.")
 
         logging.debug(f"Retrieving all {len(self.datasets[name]['tensors'])} tensors from dataset '{name}'.")
-        # --- Placeholder for Reassembling Chunks ---
-        # If data was chunked, it would be reassembled here before returning.
-        # -----------------------------------------
-        return self.datasets[name]["tensors"]
+        
+        # Decompress tensors if needed
+        tensors = []
+        for i, tensor_data in enumerate(self.datasets[name]["tensors"]):
+            metadata = self.datasets[name]["metadata"][i]
+            decompressed_tensor = self._decompress_tensor_if_needed(tensor_data, metadata)
+            tensors.append(decompressed_tensor)
+        
+        return tensors
 
     def get_dataset_with_metadata(self, name: str) -> List[Dict[str, Any]]:
         """
@@ -575,8 +673,9 @@ class TensorStorage:
         logging.debug(f"Retrieving all {len(self.datasets[name]['tensors'])} tensors and metadata from dataset '{name}'.")
 
         results = []
-        for tensor, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
-            results.append({"tensor": tensor, "metadata": meta})
+        for tensor_data, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
+            decompressed_tensor = self._decompress_tensor_if_needed(tensor_data, meta)
+            results.append({"tensor": decompressed_tensor, "metadata": meta})
         return results
 
 
@@ -611,14 +710,15 @@ class TensorStorage:
 
         logging.debug(f"Querying dataset '{name}' with custom function.")
         results = []
-        # --- Placeholder for Optimized Querying ---
+        # --- Optimized Querying with Decompression ---
         # In a real system, metadata indexing would speed this up significantly.
         # Query might operate directly on chunks or specific metadata fields first.
         # ----------------------------------------
-        for tensor, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
+        for tensor_data, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
             try:
-                if query_fn(tensor, meta):
-                    results.append({"tensor": tensor, "metadata": meta})
+                decompressed_tensor = self._decompress_tensor_if_needed(tensor_data, meta)
+                if query_fn(decompressed_tensor, meta):
+                    results.append({"tensor": decompressed_tensor, "metadata": meta})
             except Exception as e:
                 logging.warning(f"Error executing query_fn on tensor {meta.get('record_id', 'N/A')} in dataset '{name}': {e}")
                 # Optionally re-raise or continue based on desired strictness
@@ -648,10 +748,11 @@ class TensorStorage:
             raise DatasetNotFoundError(f"Dataset '{name}' not found.")
 
         # This is inefficient for large datasets; requires an index in a real system.
-        for tensor, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
+        for tensor_data, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
              if meta.get("record_id") == record_id:
                  logging.debug(f"Tensor with record_id '{record_id}' found in dataset '{name}'.")
-                 return {"tensor": tensor, "metadata": meta}
+                 decompressed_tensor = self._decompress_tensor_if_needed(tensor_data, meta)
+                 return {"tensor": decompressed_tensor, "metadata": meta}
 
         logging.warning(f"Tensor with record_id '{record_id}' not found in dataset '{name}'.")
         raise TensorNotFoundError(f"Tensor '{record_id}' not found in dataset '{name}'.")
@@ -696,9 +797,12 @@ class TensorStorage:
         # likely involve optimized queries or index lookups.
         sampled_records = []
         for i in indices:
+            tensor_data = self.datasets[name]["tensors"][i]
+            metadata = self.datasets[name]["metadata"][i]
+            decompressed_tensor = self._decompress_tensor_if_needed(tensor_data, metadata)
             sampled_records.append({
-                "tensor": self.datasets[name]["tensors"][i],
-                "metadata": self.datasets[name]["metadata"][i]
+                "tensor": decompressed_tensor,
+                "metadata": metadata
             })
 
         return sampled_records
@@ -725,7 +829,7 @@ class TensorStorage:
         metadata = self.datasets[name]["metadata"]
         end = offset + limit if limit is not None else None
         sliced = list(zip(tensors, metadata))[offset:end]
-        return [{"tensor": t, "metadata": m} for t, m in sliced]
+        return [{"tensor": self._decompress_tensor_if_needed(tensor_data, meta), "metadata": meta} for tensor_data, meta in sliced]
 
     def delete_dataset(self, name: str) -> bool:
         """
@@ -921,9 +1025,76 @@ class TensorStorage:
             for record_id in record_ids:
                 self.delete_tensor(dataset_name, record_id)
             return True
+            
+    # === Compression Management Methods ===
+    
+    def set_compression_config(self, config: 'CompressionConfig') -> None:
+        """Update compression configuration.
+        
+        Args:
+            config: New compression configuration
+        """
+        if not self._compression_enabled:
+            raise RuntimeError("Compression module not available")
+            
+        self.compression_config = config
+        self.tensor_compression = config.create_tensor_compression()
+        logging.info(f"Compression config updated: {config.compression}/{config.quantization}")
+    
+    def set_compression_preset(self, preset: str) -> None:
+        """Set compression using a preset.
+        
+        Args:
+            preset: Named preset (none, fast, balanced, maximum, fp16_only, int8_only)
+        """
+        if not self._compression_enabled:
+            raise RuntimeError("Compression module not available")
+            
+        config = get_compression_preset(preset)
+        self.set_compression_config(config)
+    
+    def get_compression_stats(self, dataset_name: str) -> Dict[str, Any]:
+        """Get compression statistics for a dataset.
+        
+        Args:
+            dataset_name: Name of the dataset
+            
+        Returns:
+            Dictionary with compression statistics
+        """
+        if dataset_name not in self.datasets:
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' not found.")
+            
+        stats = {
+            "total_tensors": len(self.datasets[dataset_name]["tensors"]),
+            "compressed_tensors": 0,
+            "total_original_size": 0,
+            "total_compressed_size": 0,
+            "compression_algorithms": set(),
+            "quantization_algorithms": set()
+        }
+        
+        for meta in self.datasets[dataset_name]["metadata"]:
+            if meta.get("compressed", False):
+                stats["compressed_tensors"] += 1
+                comp_meta = meta.get("compression_metadata", {})
+                stats["total_original_size"] += comp_meta.get("original_size", 0)
+                stats["total_compressed_size"] += comp_meta.get("compressed_size", 0)
+                stats["compression_algorithms"].add(comp_meta.get("compression", "unknown"))
+                stats["quantization_algorithms"].add(comp_meta.get("quantization", "unknown"))
+        
+        stats["compression_algorithms"] = list(stats["compression_algorithms"])
+        stats["quantization_algorithms"] = list(stats["quantization_algorithms"])
+        
+        if stats["total_original_size"] > 0:
+            stats["average_compression_ratio"] = stats["total_original_size"] / stats["total_compressed_size"]
+        else:
+            stats["average_compression_ratio"] = 1.0
+            
+        return stats
 
 # Public API exports
-__all__ = ["TensorStorage", "DatasetNotFoundError", "TensorNotFoundError"]
+__all__ = ["TensorStorage", "DatasetNotFoundError", "TensorNotFoundError", "SchemaValidationError", "TransactionError"]
 
 # Example Usage (can be run directly if needed)
 if __name__ == "__main__":
