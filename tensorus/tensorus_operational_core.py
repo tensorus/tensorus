@@ -16,7 +16,7 @@ from typing import Dict, List, Set, Tuple, Optional, Any, Iterator, Callable, Un
 from pathlib import Path
 
 from tensorus.tensor_storage import TensorStorage
-from tensorus.tensor_operations_integrated import OperationalStorage, OperationChain
+from tensorus.tensor_operations_integrated import OperationalStorage
 from tensorus.tensor_streaming_pipeline import StreamingOperationManager
 from tensorus.tensor_operation_api import TensorOperationAPI
 from tensorus.metadata.index_manager import IndexManager
@@ -120,7 +120,7 @@ class TensorusOperationalCore:
         full_metadata.update({
             "tensor_id": tensor_id,
             "shape": list(tensor.shape),
-            "dtype": str(tensor.dtype),
+            "data_type": str(tensor.dtype),
             "byte_size": tensor.numel() * tensor.element_size(),
             "created_at": time.time(),
             "dataset": dataset
@@ -141,11 +141,7 @@ class TensorusOperationalCore:
         Returns:
             OperationalTensor for operations
         """
-        # Validate tensor exists
-        metadata = self.operational_storage.get_tensor_metadata(tensor_id)
-        if not metadata:
-            raise ValueError(f"Tensor '{tensor_id}' not found")
-        return OperationalTensor(tensor_id, self)
+        return self.operational_storage.get_tensor(tensor_id)
 
     def list_tensors(self, conditions: Optional[Dict[str, Any]] = None,
                     limit: Optional[int] = None) -> List[str]:
@@ -216,17 +212,8 @@ class TensorusOperationalCore:
         result = self.operational_storage.execute_operation(
             operation, tensor_ids, {}, "operations"
         )
-        if isinstance(result, OperationChain):
-            executed = result.execute()
-            if isinstance(executed, torch.Tensor):
-                tensor_id = self.store_tensor(executed)
-                return OperationalTensor(tensor_id, self)
-            elif isinstance(executed, str):
-                return OperationalTensor(executed, self)
-            else:
-                raise RuntimeError(f"Unexpected execute result type: {type(executed)}")
         if hasattr(result, 'result_tensor_ids') and result.result_tensor_ids:
-            return OperationalTensor(result.result_tensor_ids[0], self)
+            return self.operational_storage.get_tensor(result.result_tensor_ids[0])
         else:
             raise RuntimeError(f"Binary operation {operation} failed")
 
@@ -238,17 +225,8 @@ class TensorusOperationalCore:
         result = self.operational_storage.execute_operation(
             operation, tensor_ids, parameters, "operations"
         )
-        if isinstance(result, OperationChain):
-            executed = result.execute()
-            if isinstance(executed, torch.Tensor):
-                tensor_id = self.store_tensor(executed)
-                return OperationalTensor(tensor_id, self)
-            elif isinstance(executed, str):
-                return OperationalTensor(executed, self)
-            else:
-                raise RuntimeError(f"Unexpected execute result type: {type(executed)}")
         if hasattr(result, 'result_tensor_ids') and result.result_tensor_ids:
-            return OperationalTensor(result.result_tensor_ids[0], self)
+            return self.operational_storage.get_tensor(result.result_tensor_ids[0])
         else:
             raise RuntimeError(f"Unary operation {operation} failed")
 
