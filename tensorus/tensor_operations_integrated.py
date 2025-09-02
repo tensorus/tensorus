@@ -40,7 +40,7 @@ import torch
 from tensorus.tensor_ops import TensorOps
 from tensorus.tensor_storage import TensorStorage
 from tensorus.tensor_chunking import TensorChunker, TensorChunkingConfig
-from tensorus.metadata.indexing import IndexManager
+from tensorus.metadata.index_manager import IndexManager
 
 
 class OperationType(Enum):
