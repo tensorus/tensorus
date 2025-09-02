@@ -23,6 +23,15 @@ except ImportError:
     get_compression_preset = None
 
 try:
+    from .indexing import IndexManager, QueryBuilder, HashIndex, RangeIndex, TensorPropertyIndex
+except ImportError:
+    IndexManager = None
+    QueryBuilder = None
+    HashIndex = None
+    RangeIndex = None
+    TensorPropertyIndex = None
+
+try:
     import boto3  # Optional dependency for S3 support
     from botocore.exceptions import ClientError
 except Exception:  # pragma: no cover - boto3 is optional at runtime
@@ -101,6 +110,14 @@ class TensorStorage:
             self.tensor_compression = None
             logging.warning("TensorStorage compression module not available")
         
+        # Indexing support
+        self._indexing_enabled = IndexManager is not None
+        self._dataset_indexes: Dict[str, IndexManager] = {}
+        if self._indexing_enabled:
+            logging.info("TensorStorage indexing enabled")
+        else:
+            logging.warning("TensorStorage indexing module not available")
+        
         # Transactional support
         self._transaction_lock = threading.RLock()
         self._active_transactions: Dict[str, Dict[str, Any]] = {}  # transaction_id -> transaction_state
@@ -129,10 +146,14 @@ class TensorStorage:
         else:
             logging.info("TensorStorage initialized (In-Memory only mode).")
             
-        # Initialize dataset locks for any existing datasets
+        # Initialize dataset locks and indexes for any existing datasets
         for dataset_name in self.datasets.keys():
             if dataset_name not in self._dataset_locks:
                 self._dataset_locks[dataset_name] = threading.RLock()
+            # Initialize indexes for existing datasets
+            if self._indexing_enabled and dataset_name not in self._dataset_indexes:
+                self._dataset_indexes[dataset_name] = IndexManager(dataset_name)
+                self._rebuild_indexes_for_dataset(dataset_name)
                 
     def _decompress_tensor_if_needed(self, tensor_data: Any, metadata: Dict[str, Any]) -> torch.Tensor:
         """Helper method to decompress tensor data if it's compressed."""
@@ -157,6 +178,103 @@ class TensorStorage:
         except Exception as e:
             logging.error(f"Failed to decompress tensor {metadata.get('record_id', 'unknown')}: {e}")
             raise RuntimeError(f"Failed to decompress tensor: {e}")
+
+    def _rebuild_indexes_for_dataset(self, dataset_name: str) -> None:
+        """Rebuild all indexes for a dataset from existing data."""
+        if not self._indexing_enabled:
+            return
+        
+        index_manager = self._dataset_indexes.get(dataset_name)
+        if not index_manager:
+            return
+        
+        try:
+            # Get all records for this dataset
+            dataset = self.datasets.get(dataset_name, {})
+            
+            # Initialize the basic indexes if they don't exist
+            if not index_manager.get_index("record_id"):
+                from tensorus.indexing import HashIndex
+                index_manager.add_index("record_id", HashIndex("record_id"))
+            if not index_manager.get_index("timestamp"):
+                from tensorus.indexing import RangeIndex
+                index_manager.add_index("timestamp", RangeIndex("timestamp"))
+            
+            # Rebuild indexes from existing data
+            for record_id, record_data in dataset.items():
+                if isinstance(record_data, dict):
+                    metadata = record_data.get("metadata", {})
+                    tensor_data = record_data.get("tensor")
+                    
+                    # Update record_id index
+                    record_id_index = index_manager.get_index("record_id")
+                    if record_id_index:
+                        record_id_index.insert(record_id, record_id)
+                    
+                    # Update timestamp index if available
+                    if "timestamp" in metadata:
+                        timestamp_index = index_manager.get_index("timestamp")
+                        if timestamp_index:
+                            timestamp_index.insert(record_id, metadata["timestamp"])
+                    
+                    # Update metadata indexes
+                    for key, value in metadata.items():
+                        if key not in ["tensor", "compressed", "compression_metadata"]:
+                            # Create or update index for this metadata key
+                            if not index_manager.get_index(f"metadata_{key}"):
+                                if isinstance(value, (int, float)):
+                                    from tensorus.indexing import RangeIndex
+                                    index_manager.add_index(f"metadata_{key}", RangeIndex(f"metadata_{key}"))
+                                else:
+                                    from tensorus.indexing import HashIndex
+                                    index_manager.add_index(f"metadata_{key}", HashIndex(f"metadata_{key}"))
+                            
+                            meta_index = index_manager.get_index(f"metadata_{key}")
+                            if meta_index:
+                                meta_index.insert(record_id, value)
+                    
+                    # Update tensor property indexes if tensor is available
+                    if tensor_data is not None:
+                        try:
+                            # Decompress if needed
+                            tensor = self._decompress_tensor_if_needed(tensor_data, metadata)
+                            
+                            # Add tensor property indexes
+                            if not index_manager.get_index("tensor_shape"):
+                                from tensorus.indexing import TensorPropertyIndex
+                                shape_extractor = lambda t: tuple(t.shape)
+                                index_manager.add_index("tensor_shape", TensorPropertyIndex("tensor_shape", shape_extractor))
+                            if not index_manager.get_index("tensor_dtype"):
+                                from tensorus.indexing import HashIndex
+                                index_manager.add_index("tensor_dtype", HashIndex("tensor_dtype"))
+                            
+                            # Update tensor property indexes
+                            shape_index = index_manager.get_index("tensor_shape")
+                            if shape_index:
+                                shape_index.insert(record_id, None, tensor)
+                            
+                            dtype_index = index_manager.get_index("tensor_dtype")
+                            if dtype_index:
+                                dtype_index.insert(record_id, str(tensor.dtype))
+                                
+                        except Exception as e:
+                            logging.warning(f"Failed to index tensor properties for {record_id}: {e}")
+                            
+            logging.info(f"Successfully rebuilt indexes for dataset '{dataset_name}'")
+            
+        except Exception as e:
+            logging.error(f"Failed to rebuild indexes for dataset '{dataset_name}': {e}")
+
+    def _get_or_create_index_manager(self, dataset_name: str):
+        """Get or create an index manager for the specified dataset."""
+        if not self._indexing_enabled:
+            return None
+        
+        if dataset_name not in self._dataset_indexes:
+            from tensorus.indexing import IndexManager
+            self._dataset_indexes[dataset_name] = IndexManager(dataset_name)
+        
+        return self._dataset_indexes[dataset_name]
 
     # --- S3 Helpers ---
     def _configure_s3_backend(self, uri: str) -> None:
@@ -494,6 +612,11 @@ class TensorStorage:
                 raise ValueError(f"Dataset '{name}' already exists.")
 
             self.datasets[name] = {"tensors": [], "metadata": [], "schema": schema}
+            
+            # Initialize indexes for new dataset
+            if self._indexing_enabled:
+                self._get_or_create_index_manager(name)
+            
             logging.info(f"Dataset '{name}' created successfully.")
             self._save_dataset(name) # Save after creation
  
@@ -614,6 +737,15 @@ class TensorStorage:
 
         self.datasets[name]["tensors"].append(tensor_to_store)
         self.datasets[name]["metadata"].append(final_metadata)
+        
+        # Update indexes
+        if self._indexing_enabled:
+            index_manager = self._get_or_create_index_manager(name)
+            if index_manager:
+                try:
+                    index_manager.insert_record(final_metadata['record_id'], final_metadata, tensor)
+                except Exception as e:
+                    logging.warning(f"Failed to update indexes for record '{final_metadata['record_id']}': {e}")
         
         # Log the record_id actually stored (either user provided or generated)
         logging.debug(
@@ -747,15 +879,31 @@ class TensorStorage:
             logging.error(f"Dataset '{name}' not found for get_tensor_by_id.")
             raise DatasetNotFoundError(f"Dataset '{name}' not found.")
 
-        # This is inefficient for large datasets; requires an index in a real system.
+        # Use index for O(1) lookup if available
+        if self._indexing_enabled:
+            index_manager = self._get_or_create_index_manager(name)
+            if index_manager:
+                record_id_index = index_manager.get_index("record_id")
+                if record_id_index:
+                    matching_ids = record_id_index.lookup(record_id)
+                    if matching_ids:
+                        # Find the record in the dataset
+                        for i, meta in enumerate(self.datasets[name]["metadata"]):
+                            if meta.get("record_id") == record_id:
+                                tensor_data = self.datasets[name]["tensors"][i]
+                                decompressed_tensor = self._decompress_tensor_if_needed(tensor_data, meta)
+                                logging.debug(f"Tensor with record_id '{record_id}' found in dataset '{name}' via index.")
+                                return {"tensor": decompressed_tensor, "metadata": meta}
+        
+        # Fallback to linear search (for backward compatibility or when indexing is disabled)
         for tensor_data, meta in zip(self.datasets[name]["tensors"], self.datasets[name]["metadata"]):
              if meta.get("record_id") == record_id:
-                 logging.debug(f"Tensor with record_id '{record_id}' found in dataset '{name}'.")
+                 logging.debug(f"Tensor with record_id '{record_id}' found in dataset '{name}' via linear search.")
                  decompressed_tensor = self._decompress_tensor_if_needed(tensor_data, meta)
                  return {"tensor": decompressed_tensor, "metadata": meta}
 
         logging.warning(f"Tensor with record_id '{record_id}' not found in dataset '{name}'.")
-        raise TensorNotFoundError(f"Tensor '{record_id}' not found in dataset '{name}'.")
+        raise TensorNotFoundError(f"Tensor {record_id} not found in dataset {name}.")
 
     # --- ADDED METHOD (from Step 3) ---
     def sample_dataset(self, name: str, n_samples: int) -> List[Dict[str, Any]]:
@@ -961,15 +1109,28 @@ class TensorStorage:
         dataset = self.datasets[dataset_name]
         for i, meta in enumerate(dataset["metadata"]):
             if meta.get("record_id") == record_id:
+                # Get tensor data for index cleanup
+                tensor_data = dataset["tensors"][i]
+                
+                # Update indexes before deletion
+                if self._indexing_enabled:
+                    index_manager = self._get_or_create_index_manager(dataset_name)
+                    if index_manager:
+                        try:
+                            # Decompress tensor if needed for index cleanup
+                            tensor = self._decompress_tensor_if_needed(tensor_data, meta)
+                            index_manager.delete_record(record_id, meta, tensor)
+                        except Exception as e:
+                            logging.warning(f"Failed to update indexes during deletion of record '{record_id}': {e}")
+                
                 del dataset["tensors"][i]
                 del dataset["metadata"][i]
                 logging.info(f"Tensor record '{record_id}' deleted from dataset '{dataset_name}'.")
                 self._save_dataset(dataset_name) # Save after tensor deletion
                 return True
 
-            logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for deletion.")
-            raise TensorNotFoundError(f"Tensor '{record_id}' not found in dataset '{dataset_name}'.")
-            
+        logging.warning(f"Record '{record_id}' not found in dataset '{dataset_name}' for deletion.")
+        raise TensorNotFoundError(f"Tensor {record_id} not found in dataset {dataset_name}.")
     def batch_insert(self, dataset_name: str, tensors_and_metadata: List[Tuple[torch.Tensor, Optional[Dict[str, Any]]]]) -> List[str]:
         """Insert multiple tensors atomically within a single transaction.
         
@@ -1092,6 +1253,179 @@ class TensorStorage:
             stats["average_compression_ratio"] = 1.0
             
         return stats
+    
+    # === Indexing and Advanced Query Methods ===
+    
+    def create_index(self, dataset_name: str, index_name: str, field_name: str, 
+                    index_type: str = "hash") -> bool:
+        """Create a custom index on a metadata field.
+        
+        Args:
+            dataset_name: Name of the dataset
+            index_name: Name for the new index
+            field_name: Metadata field to index
+            index_type: Type of index ("hash" or "range")
+            
+        Returns:
+            bool: True if index was created successfully
+        """
+        if not self._indexing_enabled:
+            logging.warning("Indexing not available")
+            return False
+            
+        if dataset_name not in self.datasets:
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' not found.")
+            
+        index_manager = self._get_or_create_index_manager(dataset_name)
+        if not index_manager:
+            return False
+            
+        try:
+            if index_type == "hash":
+                from .indexing import HashIndex
+                index = HashIndex(index_name)
+            elif index_type == "range":
+                from .indexing import RangeIndex  
+                index = RangeIndex(index_name)
+            else:
+                raise ValueError(f"Unknown index type: {index_type}")
+                
+            index_manager.add_index(index_name, index)
+            
+            # Populate the new index with existing data
+            dataset = self.datasets[dataset_name]
+            for i, metadata in enumerate(dataset["metadata"]):
+                if field_name in metadata:
+                    tensor_data = dataset["tensors"][i]
+                    tensor = self._decompress_tensor_if_needed(tensor_data, metadata)
+                    index.insert(metadata.get("record_id", str(i)), metadata[field_name], tensor)
+            
+            logging.info(f"Created {index_type} index '{index_name}' on field '{field_name}' for dataset '{dataset_name}'")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Failed to create index '{index_name}': {e}")
+            return False
+    
+    def query_by_metadata(self, dataset_name: str, field: str, value: Any) -> List[Dict[str, Any]]:
+        """Query records by exact metadata field value using indexes.
+        
+        Args:
+            dataset_name: Name of the dataset
+            field: Metadata field name
+            value: Value to search for
+            
+        Returns:
+            List of matching records with tensors and metadata
+        """
+        if dataset_name not in self.datasets:
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' not found.")
+        
+        if not self._indexing_enabled:
+            # Fallback to linear search
+            return self.query(dataset_name, lambda t, m: m.get(field) == value)
+        
+        index_manager = self._get_or_create_index_manager(dataset_name)
+        if not index_manager:
+            return self.query(dataset_name, lambda t, m: m.get(field) == value)
+            
+        # Try to use index
+        index = index_manager.get_index(field)
+        if index:
+            record_ids = index.lookup(value)
+            results = []
+            for record_id in record_ids:
+                try:
+                    result = self.get_tensor_by_id(dataset_name, record_id)
+                    results.append(result)
+                except TensorNotFoundError:
+                    continue
+            return results
+        else:
+            # Fallback to linear search
+            return self.query(dataset_name, lambda t, m: m.get(field) == value)
+    
+    def query_by_tensor_shape(self, dataset_name: str, shape: Tuple[int, ...]) -> List[Dict[str, Any]]:
+        """Query records by exact tensor shape using spatial index.
+        
+        Args:
+            dataset_name: Name of the dataset
+            shape: Tensor shape tuple to search for
+            
+        Returns:
+            List of matching records with tensors and metadata
+        """
+        if dataset_name not in self.datasets:
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' not found.")
+        
+        if not self._indexing_enabled:
+            return self.query(dataset_name, lambda t, m: tuple(t.shape) == shape)
+        
+        index_manager = self._get_or_create_index_manager(dataset_name)
+        if not index_manager:
+            return self.query(dataset_name, lambda t, m: tuple(t.shape) == shape)
+        
+        # Use spatial index
+        spatial_index = index_manager.get_index("spatial")
+        if spatial_index and hasattr(spatial_index, 'lookup_by_shape'):
+            record_ids = spatial_index.lookup_by_shape(shape)
+            results = []
+            for record_id in record_ids:
+                try:
+                    result = self.get_tensor_by_id(dataset_name, record_id)
+                    results.append(result)
+                except TensorNotFoundError:
+                    continue
+            return results
+        else:
+            return self.query(dataset_name, lambda t, m: tuple(t.shape) == shape)
+    
+    def get_index_stats(self, dataset_name: str) -> Dict[str, Any]:
+        """Get statistics about dataset indexes.
+        
+        Args:
+            dataset_name: Name of the dataset
+            
+        Returns:
+            Dictionary with index statistics
+        """
+        if not self._indexing_enabled:
+            return {"indexing_enabled": False}
+            
+        if dataset_name not in self.datasets:
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' not found.")
+            
+        index_manager = self._get_or_create_index_manager(dataset_name)
+        if not index_manager:
+            return {"indexing_enabled": False}
+            
+        stats = index_manager.get_index_stats()
+        stats["indexing_enabled"] = True
+        stats["dataset_name"] = dataset_name
+        return stats
+    
+    def rebuild_indexes(self, dataset_name: str) -> bool:
+        """Rebuild all indexes for a dataset.
+        
+        Args:
+            dataset_name: Name of the dataset
+            
+        Returns:
+            bool: True if indexes were rebuilt successfully
+        """
+        if not self._indexing_enabled:
+            logging.warning("Indexing not available")
+            return False
+            
+        if dataset_name not in self.datasets:
+            raise DatasetNotFoundError(f"Dataset '{dataset_name}' not found.")
+            
+        try:
+            self._rebuild_indexes_for_dataset(dataset_name)
+            return True
+        except Exception as e:
+            logging.error(f"Failed to rebuild indexes for dataset '{dataset_name}': {e}")
+            return False
 
 # Public API exports
 __all__ = ["TensorStorage", "DatasetNotFoundError", "TensorNotFoundError", "SchemaValidationError", "TransactionError"]
