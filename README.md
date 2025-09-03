@@ -29,25 +29,50 @@ Tensorus bridges the gap between traditional databases and AI/ML requirements by
 
 The core purpose of Tensorus is to **simplify and accelerate** how developers and AI agents interact with tensor datasets, enabling faster development of automated data ingestion, reinforcement learning from stored experiences, AutoML processes, and intelligent data utilization in AI projects.
 
-## 🚀 Quick Start (5 Minutes)
+## 🚀 Quick Start (3 Minutes)
 
 ```bash
 # Install Tensorus
-pip install tensorus
+pip install -e .
 
-# Start development server
-tensorus start --dev
+# Start the development server
+python -m uvicorn tensorus.api:app --reload
 
-# Access web interface at http://localhost:8000
+# Access the API documentation at http://localhost:8000/docs
+# Or the Swagger UI at http://localhost:8000/redoc
 ```
 
 ```python
 import tensorus
 import numpy as np
 
-# Connect and create your first tensor dataset
-client = tensorus.Client()
-client.create_dataset("my_dataset")
+# Initialize Tensorus
+ts = tensorus.Tensorus()
+
+# Create a tensor
+data = np.random.rand(3, 3)
+tensor = ts.create_tensor(data, name="example_tensor")
+
+# Perform operations
+result = tensor.transpose()
+print(result)
+```
+
+## 📚 Documentation
+
+For comprehensive documentation, including user guides and examples, please visit our [documentation site](https://docs.tensorus.com).
+
+### Interactive API Documentation
+
+Access the interactive API documentation when the server is running:
+
+- **Swagger UI**: `http://localhost:8000/docs` - Interactive API exploration with "Try it out" functionality
+- **ReDoc**: `http://localhost:8000/redoc` - Clean, responsive API documentation
+
+### Quick Links
+- [Getting Started Guide](docs/user_guide.md) - Learn the basics of Tensorus
+- [Examples](examples/) - Practical code examples
+- [Deployment Guide](docs/deployment.md) - Production deployment instructions
 
 # Store tensors with rich metadata
 tensor_id = client.store_tensor(
@@ -978,12 +1003,9 @@ Below are the primary Pydantic models used by the API. See `tensorus/api.py` and
   - Key fields: `tensor_id`, `root_tensor_ids`, `max_depth`, `total_operations`, `lineage_nodes[]`, `operations[]`, timestamps
 
 
-#### Example Responses
+#### 🧩 Examples
 
-Success (ApiResponse):
-```json
-{
-  "success": true,
+Explore our collection of examples to get started with Tensorus:
   "message": "Tensor ingested successfully.",
   "data": { "record_id": "abc123" }
 }

@@ -1,24 +1,32 @@
 # Tensorus API Reference
 
+## Interactive API Documentation
+
+For the most up-to-date and interactive API documentation, please use:
+
+- **Swagger UI**: [/docs](http://localhost:8000/docs) - Interactive API explorer with "Try it out" functionality
+- **ReDoc**: [/redoc](http://localhost:8000/redoc) - Clean, responsive API documentation
+
 ## Overview
 
 The Tensorus API provides comprehensive REST endpoints for tensor storage, operations, and analytics. All endpoints follow RESTful conventions and return JSON responses with consistent error handling.
 
-**Base URL**: `https://api.tensorus.com/v1` (Production) | `http://localhost:8000` (Development)
+**Base URL**: `http://localhost:8000` (Development) | `https://api.tensorus.com/v1` (Production)
 
-**Authentication**: API Key required for all endpoints (header: `X-API-Key`)
+**Authentication**: API Key required for all endpoints (header: `X-API-KEY`)
 
 **Rate Limits**: 1000 requests/minute (Enterprise), 100 requests/minute (Developer)
 
 ## Quick Start
 
-```bash
-# Set your API key
-export TENSORUS_API_KEY="your-api-key-here"
+1. Start the development server:
+   ```bash
+   python -m uvicorn tensorus.api:app --reload
+   ```
 
-# Test connectivity
-curl -H "X-API-Key: $TENSORUS_API_KEY" https://api.tensorus.com/v1/health
-```
+2. Access the interactive documentation at http://localhost:8000/docs
+
+3. Set your API key in the "Authorize" dialog
 
 ## Core Concepts
 
