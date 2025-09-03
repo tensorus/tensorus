@@ -551,8 +551,13 @@ The API provides the following main endpoints:
     *   `GET /datasets/{name}/fetch`: Retrieve all records from a dataset.
     *   `GET /datasets/{name}/records`: Retrieve a page of records. Supports `offset` (start index, default `0`) and `limit` (max results, default `100`).
     *   `GET /datasets`: List all available datasets.
+    *   `GET /datasets/{name}/count`: Count records in a dataset.
+    *   `GET /datasets/{dataset_name}/tensors/{record_id}`: Retrieve a tensor by record ID.
+    *   `DELETE /datasets/{dataset_name}`: Delete a dataset.
+    *   `DELETE /datasets/{dataset_name}/tensors/{record_id}`: Delete a tensor by record ID.
+    *   `PUT /datasets/{dataset_name}/tensors/{record_id}/metadata`: Update tensor metadata.
 *   **Querying:**
-    *   `POST /query`: Execute an NQL query.
+    *   `POST /api/v1/query`: Execute an NQL query.
 *   **Vector Database:**
     *   `POST /api/v1/vector/embed`: Generate and store embeddings from text.
     *   `POST /api/v1/vector/search`: Perform vector similarity search.
@@ -560,15 +565,26 @@ The API provides the following main endpoints:
     *   `POST /api/v1/vector/tensor-workflow`: Run tensor workflow with lineage tracking.
     *   `POST /api/v1/vector/index/build`: Build vector indexes with geometric partitioning.
     *   `GET /api/v1/vector/models`: List available embedding models.
-    *   `GET /api/v1/vector/stats/{dataset}`: Get embedding statistics for a dataset.
+    *   `GET /api/v1/vector/stats/{dataset_name}`: Get embedding statistics for a dataset.
     *   `GET /api/v1/vector/metrics`: Get performance metrics.
-    *   `DELETE /api/v1/vector/vectors/{dataset}`: Delete vectors from a dataset.
+    *   `DELETE /api/v1/vector/vectors/{dataset_name}`: Delete vectors from a dataset.
+*   **Operation History & Lineage:**
+    *   `GET /api/v1/operations/recent`: Get recent operations with optional filtering by type/status.
+    *   `GET /api/v1/operations/tensor/{tensor_id}`: Get all operations that involved a specific tensor.
+    *   `GET /api/v1/operations/statistics`: Get aggregate operation statistics.
+    *   `GET /api/v1/operations/types`: List available operation types.
+    *   `GET /api/v1/operations/statuses`: List available operation statuses.
+    *   `GET /api/v1/lineage/tensor/{tensor_id}`: Get computational lineage for a tensor.
+    *   `GET /api/v1/lineage/tensor/{tensor_id}/dot`: DOT graph for lineage visualization.
+    *   `GET /api/v1/lineage/tensor/{source_tensor_id}/path/{target_tensor_id}`: Operation path between two tensors.
 *   **Agents:**
     *   `GET /agents`: List all registered agents.
     *   `GET /agents/{agent_id}/status`: Get the status of a specific agent.
     *   `POST /agents/{agent_id}/start`: Start an agent.
     *   `POST /agents/{agent_id}/stop`: Stop an agent.
     *   `GET /agents/{agent_id}/logs`: Get recent logs for an agent.
+    *   `GET /agents/{agent_id}/config`: Get stored configuration for an agent.
+    *   `POST /agents/{agent_id}/configure`: Update agent configuration.
 *   **Metrics & Monitoring:**
     *   `GET /metrics/dashboard`: Get aggregated dashboard metrics.
 
@@ -626,6 +642,190 @@ curl -X POST "http://localhost:7860/api/v1/vector/hybrid-search" \
       "sparsity_preference": 0.1
     }
   }'
+```
+
+### Agents API Examples
+
+#### List Agents
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/agents"
+```
+
+#### Start Agent
+```bash
+curl -X POST -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/agents/ingestion/start"
+```
+
+#### Agent Status & Logs
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/agents/ingestion/status"
+
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/agents/ingestion/logs?lines=50"
+```
+
+### Operation History & Lineage Examples
+
+#### Recent Operations
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/api/v1/operations/recent?limit=50"
+```
+
+#### Tensor Lineage (JSON)
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/api/v1/lineage/tensor/{tensor_id}"
+```
+
+#### Tensor Lineage (DOT Graph)
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/api/v1/lineage/tensor/{tensor_id}/dot"
+```
+
+#### Operation Path Between Two Tensors
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/api/v1/lineage/tensor/{source_tensor_id}/path/{target_tensor_id}"
+```
+
+### Authentication Examples
+
+Recommended (Bearer):
+```bash
+curl -s \
+  -H "Authorization: Bearer tsr_your_api_key" \
+  "http://localhost:7860/datasets"
+```
+
+Legacy header (still supported):
+```bash
+curl -s \
+  -H "X-API-KEY: tsr_your_api_key" \
+  "http://localhost:7860/datasets"
+```
+
+### NQL Query Example
+
+```bash
+curl -X POST "http://localhost:7860/api/v1/query" \
+  -H "Authorization: Bearer tsr_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "find tensors from 'my_dataset' where metadata.source = 'api_ingest' limit 10"
+  }'
+```
+
+### Request/Response Schemas
+
+Below are the primary Pydantic models used by the API. See `tensorus/api.py` and `tensorus/api/models.py` for full details.
+
+* **ApiResponse** (`tensorus/api.py`)
+  - `success: bool`
+  - `message: str`
+  - `data: Any | null`
+
+* **DatasetCreateRequest** (`tensorus/api.py`)
+  - `name: str`
+
+* **TensorInput** (`tensorus/api.py`)
+  - `shape: List[int]`
+  - `dtype: str`
+  - `data: List[Any] | int | float`
+  - `metadata: Dict[str, Any] | null`
+
+* **TensorOutput** (`tensorus/api/models.py`)
+  - `record_id: str`
+  - `shape: List[int]`
+  - `dtype: str`
+  - `data: List[Any] | int | float`
+  - `metadata: Dict[str, Any]`
+
+* **NQLQueryRequest / NQLResponse** (`tensorus/api/models.py`)
+  - Request: `query: str`
+  - Response: `success: bool`, `message: str`, `count?: int`, `results?: List[TensorOutput]`
+
+* **VectorSearchQuery** (`tensorus/api/models.py`)
+  - `query: str`, `dataset_name: str`, `k: int = 5`, `namespace?: str`, `tenant_id?: str`, `similarity_threshold?: float`, `include_vectors: bool = false`
+
+* **OperationHistoryRequest** (`tensorus/api/models.py`)
+  - Filters: `tensor_id?`, `operation_type?`, `status?`, `user_id?`, `session_id?`, `start_time?`, `end_time?`, `limit: int = 100`
+
+* **LineageResponse** (`tensorus/api/models.py`)
+  - Key fields: `tensor_id`, `root_tensor_ids`, `max_depth`, `total_operations`, `lineage_nodes[]`, `operations[]`, timestamps
+
+
+### Dataset API Examples
+
+All requests require authentication by default: `-H "Authorization: Bearer your_api_key"` (legacy `X-API-KEY` also supported).
+
+#### Create Dataset
+```bash
+curl -X POST "http://localhost:7860/datasets/create" \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my_dataset"}'
+```
+
+#### Ingest Tensor
+```bash
+curl -X POST "http://localhost:7860/datasets/my_dataset/ingest" \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "shape": [2, 3],
+    "dtype": "float32",
+    "data": [[1.0,2.0,3.0],[4.0,5.0,6.0]],
+    "metadata": {"source": "api_ingest", "label": "row_batch_1"}
+  }'
+```
+
+#### Fetch Entire Dataset
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/datasets/my_dataset/fetch"
+```
+
+#### Fetch Records (Pagination)
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/datasets/my_dataset/records?offset=0&limit=50"
+```
+
+#### Count Records
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/datasets/my_dataset/count"
+```
+
+#### Get Tensor By ID
+```bash
+curl -s -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/datasets/my_dataset/tensors/{record_id}"
+```
+
+#### Update Tensor Metadata (replace entire metadata)
+```bash
+curl -X PUT "http://localhost:7860/datasets/my_dataset/tensors/{record_id}/metadata" \
+  -H "Authorization: Bearer your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"new_metadata": {"source": "sensor_A", "priority": "high"}}'
+```
+
+#### Delete Tensor
+```bash
+curl -X DELETE -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/datasets/my_dataset/tensors/{record_id}"
+```
+
+#### Delete Dataset
+```bash
+curl -X DELETE -H "Authorization: Bearer your_api_key" \
+  "http://localhost:7860/datasets/my_dataset"
 ```
 
 ### Dataset Schemas
