@@ -103,18 +103,15 @@ graph TB
 
 ## 🆕 Latest Updates
 
-### Version 1.2.3 (Current)
-- ✅ **Complete Gap Resolution** - All 10 critical tensor database gaps implemented
-- ✅ **Production-Ready** - Enterprise-grade performance, security, and monitoring
-- ✅ **Advanced Compression** - Multi-algorithm support with 4x storage savings
-- ✅ **Full Operation Lineage** - Complete computational provenance tracking
-- ✅ **Natural Language Queries** - Intuitive NQL interface for data discovery
+### Version 0.0.2 (Current)
+- ✅ **Compression & Quantization** - Added support for multiple compression algorithms and FP16/INT8 quantization
+- ✅ **Documentation Updates** - Improved guides and API references
+- ✅ **Testing Improvements** - Expanded test coverage for new functionality
 
 ### Roadmap Highlights
-- **Q2 2024**: Distributed processing with automatic sharding
-- **Q3 2024**: Advanced GPU support and federated learning
-- **Q4 2024**: Real-time streaming and edge deployment
-- **2025**: Quantum computing integration and autonomous optimization
+- **Near-term**: Operation APIs, storage-operation integration, and indexing improvements
+- **Mid-term**: Asynchronous processing, lineage tracking, and discovery APIs
+- **Long-term**: Distributed processing and advanced deployment options
 
 ## 💬 Community & Support
 
