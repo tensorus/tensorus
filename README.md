@@ -32,8 +32,13 @@ The core purpose of Tensorus is to simplify and enhance how developers and AI ag
 - [Production Deployment](#production-deployment)
 - [Testing](#testing)
 - [Using Tensorus](#using-tensorus)
+  - [API Basics](#api-basics)
+  - [Authentication Examples](#authentication-examples)
+  - [NQL Query Example](#nql-query-example)
   - [API Endpoints](#api-endpoints)
   - [Vector Database Examples](#vector-database-examples)
+  - [Request/Response Schemas](#requestresponse-schemas)
+  - [Dataset API Examples](#dataset-api-examples)
   - [Dataset Schemas](#dataset-schemas)
 - [Metadata System](#metadata-system)
 - [Streamlit UI](#streamlit-ui)
@@ -541,6 +546,18 @@ Tensorus includes Python unit tests. To set up the environment and run them:
 
 ## Using Tensorus
 
+### API Basics
+
+Base URL: `http://localhost:7860`
+
+Authentication:
+- Preferred: send `Authorization: Bearer tsr_<your_key>`
+- Legacy (still supported): `X-API-KEY: tsr_<your_key>`
+
+PowerShell notes:
+- Use double quotes for JSON and escape inner quotes, or run in WSL/Git Bash for copy/paste fidelity.
+- Alternatively, use `--%` to stop PowerShell from interpreting special characters.
+
 ### API Endpoints
 
 The API provides the following main endpoints:
@@ -590,6 +607,11 @@ The API provides the following main endpoints:
 
 ### Vector Database Examples
 
+Note on path parameter names across endpoints:
+- Datasets CRUD often uses `name` in path: e.g., `/datasets/{name}/ingest`, `/datasets/{name}/records`
+- Tensor CRUD uses `dataset_name` + `record_id`: e.g., `/datasets/{dataset_name}/tensors/{record_id}`
+- Vector API consistently uses `dataset_name` in path and body
+
 For an end-to-end quickstart with PowerShell-friendly curl commands and authentication setup, see `DEMO.md` → "Vector & Embedding API Quickstart".
 
 #### Generate & Store Embeddings
@@ -618,6 +640,36 @@ curl -X POST "http://localhost:7860/api/v1/vector/search" \
     "similarity_threshold": 0.7,
     "namespace": "research"
   }'
+```
+
+Example response:
+```json
+{
+  "success": true,
+  "query": "artificial intelligence models",
+  "total_results": 2,
+  "search_time_ms": 8.42,
+  "results": [
+    {
+      "record_id": "rec_123",
+      "similarity_score": 0.9153,
+      "rank": 1,
+      "source_text": "Deep learning models for AI",
+      "metadata": {"source": "paper_db", "year": 2024},
+      "namespace": "research",
+      "tenant_id": "team_alpha"
+    },
+    {
+      "record_id": "rec_456",
+      "similarity_score": 0.8831,
+      "rank": 2,
+      "source_text": "AI model architectures",
+      "metadata": {"source": "notes"},
+      "namespace": "research",
+      "tenant_id": "team_alpha"
+    }
+  ]
+}
 ```
 
 #### Hybrid Computational Search
@@ -759,6 +811,31 @@ Below are the primary Pydantic models used by the API. See `tensorus/api.py` and
   - Key fields: `tensor_id`, `root_tensor_ids`, `max_depth`, `total_operations`, `lineage_nodes[]`, `operations[]`, timestamps
 
 
+#### Example Responses
+
+Success (ApiResponse):
+```json
+{
+  "success": true,
+  "message": "Tensor ingested successfully.",
+  "data": { "record_id": "abc123" }
+}
+```
+
+Not Found (FastAPI error shape):
+```json
+{
+  "detail": "Not Found"
+}
+```
+
+Unauthorized:
+```json
+{
+  "detail": "Not authenticated"
+}
+```
+
 ### Dataset API Examples
 
 All requests require authentication by default: `-H "Authorization: Bearer your_api_key"` (legacy `X-API-KEY` also supported).
@@ -864,6 +941,8 @@ The Streamlit UI provides a user-friendly interface for:
 Tensorus ships with a simple regex‑based Natural Query Language for retrieving
 tensors by metadata. You can issue NQL queries via the API or from the "NQL
 Chat" page in the Streamlit UI.
+
+See also: [NQL Query Example](#nql-query-example) for a minimal API request.
 
 ### Enabling LLM rewriting
 
