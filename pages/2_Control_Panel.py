@@ -4,7 +4,7 @@ import streamlit as st
 import time
 import json
 # Use the updated API-backed functions
-from .ui_utils import (
+from .api_client import (
     list_all_agents,
     get_agent_status,
     get_agent_logs,

@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from .ui_utils import list_datasets, fetch_dataset_data # MODIFIED
+from .api_client import list_datasets, fetch_dataset_data # MODIFIED
 import torch # Needed if we want to recreate tensors for inspection/plotting
 
 st.set_page_config(page_title="Data Explorer", layout="wide")
@@ -96,6 +96,23 @@ if selected_dataset:
     st.subheader("Filtered Data View")
     st.write(f"{len(filtered_df)} records matching filters.")
     st.dataframe(filtered_df, use_container_width=True)
+
+    # --- Metadata Visualization ---
+    st.divider()
+    st.subheader("Metadata Visualization")
+    numeric_columns = filtered_df.select_dtypes(include=np.number).columns.tolist()
+    if len(numeric_columns) >= 2:
+        col1, col2 = st.columns(2)
+        with col1:
+            x_axis = st.selectbox("Select X-axis for scatter plot:", numeric_columns)
+        with col2:
+            y_axis = st.selectbox("Select Y-axis for scatter plot:", numeric_columns)
+        
+        if x_axis and y_axis:
+            fig = px.scatter(filtered_df, x=x_axis, y=y_axis, hover_data=['record_id'])
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Not enough numeric columns in the metadata to create a scatter plot.")
 
     # --- Tensor Preview & Visualization ---
     st.divider()

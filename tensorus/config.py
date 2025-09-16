@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     AUTH_JWT_JWKS_URI: Optional[str] = None
     AUTH_DEV_MODE_ALLOW_DUMMY_JWT: bool = False
 
+    API_BASE_URL: str = "http://127.0.0.1:7860"
+
     model_config = SettingsConfigDict(env_prefix="TENSORUS_", case_sensitive=False)
 
     @field_validator("VALID_API_KEYS", mode="before")

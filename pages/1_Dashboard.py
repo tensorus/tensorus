@@ -6,7 +6,7 @@ import numpy as np
 import plotly.express as px
 import time
 # Updated imports to use API-backed functions
-from .ui_utils import get_dashboard_metrics, list_all_agents, get_agent_status # MODIFIED
+from .api_client import get_dashboard_metrics, list_all_agents, get_agent_status # MODIFIED
 
 st.set_page_config(page_title="Tensorus Dashboard", layout="wide")
 
@@ -41,13 +41,19 @@ else:
 # --- Display Metrics ---
 st.subheader("System Metrics")
 if metrics_data:
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Datasets", metrics_data.get('dataset_count', 'N/A'))
-    col2.metric("Total Records (Est.)", f"{metrics_data.get('total_records_est', 0):,}")
-    # Agent status summary from metrics
-    agent_summary = metrics_data.get('agent_status_summary', {})
-    running_agents = agent_summary.get('running', 0) + agent_summary.get('starting', 0)
-    col3.metric("Running Agents", running_agents)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Datasets", metrics_data.get('dataset_count', 'N/A'))
+    with col2:
+        st.metric("Total Records (Est.)", f"{metrics_data.get('total_records_est', 0):,}")
+
+    col3, col4 = st.columns(2)
+    with col3:
+        agent_summary = metrics_data.get('agent_status_summary', {})
+        running_agents = agent_summary.get('running', 0) + agent_summary.get('starting', 0)
+        st.metric("Running Agents", running_agents)
+    with col4:
+        st.metric("System CPU Usage", f"{metrics_data.get('system_cpu_usage_percent', 0.0):.1f}%")
 
     st.divider()
 

@@ -1,7 +1,7 @@
 # pages/3_NQL_Chatbot.py
 
 import streamlit as st
-from .ui_utils import execute_nql_query # MODIFIED
+from .api_client import execute_nql_query # MODIFIED
 import pandas as pd # Added import for pandas
 
 st.set_page_config(page_title="NQL Chatbot", layout="wide")
