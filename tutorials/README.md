@@ -16,6 +16,11 @@ Welcome to the Tensorus tutorial series. These notebooks provide hands-on exampl
 | [08_scientific_features.ipynb](08_scientific_features.ipynb) | Scientific features with lineage tracking and reproducibility |
 | [09_multi_modal.ipynb](09_multi_modal.ipynb) | Multi-modal data handling with cross-modal search |
 | [10_production.ipynb](10_production.ipynb) | Production deployment, monitoring, HA, and DR simulation |
+| [11_vector_workflows.ipynb](11_vector_workflows.ipynb) | Embeddings, FAISS indexing, similarity & hybrid search |
+| [12_schema_metadata.ipynb](12_schema_metadata.ipynb) | Dataset schemas, validation, and metadata queries |
+| [13_ingestion_agent.ipynb](13_ingestion_agent.ipynb) | Configure and monitor ingestion agents |
+| [14_operations_lineage.ipynb](14_operations_lineage.ipynb) | Operation history and computational lineage |
+| [15_storage_compression.ipynb](15_storage_compression.ipynb) | Storage backends, persistence, and compression |
 
 ## Prerequisites
 - Python 3.9+
@@ -31,6 +36,7 @@ pip install -r tutorials/requirements.txt
 - For best results, start a Tensorus server locally (see repository docs) to unlock live API examples.
 - GPU-accelerated sections will detect CUDA automatically; otherwise, they run on CPU.
 - If a cell references an endpoint your server doesn’t expose yet, the notebook will continue in demo mode.
+- Tutorials `11`–`15` import helpers from `tutorial_utils.py`; install requirements once for shared dependencies.
 
 ## Getting Started
 Start with `01_getting_started.ipynb` to set up your environment and explore the core concepts. Each tutorial builds on the previous ones, covering progressively advanced topics.
