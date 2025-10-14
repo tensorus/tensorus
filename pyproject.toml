@@ -1,10 +1,10 @@
 [project]
 name = "tensorus"
-version = "0.0.3"
+version = "0.0.5"
 authors = [
     { name = "Tensorus Team", email = "ai@tensorus.com" }
 ]
-description = "An agentic tensor database and agent framework for managing, querying, and automating tensor data workflows."
+description = "An agentic tensor database with unified SDK, agent orchestration, and intelligent workflows for ML/AI applications."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

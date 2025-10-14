@@ -12,8 +12,11 @@ short_description: Tensorus Core
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.0.5-blue.svg)](https://pypi.org/project/tensorus/)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)](https://hub.docker.com/r/tensorus/tensorus)
 [![API Documentation](https://img.shields.io/badge/API-Documentation-green.svg)](https://docs.tensorus.com/api)
+
+> **🎉 New in v0.0.5:** Unified Python SDK with intuitive API, Agent Orchestrator for multi-agent workflows, and comprehensive examples. See [What's New](#-whats-new-in-v005) for details.
 
 **Tensorus** is a production-ready, specialized data platform focused on the management and agent-driven manipulation of tensor data. It offers a streamlined environment for storing, retrieving, and operating on tensors at scale, providing the foundation for advanced AI and machine learning workflows.
 
@@ -31,32 +34,122 @@ The core purpose of Tensorus is to **simplify and accelerate** how developers an
 
 ## 🚀 Quick Start (3 Minutes)
 
+### Installation
 ```bash
-# Install Tensorus
+# Install from PyPI
+pip install tensorus
+
+# Or install from source for development
+git clone https://github.com/tensorus/tensorus.git
+cd tensorus
 pip install -e .
-
-# Start the development server
-python -m uvicorn tensorus.api:app --reload
-
-# Access the API documentation at http://localhost:8000/docs
-# Or the Swagger UI at http://localhost:8000/redoc
 ```
 
+### Basic Usage with Python SDK
 ```python
-import tensorus
-import numpy as np
+from tensorus import Tensorus
+import torch
 
-# Initialize Tensorus
-ts = tensorus.Tensorus()
+# Initialize Tensorus SDK (minimal dependencies)
+ts = Tensorus(
+    enable_nql=False,          # Disable if transformers not installed
+    enable_embeddings=False,   # Disable if sentence-transformers not installed
+    enable_vector_search=False
+)
 
-# Create a tensor
-data = np.random.rand(3, 3)
-tensor = ts.create_tensor(data, name="example_tensor")
+# Create a dataset
+ts.create_dataset("my_dataset")
+
+# Create and store tensors
+tensor_a = ts.create_tensor(
+    [[1, 2], [3, 4]], 
+    name="matrix_a",
+    dataset="my_dataset"
+)
+
+tensor_b = ts.create_tensor(
+    [[5, 6], [7, 8]],
+    name="matrix_b",
+    dataset="my_dataset"
+)
 
 # Perform operations
-result = tensor.transpose()
-print(result)
+result = ts.matmul(tensor_a.to_tensor(), tensor_b.to_tensor())
+print(f"Result shape: {result.shape}")  # (2, 2)
+
+# List all tensors
+tensors = ts.list_tensors("my_dataset")
+print(f"Stored {len(tensors)} tensors")
 ```
+
+### Start the API Server
+```bash
+# Start development server
+python -m uvicorn tensorus.api:app --reload --port 8000
+
+# Access interactive API docs at:
+# - Swagger UI: http://localhost:8000/docs
+# - ReDoc: http://localhost:8000/redoc
+```
+
+## 🐍 Python SDK Features
+
+The Tensorus SDK provides a unified interface for all tensor operations, agent coordination, and data management.
+
+### Core SDK Operations
+
+```python
+from tensorus import Tensorus
+
+# Full initialization with all features
+ts = Tensorus(
+    enable_nql=True,              # Natural Query Language
+    enable_embeddings=True,       # Embedding generation  
+    enable_vector_search=True,    # Vector similarity search
+    enable_orchestrator=True,     # Multi-agent workflows
+    embedding_model="all-MiniLM-L6-v2"
+)
+
+# Dataset management
+ts.create_dataset("research_data")
+ts.list_datasets()
+ts.delete_dataset("old_data")
+
+# Tensor operations
+a = ts.create_tensor([[1, 2], [3, 4]], name="matrix_a", dataset="research_data")
+b = ts.create_tensor([[5, 6], [7, 8]], name="matrix_b", dataset="research_data")
+
+# Mathematical operations
+result = ts.matmul(a.to_tensor(), b.to_tensor())
+transposed = ts.transpose(a.to_tensor())
+eigenvals = ts.eigenvalues(a.to_tensor())
+
+# Natural language queries (requires enable_nql=True)
+results = ts.query("find tensors in research_data where shape is (2, 2)")
+
+# Vector operations (requires enable_embeddings=True)
+ts.create_index("docs", dimensions=384, metric="cosine")
+ts.embed_and_index(
+    texts=["Machine learning paper", "Deep learning tutorial"],
+    index_name="docs",
+    dataset="research_data"
+)
+search_results = ts.search("neural networks", index_name="docs", top_k=5)
+
+# Multi-agent workflows (requires enable_orchestrator=True)
+workflow = ts.create_workflow("data_pipeline")
+ts.orchestrator.add_task(workflow, "embed", "embedding", "generate", {...})
+ts.orchestrator.add_task(workflow, "index", "vector", "index", {...}, deps=["embed"])
+results = ts.execute_workflow(workflow)
+```
+
+### SDK Benefits
+
+- **Unified Interface** - Single entry point for all Tensorus capabilities
+- **Lazy Loading** - Agents load only when enabled, reducing dependencies
+- **Type Safety** - Full type hints for IDE autocomplete and validation
+- **Error Handling** - Comprehensive exception handling with helpful messages
+- **Performance** - Optimized for both single-node and distributed workloads
 
 ## 📚 Documentation
 
@@ -71,24 +164,8 @@ Access the interactive API documentation when the server is running:
 
 ### Quick Links
 - [Getting Started Guide](docs/user_guide.md) - Learn the basics of Tensorus
-- [Examples](examples/) - Practical code examples
+- [Examples](examples/) - Practical code examples including `basic_usage.py` and `complete_workflow_example.py`
 - [Deployment Guide](docs/deployment.md) - Production deployment instructions
-
-# Store tensors with rich metadata
-tensor_id = client.store_tensor(
-    dataset="my_dataset",
-    tensor=np.random.rand(100, 100), 
-    metadata={"type": "random_matrix", "source": "demo"}
-)
-
-# Query using natural language
-results = client.query("find tensors where metadata.type = 'random_matrix'")
-print(f"Found {len(results)} matching tensors")
-
-# Execute tensor operations
-product = client.matrix_multiply(tensor_id, tensor_id)
-print(f"Matrix product shape: {product.shape}")
-```
 
 ## 📖 Comprehensive Documentation
 
@@ -106,8 +183,34 @@ print(f"Matrix product shape: {product.shape}")
 - **🎯 [Executive Overview](docs/executive_overview.md)** - Product positioning, market analysis, and business value
 - **📊 [Architecture Guide](docs/index.md#architecture-highlights)** - System design and technical architecture
 
+## 📦 What's New in v0.0.5
+
+**Major Release** - Unified SDK and Agent Orchestration
+
+### New Features
+- ✨ **Unified Tensorus SDK** - Single `Tensorus` class with intuitive API for all operations
+- 🤖 **Agent Orchestrator** - Multi-agent workflow coordination with DAG-based execution
+- 📚 **Updated Examples** - All examples now use the new SDK (`examples/basic_usage.py`, `examples/complete_workflow_example.py`)
+- 📊 **Benchmarking Suite** - Comprehensive performance testing framework (`benchmarks/benchmark_suite.py`)
+- 🔧 **Lazy Agent Loading** - Agents only load when enabled, reducing startup dependencies
+- 📝 **Enhanced Documentation** - Complete SDK reference and implementation guides
+
+### Breaking Changes
+- **SDK Interface** - New unified API replaces direct component access (migration is straightforward - see Quick Start)
+- **Optional Dependencies** - NQL, embeddings, and vector search now require explicit enabling
+
+### Improvements
+- Better error messages for missing dependencies
+- Cleaner separation of concerns
+- Improved performance through optimized initialization
+- More intuitive API naming
+
+See [QUICKSTART.md](QUICKSTART.md) for migration guide and [examples/](examples/) for updated code samples.
+
 ## Table of Contents
 
+- [What's New in v0.0.5](#-whats-new-in-v005)
+- [Python SDK Features](#-python-sdk-features)
 - [Key Features](#key-features)
 - [Project Structure](#project-structure)
 - [Demos](#demos)
