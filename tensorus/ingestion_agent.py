@@ -30,8 +30,15 @@ import threading
 import csv
 from PIL import Image
 import torch
-import torchvision.transforms as T # Use torchvision for image transforms
 import collections # Added import
+
+# Optional torchvision import
+try:
+    import torchvision.transforms as T
+    TORCHVISION_AVAILABLE = True
+except ImportError:
+    TORCHVISION_AVAILABLE = False
+    T = None
 
 from typing import Dict, Callable, Optional, Tuple, List, Any
 from .tensor_storage import TensorStorage # Import our storage module
@@ -98,15 +105,23 @@ def preprocess_image(file_path: str) -> Tuple[Optional[torch.Tensor], Dict[str, 
     try:
         img = Image.open(file_path).convert('RGB') # Ensure 3 channels (RGB)
 
-        # Example transform: Resize, convert to tensor, normalize
-        # These should ideally be configurable
-        transform = T.Compose([
-            T.Resize((128, 128)), # Example fixed size
-            T.ToTensor(), # Converts PIL image (H, W, C) [0,255] to Tensor (C, H, W) [0,1]
-            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # ImageNet stats
-        ])
-
-        tensor = transform(img)
+        if TORCHVISION_AVAILABLE:
+            # Example transform: Resize, convert to tensor, normalize
+            # These should ideally be configurable
+            transform = T.Compose([
+                T.Resize((128, 128)), # Example fixed size
+                T.ToTensor(), # Converts PIL image (H, W, C) [0,255] to Tensor (C, H, W) [0,1]
+                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # ImageNet stats
+            ])
+            tensor = transform(img)
+        else:
+            # Fallback: simple PIL to tensor conversion
+            import numpy as np
+            img_resized = img.resize((128, 128))
+            img_array = np.array(img_resized).astype(np.float32) / 255.0
+            # Convert HWC to CHW format
+            tensor = torch.from_numpy(img_array.transpose(2, 0, 1))
+            
         metadata["original_size"] = img.size # (width, height)
         logger.debug(f"Successfully processed {file_path} into tensor shape {tensor.shape}")
         return tensor, metadata

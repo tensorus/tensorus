@@ -15,12 +15,14 @@ from pathlib import Path
 from .tensor_storage import TensorStorage, TensorNotFoundError, DatasetNotFoundError
 from .tensor_ops import TensorOps
 from .vector_database import PartitionedVectorIndex, VectorMetadata, SearchResult
-from .embedding_agent import EmbeddingAgent
-from .nql_agent import NQLAgent
-from .ingestion_agent import DataIngestionAgent
-from .rl_agent import RLAgent
-from .automl_agent import AutoMLAgent
-from .agent_orchestrator import AgentOrchestrator
+
+# Lazy imports for agents to avoid heavy dependencies on startup
+EmbeddingAgent = None
+NQLAgent = None
+DataIngestionAgent = None
+RLAgent = None
+AutoMLAgent = None
+AgentOrchestrator = None
 
 logger = logging.getLogger(__name__)
 
@@ -167,10 +169,10 @@ class Tensorus:
         logger.info(f"Initializing Tensorus SDK with backend: {storage_backend}")
         
         # Initialize core storage
+        compression_preset = kwargs.get("compression_preset", None) if kwargs.get("enable_compression", True) else None
         self.storage = TensorStorage(
             storage_path=storage_path,
-            enable_compression=kwargs.get("enable_compression", True),
-            enable_indexing=kwargs.get("enable_indexing", True)
+            compression_preset=compression_preset
         )
         
         # Initialize agents
@@ -180,20 +182,20 @@ class Tensorus:
         self._rl_agent = None
         self._automl_agent = None
         
+        # Initialize NQL Agent if enabled
+        self._nql_agent = None
         if enable_nql:
             try:
-                self._nql_agent = NQLAgent(
-                    self.storage,
-                    use_llm=kwargs.get("use_llm", False),
-                    llm_model=kwargs.get("llm_model", "gemini-2.0-flash-exp")
-                )
+                from .nql_agent import NQLAgent as NQLAgentClass
+                self._nql_agent = NQLAgentClass(self.storage)
                 logger.info("NQL Agent initialized")
             except Exception as e:
                 logger.warning(f"Failed to initialize NQL Agent: {e}")
         
         if enable_embeddings:
             try:
-                self._embedding_agent = EmbeddingAgent(
+                from .embedding_agent import EmbeddingAgent as EmbeddingAgentClass
+                self._embedding_agent = EmbeddingAgentClass(
                     self.storage,
                     model_name=embedding_model,
                     enable_caching=kwargs.get("enable_caching", True)
@@ -208,13 +210,17 @@ class Tensorus:
         # Agent orchestrator
         self._orchestrator = None
         if kwargs.get("enable_orchestrator", True):
-            self._orchestrator = AgentOrchestrator(self.storage)
-            # Auto-register agents
-            if self._nql_agent:
-                self._orchestrator.register_nql_agent(self._nql_agent)
-            if self._embedding_agent:
-                self._orchestrator.register_embedding_agent(self._embedding_agent)
-            logger.info("Agent Orchestrator initialized")
+            try:
+                from .agent_orchestrator import AgentOrchestrator as AgentOrchestratorClass
+                self._orchestrator = AgentOrchestratorClass(self.storage)
+                # Auto-register agents
+                if self._nql_agent:
+                    self._orchestrator.register_nql_agent(self._nql_agent)
+                if self._embedding_agent:
+                    self._orchestrator.register_embedding_agent(self._embedding_agent)
+                logger.info("Agent Orchestrator initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize Agent Orchestrator: {e}")
         
         logger.info("Tensorus SDK initialized successfully")
     
@@ -263,7 +269,7 @@ class Tensorus:
             full_metadata["description"] = description
         
         tensor_id = self.storage.insert(
-            dataset_name=dataset,
+            name=dataset,
             tensor=tensor_data,
             metadata=full_metadata
         )
@@ -298,13 +304,14 @@ class Tensorus:
     def list_tensors(self, dataset: str = "default") -> List[Dict[str, Any]]:
         """List all tensors in a dataset."""
         try:
-            dataset_info = self.storage.get_dataset(dataset)
+            # Use get_dataset_with_metadata to get full information
+            tensor_records = self.storage.get_dataset_with_metadata(dataset)
             return [
                 {
-                    "id": tid,
-                    "metadata": dataset_info["tensors"][tid]["metadata"]
+                    "id": record["metadata"].get("record_id", ""),
+                    "metadata": record.get("metadata", {})
                 }
-                for tid in dataset_info["tensors"]
+                for record in tensor_records
             ]
         except (ValueError, DatasetNotFoundError):
             return []
