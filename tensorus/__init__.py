@@ -17,6 +17,9 @@ configure_logging()
 # Import base model class that may be used by external model packages
 from .base import TensorusModel
 
+# Import the unified SDK as the primary interface
+from .sdk import Tensorus, TensorWrapper, SearchResults
+
 # The repository previously exposed a large collection of models under
 # ``tensorus.models``. These models have been moved to a separate package.
 # Tensorus now only attempts to import them if available.
@@ -26,8 +29,8 @@ if not os.environ.get("TENSORUS_MINIMAL_IMPORT"):
         import importlib
 
         models = importlib.import_module("tensorus.models")
-        __all__ = ["TensorusModel", "models"]
+        __all__ = ["Tensorus", "TensorusModel", "TensorWrapper", "SearchResults", "models"]
     except ModuleNotFoundError:
-        __all__ = ["TensorusModel"]
+        __all__ = ["Tensorus", "TensorusModel", "TensorWrapper", "SearchResults"]
 else:
-    __all__ = ["TensorusModel"]
+    __all__ = ["Tensorus", "TensorusModel", "TensorWrapper", "SearchResults"]

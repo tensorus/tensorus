@@ -4,7 +4,14 @@ Basic Tensorus Usage Examples
 This script demonstrates common operations with the Tensorus library.
 """
 import numpy as np
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from tensorus import Tensorus
+
 
 def basic_tensor_operations():
     """Demonstrates basic tensor operations."""
@@ -15,22 +22,27 @@ def basic_tensor_operations():
     a = ts.create_tensor([[1, 2], [3, 4]], name="matrix_a")
     b = ts.create_tensor([[5, 6], [7, 8]], name="matrix_b")
     
+    print(f"Created tensor A: {a}")
+    print(f"Created tensor B: {b}")
+    
     # Basic arithmetic
     add_result = a + b
-    print(f"Addition:\n{add_result}")
+    print(f"\nAddition result shape: {add_result.shape}")
+    print(f"Addition result:\n{add_result.numpy()}")
     
     # Matrix multiplication
     matmul_result = ts.matmul(a, b)
-    print(f"\nMatrix Multiplication:\n{matmul_result}")
+    print(f"\nMatrix Multiplication result:\n{matmul_result.numpy() if hasattr(matmul_result, 'numpy') else matmul_result}")
     
     # Transpose
     transposed = a.transpose()
-    print(f"\nTranspose of A:\n{transposed}")
+    print(f"\nTranspose of A:\n{transposed.numpy()}")
+
 
 def vector_database_example():
     """Demonstrates vector database functionality."""
     print("\n=== Vector Database Example ===")
-    ts = Tensorus()
+    ts = Tensorus(enable_vector_search=True, enable_embeddings=True)
     
     # Create a vector index
     index_name = "image_embeddings"
@@ -38,9 +50,10 @@ def vector_database_example():
     
     if not ts.index_exists(index_name):
         ts.create_index(index_name, dimensions=dimensions)
+        print(f"Created vector index '{index_name}' with {dimensions} dimensions")
     
     # Generate some random embeddings
-    num_vectors = 1000
+    num_vectors = 100
     embeddings = np.random.rand(num_vectors, dimensions).astype(np.float32)
     vector_ids = [f"img_{i}" for i in range(num_vectors)]
     
@@ -52,9 +65,10 @@ def vector_database_example():
     query = np.random.rand(dimensions).astype(np.float32)
     results = ts.search_vectors(index_name, query, k=3)
     
-    print("\nSearch Results:")
+    print("\nSearch Results (top 3):")
     for i, (vector_id, score) in enumerate(zip(results.ids, results.scores), 1):
         print(f"{i}. ID: {vector_id}, Similarity: {score:.4f}")
+
 
 def tensor_metadata_example():
     """Shows how to work with tensor metadata."""
@@ -65,7 +79,7 @@ def tensor_metadata_example():
     data = np.random.rand(3, 3)
     metadata = {
         "source": "synthetic_data",
-        "creation_date": "2025-09-03",
+        "creation_date": "2025-01-13",
         "tags": ["example", "test"]
     }
     
@@ -82,8 +96,20 @@ def tensor_metadata_example():
     print(f"Shape: {tensor.shape}")
     print(f"Metadata: {tensor.metadata}")
     print(f"Description: {tensor.description}")
+    
+    # Search by metadata
+    print("\nSearching for tensors with tag 'example'...")
+    results = ts.search_metadata({"tags": "example"})
+    print(f"Found {len(results)} tensors")
+
 
 if __name__ == "__main__":
-    basic_tensor_operations()
-    vector_database_example()
-    tensor_metadata_example()
+    try:
+        basic_tensor_operations()
+        vector_database_example()
+        tensor_metadata_example()
+        print("\n✓ All examples completed successfully!")
+    except Exception as e:
+        print(f"\n✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
