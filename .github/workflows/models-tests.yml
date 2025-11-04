@@ -32,7 +32,7 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
       - name: Install test dependencies
-        run: pip install pytest pandas statsmodels scipy matplotlib seaborn
+        run: pip install pytest tensorly numpy torch pandas statsmodels scipy matplotlib seaborn
       - name: Run models tests
         working-directory: models
         run: pytest -v tests
