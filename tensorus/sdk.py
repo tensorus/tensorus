@@ -149,20 +149,23 @@ class Tensorus:
     def __init__(self,
                  storage_path: Optional[str] = None,
                  storage_backend: str = "in_memory",
-                 enable_nql: bool = True,
-                 enable_embeddings: bool = True,
-                 enable_vector_search: bool = True,
+                 enable_nql: bool = False,
+                 enable_embeddings: bool = False,
+                 enable_vector_search: bool = False,
                  embedding_model: str = "all-MiniLM-L6-v2",
                  **kwargs):
         """
         Initialize Tensorus with specified configuration.
         
+        Focus on core tensor database functionality by default.
+        Advanced features (NQL, embeddings, vector search) are disabled by default.
+        
         Args:
             storage_path: Path for persistent storage (file or S3)
             storage_backend: Backend type ("in_memory", "postgres", "s3")
-            enable_nql: Enable Natural Query Language agent
-            enable_embeddings: Enable embedding generation
-            enable_vector_search: Enable vector similarity search
+            enable_nql: Enable Natural Query Language agent (experimental)
+            enable_embeddings: Enable embedding generation (experimental)
+            enable_vector_search: Enable vector similarity search (experimental)
             embedding_model: Model to use for embeddings
             **kwargs: Additional configuration options
         """
@@ -207,9 +210,9 @@ class Tensorus:
         # Vector indexes storage
         self._vector_indexes: Dict[str, PartitionedVectorIndex] = {}
         
-        # Agent orchestrator
+        # Agent orchestrator (experimental - disabled by default)
         self._orchestrator = None
-        if kwargs.get("enable_orchestrator", True):
+        if kwargs.get("enable_orchestrator", False):
             try:
                 from .agent_orchestrator import AgentOrchestrator as AgentOrchestratorClass
                 self._orchestrator = AgentOrchestratorClass(self.storage)
