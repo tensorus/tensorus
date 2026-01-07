@@ -92,7 +92,7 @@ def main():
     mean_val = ts.mean(a)
     print(f"\n✓ Mean: {mean_val.item():.2f}")
     
-    # 5. Summary (skipping tensor retrieval - API being simplified)
+    # 5. Summary
     print("\n=== Summary ===")
     print(f"✓ Datasets: {len(ts.list_datasets())}")
     print(f"✓ Tensors in 'experiments': {len(ts.list_tensors('experiments'))}")

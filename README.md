@@ -343,7 +343,7 @@ Tensorus is designed for ML/AI workflows that need reliable tensor storage:
 - **Data Processing** - Organize tensor datasets for preprocessing
 - **Research** - Manage scientific computing data
 
-*Note: Tensorus focuses on basic tensor database operations. For advanced features like distributed training, vector search, or AutoML, consider specialized tools.*
+*Note: Tensorus focuses on basic tensor database operations done right. Advanced features (NQL, embeddings, vector search, agents) are available but experimental - enable them explicitly if needed.*
 
 ## 🧪 Testing
 
