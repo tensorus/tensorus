@@ -158,7 +158,11 @@ class Tensorus:
         Initialize Tensorus with specified configuration.
         
         Focus on core tensor database functionality by default.
-        Advanced features (NQL, embeddings, vector search) are disabled by default.
+        Advanced features (NQL, embeddings, vector search) are disabled by default
+        and considered experimental. Enable them explicitly if needed:
+        
+        Example:
+            ts = Tensorus(enable_nql=True, enable_embeddings=True)
         
         Args:
             storage_path: Path for persistent storage (file or S3)
@@ -595,23 +599,35 @@ class Tensorus:
         return result
     
     def mean(self, tensor: Union[TensorWrapper, torch.Tensor],
-             dim: Optional[int] = None, keepdim: bool = False) -> torch.Tensor:
+             dim: Optional[int] = None, keepdim: bool = False) -> Union[TensorWrapper, torch.Tensor]:
         """Compute mean of tensor."""
         data = tensor._data if isinstance(tensor, TensorWrapper) else tensor
-        return TensorOps.mean(data, dim=dim, keepdim=keepdim)
+        result = TensorOps.mean(data, dim=dim, keepdim=keepdim)
+        
+        if isinstance(tensor, TensorWrapper):
+            return TensorWrapper(result, storage_ref=self)
+        return result
     
     def sum(self, tensor: Union[TensorWrapper, torch.Tensor],
-            dim: Optional[int] = None, keepdim: bool = False) -> torch.Tensor:
+            dim: Optional[int] = None, keepdim: bool = False) -> Union[TensorWrapper, torch.Tensor]:
         """Compute sum of tensor."""
         data = tensor._data if isinstance(tensor, TensorWrapper) else tensor
-        return TensorOps.sum(data, dim=dim, keepdim=keepdim)
+        result = TensorOps.sum(data, dim=dim, keepdim=keepdim)
+        
+        if isinstance(tensor, TensorWrapper):
+            return TensorWrapper(result, storage_ref=self)
+        return result
     
     def add(self, a: Union[TensorWrapper, torch.Tensor],
-            b: Union[TensorWrapper, torch.Tensor, float, int]) -> torch.Tensor:
+            b: Union[TensorWrapper, torch.Tensor, float, int]) -> Union[TensorWrapper, torch.Tensor]:
         """Element-wise addition."""
         a_data = a._data if isinstance(a, TensorWrapper) else a
         b_data = b._data if isinstance(b, TensorWrapper) else b
-        return TensorOps.add(a_data, b_data)
+        result = TensorOps.add(a_data, b_data)
+        
+        if isinstance(a, TensorWrapper):
+            return TensorWrapper(result, storage_ref=self)
+        return result
     
     # ==================== Metadata Search ====================
     
