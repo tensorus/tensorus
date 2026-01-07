@@ -197,8 +197,8 @@ class Tensorus:
                 from .embedding_agent import EmbeddingAgent as EmbeddingAgentClass
                 self._embedding_agent = EmbeddingAgentClass(
                     self.storage,
-                    model_name=embedding_model,
-                    enable_caching=kwargs.get("enable_caching", True)
+                    default_model=embedding_model,  # Fixed: use 'default_model' not 'model_name'
+                    cache_dir=kwargs.get("cache_dir")
                 )
                 logger.info(f"Embedding Agent initialized with model: {embedding_model}")
             except Exception as e:
@@ -339,10 +339,10 @@ class Tensorus:
         
         # Create partitioned vector index
         index = PartitionedVectorIndex(
-            dimensions=dimensions,
+            dimension=dimensions,  # Fixed: use 'dimension' not 'dimensions'
             metric=metric,
             num_partitions=8,  # Reasonable default
-            enable_freshness_layer=True
+            use_hierarchical=True  # Fixed: use correct parameter name
         )
         
         self._vector_indexes[index_name] = index
@@ -382,19 +382,32 @@ class Tensorus:
             for i, meta in enumerate(metadata):
                 meta["id"] = vector_ids[i]
         
-        # Convert to VectorMetadata objects
-        vector_metadata = [
-            VectorMetadata(
-                vector_id=vector_ids[i],
-                vector=vectors[i],
+        # Convert to VectorMetadata objects and prepare dict for index
+        vectors_dict = {}
+        for i in range(len(vector_ids)):
+            vid = vector_ids[i]
+            vec = vectors[i]
+            meta = VectorMetadata(
+                vector_id=vid,
                 metadata=metadata[i]
             )
-            for i in range(len(vector_ids))
-        ]
+            vectors_dict[vid] = (vec, meta)
         
-        # Add to index
+        # Add to index (async operation wrapped)
         index = self._vector_indexes[index_name]
-        index.add(vector_metadata)
+        import asyncio
+        try:
+            # Try to run in existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Create task in existing loop
+                asyncio.create_task(index.add_vectors(vectors_dict))
+            else:
+                # Run in new loop
+                asyncio.run(index.add_vectors(vectors_dict))
+        except RuntimeError:
+            # No event loop, create one
+            asyncio.run(index.add_vectors(vectors_dict))
         
         logger.info(f"Added {len(vector_ids)} vectors to index '{index_name}'")
     
@@ -424,9 +437,25 @@ class Tensorus:
         elif isinstance(query, torch.Tensor):
             query = query.cpu().numpy().astype(np.float32)
         
-        # Search the index
+        # Search the index (async operation wrapped)
         index = self._vector_indexes[index_name]
-        results = index.search(query, k=k, filter_fn=None)  # TODO: Implement filter_fn
+        import asyncio
+        try:
+            # Try to run in existing event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Can't use asyncio.run in running loop - need to await
+                # For simplicity, we'll use a workaround
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, index.search(query, k=k, filters=filter_metadata))
+                    results = future.result()
+            else:
+                # Run in new loop
+                results = asyncio.run(index.search(query, k=k, filters=filter_metadata))
+        except RuntimeError:
+            # No event loop, create one
+            results = asyncio.run(index.search(query, k=k, filters=filter_metadata))
         
         # Extract results
         ids = [r.vector_id for r in results]
