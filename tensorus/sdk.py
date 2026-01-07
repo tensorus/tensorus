@@ -594,6 +594,25 @@ class Tensorus:
             return TensorWrapper(result, storage_ref=self)
         return result
     
+    def mean(self, tensor: Union[TensorWrapper, torch.Tensor],
+             dim: Optional[int] = None, keepdim: bool = False) -> torch.Tensor:
+        """Compute mean of tensor."""
+        data = tensor._data if isinstance(tensor, TensorWrapper) else tensor
+        return TensorOps.mean(data, dim=dim, keepdim=keepdim)
+    
+    def sum(self, tensor: Union[TensorWrapper, torch.Tensor],
+            dim: Optional[int] = None, keepdim: bool = False) -> torch.Tensor:
+        """Compute sum of tensor."""
+        data = tensor._data if isinstance(tensor, TensorWrapper) else tensor
+        return TensorOps.sum(data, dim=dim, keepdim=keepdim)
+    
+    def add(self, a: Union[TensorWrapper, torch.Tensor],
+            b: Union[TensorWrapper, torch.Tensor, float, int]) -> torch.Tensor:
+        """Element-wise addition."""
+        a_data = a._data if isinstance(a, TensorWrapper) else a
+        b_data = b._data if isinstance(b, TensorWrapper) else b
+        return TensorOps.add(a_data, b_data)
+    
     # ==================== Metadata Search ====================
     
     def search_metadata(self, filters: Dict[str, Any], dataset: str = "default") -> List[TensorWrapper]:

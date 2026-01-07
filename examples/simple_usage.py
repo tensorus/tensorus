@@ -12,7 +12,6 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tensorus import Tensorus
-from tensorus.tensor_ops import TensorOps
 
 
 def main():
@@ -90,7 +89,7 @@ def main():
     print(f"  Transposed shape: {transposed.shape}")
     
     # Mean
-    mean_val = TensorOps.mean(a)
+    mean_val = ts.mean(a)
     print(f"\n✓ Mean: {mean_val.item():.2f}")
     
     # 5. Summary (skipping tensor retrieval - API being simplified)

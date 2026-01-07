@@ -422,24 +422,6 @@ Tensorus provides 40+ tensor operations organized by category:
 
 See `tensorus/tensor_ops.py` for the complete list and documentation.
 
-## 🧪 Testing
-
-Run the test suite to verify your installation:
-
-```bash
-# Install dependencies (if not already done)
-./setup.sh
-
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_tensor_storage.py
-
-# Run with verbose output
-pytest -v
-```
-
 ## 🤝 Contributing
 
 We welcome contributions! To get started:
