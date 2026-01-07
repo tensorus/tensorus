@@ -4,12 +4,12 @@ version = "0.1.0"
 authors = [
     { name = "Tensorus Team", email = "ai@tensorus.com" }
 ]
-description = "An agentic tensor database with unified SDK, agent orchestration, and intelligent workflows for ML/AI applications."
+description = "A simple, reliable tensor database focused on fundamental operations: store tensors, retrieve them efficiently, and perform basic operations."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 keywords = [
-    "tensor", "database", "agent", "ai", "pytorch", "fastapi", "streamlit", "automl", "reinforcement-learning", "data-ingestion"
+    "tensor", "database", "pytorch", "storage", "ml", "ai", "data-management"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
