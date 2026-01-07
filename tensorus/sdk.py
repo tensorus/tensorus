@@ -599,7 +599,8 @@ class Tensorus:
         return result
     
     def mean(self, tensor: Union[TensorWrapper, torch.Tensor],
-             dim: Optional[int] = None, keepdim: bool = False) -> Union[TensorWrapper, torch.Tensor]:
+             dim: Optional[Union[int, Tuple[int, ...]]] = None, 
+             keepdim: bool = False) -> Union[TensorWrapper, torch.Tensor]:
         """Compute mean of tensor."""
         data = tensor._data if isinstance(tensor, TensorWrapper) else tensor
         result = TensorOps.mean(data, dim=dim, keepdim=keepdim)
@@ -609,7 +610,8 @@ class Tensorus:
         return result
     
     def sum(self, tensor: Union[TensorWrapper, torch.Tensor],
-            dim: Optional[int] = None, keepdim: bool = False) -> Union[TensorWrapper, torch.Tensor]:
+            dim: Optional[Union[int, Tuple[int, ...]]] = None, 
+            keepdim: bool = False) -> Union[TensorWrapper, torch.Tensor]:
         """Compute sum of tensor."""
         data = tensor._data if isinstance(tensor, TensorWrapper) else tensor
         result = TensorOps.sum(data, dim=dim, keepdim=keepdim)
