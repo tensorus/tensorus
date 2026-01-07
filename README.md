@@ -8,311 +8,157 @@ colorTo: yellow
 short_description: Tensorus Core
 ---
 
-# Tensorus: Agentic Tensor Database/Data Lake
+# Tensorus: Basic Tensor Database
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI version](https://img.shields.io/badge/pypi-v0.0.5-blue.svg)](https://pypi.org/project/tensorus/)
-[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)](https://hub.docker.com/r/tensorus/tensorus)
-[![API Documentation](https://img.shields.io/badge/API-Documentation-green.svg)](https://docs.tensorus.com/api)
 
-> **🎉 New in v0.0.5:** Unified Python SDK with intuitive API, Agent Orchestrator for multi-agent workflows, and comprehensive examples. See [What's New](#-whats-new-in-v005) for details.
+> **Focus: Quality over Quantity** - A simple, reliable tensor database focused on fundamental operations done right.
 
-**Tensorus** is a production-ready, specialized data platform focused on the management and agent-driven manipulation of tensor data. It offers a streamlined environment for storing, retrieving, and operating on tensors at scale, providing the foundation for advanced AI and machine learning workflows.
+**Tensorus** is a lightweight, specialized database for storing and managing tensor data with metadata. It provides essential functionality for ML/AI workflows: store tensors, retrieve them efficiently, and perform basic operations.
 
-## 🎯 What Makes Tensorus Special
+## 🎯 Core Philosophy
 
-Tensorus bridges the gap between traditional databases and AI/ML requirements by providing:
+**Quality over Quantity** - Tensorus focuses on implementing fundamental tensor database operations perfectly:
 
-- **🧠 Intelligent Agent Framework** - Built-in agents for data ingestion, reinforcement learning, AutoML, and embedding generation
-- **⚡ High-Performance Tensor Operations** - 40+ optimized operations with 10-100x performance improvements
-- **🔍 Natural Language Queries** - Intuitive NQL interface for tensor discovery and analysis
-- **📊 Complete Observability** - Full computational lineage and operation history tracking
-- **🏗️ Production-Grade Architecture** - Enterprise security, scaling, and deployment capabilities
+- **📦 Tensor Storage** - Store and retrieve PyTorch tensors with rich metadata
+- **🔍 Simple Queries** - Filter tensors by metadata attributes
+- **⚡ Basic Operations** - Essential tensor operations (arithmetic, linear algebra, reshaping)
+- **🔌 REST API** - Clean, documented API for all operations
+- **📝 Clear Documentation** - Every feature is well-documented and tested
 
-The core purpose of Tensorus is to **simplify and accelerate** how developers and AI agents interact with tensor datasets, enabling faster development of automated data ingestion, reinforcement learning from stored experiences, AutoML processes, and intelligent data utilization in AI projects.
+The core purpose of Tensorus is to **provide a reliable foundation** for tensor data management without unnecessary complexity.
 
-## 🚀 Quick Start (3 Minutes)
+## 🚀 Quick Start
 
 ### Installation
-```bash
-# Install from PyPI
-pip install tensorus
 
-# Or install from source for development
+```bash
+# Install from source
 git clone https://github.com/tensorus/tensorus.git
 cd tensorus
-pip install -e .
+./setup.sh  # Installs all dependencies
 ```
 
-### Basic Usage with Python SDK
+### Basic Usage
+
 ```python
 from tensorus import Tensorus
 import torch
 
-# Initialize Tensorus SDK (minimal dependencies)
-ts = Tensorus(
-    enable_nql=False,          # Disable if transformers not installed
-    enable_embeddings=False,   # Disable if sentence-transformers not installed
-    enable_vector_search=False
-)
+# Initialize Tensorus with minimal configuration
+ts = Tensorus()
 
-# Create a dataset
+# 1. Create a dataset
 ts.create_dataset("my_dataset")
 
-# Create and store tensors
-tensor_a = ts.create_tensor(
+# 2. Store tensors with metadata
+tensor = ts.create_tensor(
     [[1, 2], [3, 4]], 
     name="matrix_a",
-    dataset="my_dataset"
+    dataset="my_dataset",
+    metadata={"source": "experiment_1", "epoch": 0}
 )
 
-tensor_b = ts.create_tensor(
-    [[5, 6], [7, 8]],
-    name="matrix_b",
-    dataset="my_dataset"
-)
-
-# Perform operations
-result = ts.matmul(tensor_a.to_tensor(), tensor_b.to_tensor())
-print(f"Result shape: {result.shape}")  # (2, 2)
-
-# List all tensors
+# 3. Retrieve tensors
 tensors = ts.list_tensors("my_dataset")
 print(f"Stored {len(tensors)} tensors")
+
+# 4. Perform basic operations
+a = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+b = torch.tensor([[5.0, 6.0], [7.0, 8.0]])
+result = ts.matmul(a, b)
+print(f"Result:\n{result}")
 ```
 
-### Start the API Server
+### REST API
+
 ```bash
-# Start development server
-python -m uvicorn tensorus.api:app --reload --port 8000
+# Start the API server
+uvicorn tensorus.api:app --reload --port 8000
 
-# Access interactive API docs at:
-# - Swagger UI: http://localhost:8000/docs
-# - ReDoc: http://localhost:8000/redoc
+# Access interactive documentation at http://localhost:8000/docs
 ```
 
-## 🐍 Python SDK Features
+## 🌟 Core Features
 
-The Tensorus SDK provides a unified interface for all tensor operations, agent coordination, and data management.
+### 📦 Tensor Storage
+- **Store & Retrieve** - Save PyTorch tensors with automatic serialization
+- **Metadata Support** - Attach rich metadata (source, experiment, epoch, etc.)
+- **Dataset Organization** - Group related tensors into named datasets
+- **Persistence** - Optional disk or S3 storage for data durability
 
-### Core SDK Operations
+### 🔍 Simple Queries
+- **Metadata Filtering** - Find tensors by metadata attributes
+- **List Operations** - Browse all tensors in a dataset
+- **Efficient Retrieval** - Fast lookup by tensor ID or name
 
-```python
-from tensorus import Tensorus
+### ⚡ Basic Tensor Operations
+- **Arithmetic** - add, subtract, multiply, divide, power
+- **Linear Algebra** - matmul, dot, transpose, svd, qr, eigenvalues
+- **Reshaping** - reshape, flatten, squeeze, unsqueeze
+- **Reductions** - sum, mean, min, max
+- **40+ operations** - All essential tensor manipulations
 
-# Full initialization with all features
-ts = Tensorus(
-    enable_nql=True,              # Natural Query Language
-    enable_embeddings=True,       # Embedding generation  
-    enable_vector_search=True,    # Vector similarity search
-    enable_orchestrator=True,     # Multi-agent workflows
-    embedding_model="all-MiniLM-L6-v2"
-)
+### 🔌 REST API
+- **FastAPI Backend** - Modern, async API with automatic documentation
+- **Authentication** - API key-based security
+- **OpenAPI Spec** - Interactive documentation at `/docs`
+- **Simple Endpoints** - Create datasets, store/retrieve tensors, run operations
 
-# Dataset management
-ts.create_dataset("research_data")
-ts.list_datasets()
-ts.delete_dataset("old_data")
+## 📋 Current Status
 
-# Tensor operations
-a = ts.create_tensor([[1, 2], [3, 4]], name="matrix_a", dataset="research_data")
-b = ts.create_tensor([[5, 6], [7, 8]], name="matrix_b", dataset="research_data")
+**Version:** 0.1.0  
+**Status:** Alpha - Core functionality stable, focused on quality improvements
 
-# Mathematical operations
-result = ts.matmul(a.to_tensor(), b.to_tensor())
-transposed = ts.transpose(a.to_tensor())
-eigenvals = ts.eigenvalues(a.to_tensor())
+### What Works Well
+- ✅ Tensor storage and retrieval
+- ✅ Metadata management
+- ✅ Basic tensor operations
+- ✅ REST API
+- ✅ File and S3 persistence
 
-# Natural language queries (requires enable_nql=True)
-results = ts.query("find tensors in research_data where shape is (2, 2)")
+### What's Simplified
+- ⚠️ Advanced features (agents, NQL, vector search) are available but considered experimental
+- ⚠️ Focus is on core database operations, not complex workflows
+- ⚠️ Performance optimizations ongoing
 
-# Vector operations (requires enable_embeddings=True)
-ts.create_index("docs", dimensions=384, metric="cosine")
-ts.embed_and_index(
-    texts=["Machine learning paper", "Deep learning tutorial"],
-    index_name="docs",
-    dataset="research_data"
-)
-search_results = ts.search("neural networks", index_name="docs", top_k=5)
+## 📁 Project Structure
 
-# Multi-agent workflows (requires enable_orchestrator=True)
-workflow = ts.create_workflow("data_pipeline")
-ts.orchestrator.add_task(workflow, "embed", "embedding", "generate", {...})
-ts.orchestrator.add_task(workflow, "index", "vector", "index", {...}, deps=["embed"])
-results = ts.execute_workflow(workflow)
+```
+tensorus/
+├── tensorus/              # Core package
+│   ├── __init__.py       # Package initialization
+│   ├── sdk.py            # Unified SDK interface
+│   ├── tensor_storage.py # Core storage engine
+│   ├── tensor_ops.py     # Tensor operations library
+│   ├── api.py            # REST API (FastAPI)
+│   ├── config.py         # Configuration management
+│   └── ...               # Additional modules
+├── tests/                 # Test suite (150+ tests)
+├── examples/              # Usage examples
+├── docs/                  # Documentation
+├── requirements.txt       # Dependencies
+├── setup.sh              # Installation script
+└── README.md             # This file
 ```
 
-### SDK Benefits
+### Core Modules
 
-- **Unified Interface** - Single entry point for all Tensorus capabilities
-- **Lazy Loading** - Agents load only when enabled, reducing dependencies
-- **Type Safety** - Full type hints for IDE autocomplete and validation
-- **Error Handling** - Comprehensive exception handling with helpful messages
-- **Performance** - Optimized for both single-node and distributed workloads
+- **`tensor_storage.py`** - Dataset management, tensor persistence, metadata handling
+- **`tensor_ops.py`** - 40+ tensor operations (arithmetic, linear algebra, reshaping, etc.)
+- **`sdk.py`** - High-level Python interface (Tensorus class)
+- **`api.py`** - REST API endpoints and authentication
+- **`config.py`** - Environment-based configuration
 
-## 📚 Documentation
+### Additional Features (Experimental)
 
-For comprehensive documentation, including user guides and examples, please visit our [documentation site](https://docs.tensorus.com).
-
-### Interactive API Documentation
-
-Access the interactive API documentation when the server is running:
-
-- **Swagger UI**: `http://localhost:8000/docs` - Interactive API exploration with "Try it out" functionality
-- **ReDoc**: `http://localhost:8000/redoc` - Clean, responsive API documentation
-
-### Quick Links
-- [Getting Started Guide](docs/user_guide.md) - Learn the basics of Tensorus
-- [Examples](examples/) - Practical code examples including `basic_usage.py` and `complete_workflow_example.py`
-- [Deployment Guide](docs/deployment.md) - Production deployment instructions
-
-## 📖 Comprehensive Documentation
-
-### 📚 Learning Resources
-- **🎓 [Documentation Hub](docs/index.md)** - Central portal with guided learning paths for all skill levels
-- **🚀 [Getting Started Guide](docs/getting_started.md)** - Complete 15-minute tutorial with real examples
-- **💡 [Use Case Examples](examples/)** - Real-world implementations and practical guides
-
-### 🔧 Technical References  
-- **🔍 [Complete API Reference](docs/api_reference.md)** - Full REST API documentation with code samples
-- **🏭 [Production Deployment](docs/production_deployment.md)** - Enterprise deployment strategies and operations
-- **⚡ [Performance & Scaling](docs/performance_benchmarks.md)** - Benchmarks, optimization, and capacity planning
-
-### 🏢 Business & Strategy
-- **🎯 [Executive Overview](docs/executive_overview.md)** - Product positioning, market analysis, and business value
-- **📊 [Architecture Guide](docs/index.md#architecture-highlights)** - System design and technical architecture
-
-## 📦 What's New in v0.0.5
-
-**Major Release** - Unified SDK and Agent Orchestration
-
-### New Features
-- ✨ **Unified Tensorus SDK** - Single `Tensorus` class with intuitive API for all operations
-- 🤖 **Agent Orchestrator** - Multi-agent workflow coordination with DAG-based execution
-- 📚 **Updated Examples** - All examples now use the new SDK (`examples/basic_usage.py`, `examples/complete_workflow_example.py`)
-- 📊 **Benchmarking Suite** - Comprehensive performance testing framework (`benchmarks/benchmark_suite.py`)
-- 🔧 **Lazy Agent Loading** - Agents only load when enabled, reducing startup dependencies
-- 📝 **Enhanced Documentation** - Complete SDK reference and implementation guides
-
-### Breaking Changes
-- **SDK Interface** - New unified API replaces direct component access (migration is straightforward - see Quick Start)
-- **Optional Dependencies** - NQL, embeddings, and vector search now require explicit enabling
-
-### Improvements
-- Better error messages for missing dependencies
-- Cleaner separation of concerns
-- Improved performance through optimized initialization
-- More intuitive API naming
-
-See [QUICKSTART.md](QUICKSTART.md) for migration guide and [examples/](examples/) for updated code samples.
-
-## Table of Contents
-
-- [What's New in v0.0.5](#-whats-new-in-v005)
-- [Python SDK Features](#-python-sdk-features)
-- [Key Features](#key-features)
-- [Project Structure](#project-structure)
-- [Demos](#demos)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the API Server](#running-the-api-server)
-  - [Running the Streamlit UI](#running-the-streamlit-ui)
-  - [Model Context Protocol Integration](#model-context-protocol-integration)
-  - [Running the Agents (Examples)](#running-the-agents-examples)
-- [Docker Deployment](#docker-deployment)
-- [Environment Configuration](#environment-configuration)
-- [Production Deployment](#production-deployment)
-- [Testing](#testing)
-- [Using Tensorus](#using-tensorus)
-  - [API Basics](#api-basics)
-  - [Authentication Examples](#authentication-examples)
-  - [NQL Query Example](#nql-query-example)
-  - [API Endpoints](#api-endpoints)
-  - [Vector Database Examples](#vector-database-examples)
-  - [Request/Response Schemas](#requestresponse-schemas)
-  - [Dataset API Examples](#dataset-api-examples)
-  - [Dataset Schemas](#dataset-schemas)
-- [Metadata System](#metadata-system)
-- [Streamlit UI](#streamlit-ui)
-- [Natural Query Language (NQL)](#natural-query-language-nql)
-- [Agent Details](#agent-details)
-- [Tensorus Models](#tensorus-models)
-- [Basic Tensor Operations](#basic-tensor-operations)
-- [Tensor Decomposition Operations](#tensor-decomposition-operations)
-- [Vector Database Features](#vector-database-features)
-- [Completed Features](#completed-features)
-- [Future Implementation](#future-implementation)
-- [Contributing](#contributing)
-- [License](#license)
-
-## 🌟 Core Capabilities
-
-### 🗄️ Advanced Tensor Storage System
-*   **High-Performance Storage** - Efficiently store and retrieve PyTorch tensors with rich metadata support
-*   **Intelligent Compression** - Multiple algorithms (LZ4, GZIP, quantization) with up to 4x space savings
-*   **Schema Validation** - Optional per-dataset schemas enforce metadata fields and tensor shape/dtype constraints
-*   **Chunked Processing** - Handle tensors larger than available memory through intelligent chunking
-*   **Multi-Backend Support** - Local filesystem, PostgreSQL, S3, and cloud storage backends
-
-### 🤖 Intelligent Agent Ecosystem  
-*   **Data Ingestion Agent** - Automatically monitors directories and ingests files as tensors with preprocessing
-*   **Reinforcement Learning Agent** - Deep Q-Network (DQN) agent that learns from experiences stored in tensor datasets  
-*   **AutoML Agent** - Hyperparameter optimization and model selection using advanced search algorithms
-*   **Embedding Agent** - Multi-provider embedding generation with intelligent caching and vector indexing
-*   **Extensible Framework** - Build custom agents that interact intelligently with your tensor data
-
-### 🔍 Advanced Query & Search Engine
-*   **Natural Query Language (NQL)** - Query tensor data using intuitive, natural language-like syntax
-*   **Vector Database Integration** - Advanced similarity search with multi-provider embedding generation
-*   **Hybrid Search** - Combine semantic similarity with computational tensor properties  
-*   **Geometric Partitioning** - Efficient vector indexing with automatic clustering and freshness layers
-
-### 🔬 Production-Grade Operations
-*   **40+ Tensor Operations** - Comprehensive library covering arithmetic, linear algebra, decompositions, and advanced operations
-*   **Computational Lineage** - Complete tracking of tensor transformations for reproducible scientific workflows
-*   **Operation History** - Full audit trail with performance metrics and error tracking
-*   **Asynchronous Processing** - Background operations and job queuing for long-running computations
-
-### 🌐 Developer-Friendly Interface
-*   **RESTful API** - FastAPI backend with comprehensive OpenAPI documentation and authentication
-*   **Interactive Web UI** - Streamlit-based dashboard for data exploration and agent control
-*   **Python SDK** - Rich client library with intuitive APIs and comprehensive error handling
-*   **Model Context Protocol** - Standardized integration for AI agents and LLMs via [tensorus/mcp](https://github.com/tensorus/mcp)
-
-### 📊 Enterprise Features
-*   **Rich Metadata System** - Pydantic schemas for semantic, lineage, computational, quality, and usage metadata
-*   **Security & Authentication** - API key management, role-based access control, and audit logging  
-*   **Monitoring & Observability** - Health checks, performance metrics, and comprehensive logging
-*   **Scalable Architecture** - Horizontal scaling, load balancing, and distributed processing capabilities
-
-## Project Structure
-
-*   `app.py`: The main Streamlit frontend application (located at the project root).
-*   `pages/`: Directory containing individual Streamlit page scripts and shared UI utilities for the dashboard.
-    *   `pages/ui_utils.py`: Utility functions specifically for the Streamlit UI.
-    *   *(Other page scripts like `01_dashboard.py`, `02_control_panel.py`, etc., define the different views of the dashboard)*
-*   `tensorus/`: Directory containing the core `tensorus` library modules (this is the main installable package).
-    *   `tensorus/__init__.py`: Makes `tensorus` a Python package.
-    *   `tensorus/api.py`: The FastAPI application providing the backend API for Tensorus.
-    *   `tensorus/tensor_storage.py`: Core TensorStorage implementation for managing tensor data.
-    *   `tensorus/tensor_ops.py`: Library of functions for tensor manipulations.
-    *   `tensorus/vector_database.py`: Advanced vector indexing with geometric partitioning and freshness layers.
-    *   `tensorus/embedding_agent.py`: Multi-provider embedding generation and vector database integration.
-    *   `tensorus/hybrid_search.py`: Hybrid search engine combining semantic similarity with computational tensor properties.
-    *   `tensorus/nql_agent.py`: Agent for processing Natural Query Language queries.
-    *   `tensorus/ingestion_agent.py`: Agent for ingesting data from various sources.
-    *   `tensorus/rl_agent.py`: Agent for Reinforcement Learning tasks.
-    *   `tensorus/automl_agent.py`: Agent for AutoML processes.
-    *   `tensorus/dummy_env.py`: A simple environment for the RL agent demonstration.
-    *   *(Other Python files within `tensorus/` are part of the core library.)*
-*   `requirements.txt`: Lists the project's Python dependencies for development and local execution.
-*   `pyproject.toml`: Project metadata, dependencies for distribution, and build system configuration (e.g., for PyPI).
-*   `README.md`: This file.
-*   `LICENSE`: Project license file.
-*   `.gitignore`: Specifies intentionally untracked files that Git should ignore.
+The following modules provide advanced functionality but are considered experimental:
+- `nql_agent.py` - Natural query language support
+- `embedding_agent.py` - Text embeddings and vector search
+- `vector_database.py` - Vector similarity search
+- `agent_orchestrator.py` - Multi-agent workflows
+- `*_agent.py` - Various specialized agents (RL, AutoML, Ingestion)
 
 ## 🌐 Live Demos & Integrations
 
@@ -331,108 +177,62 @@ Experience Tensorus directly in your browser via Huggingface Spaces:
 *   **Features:** Standardized protocol access to all Tensorus capabilities
 *   **Use Cases:** LLM-driven tensor analysis, automated data workflows, intelligent agent interactions
 
-## Architecture
+## 🏗️ Simple Architecture
 
-### Tensorus Execution Cycle
+Tensorus follows a straightforward layered architecture:
 
-```mermaid
-graph TD
-    %% User Interface Layer
-    subgraph UI_Layer ["User Interaction"]
-        UI[Streamlit UI]
-    end
-
-    %% API Gateway Layer
-    subgraph API_Layer ["Backend Services"]
-        API[FastAPI Backend]
-    end
-
-    %% Core Storage with Method Interface
-    subgraph Storage_Layer ["Core Storage - TensorStorage"]
-        TS[TensorStorage Core]
-        subgraph Storage_Methods ["Storage Interface"]
-            TS_insert[insert data metadata]
-            TS_query[query query_fn]
-            TS_get[get_by_id id]
-            TS_sample[sample n]
-            TS_update[update_metadata]
-        end
-        TS --- Storage_Methods
-    end
-
-    %% Agent Processing Layer
-    subgraph Agent_Layer ["Processing Agents"]
-        IA[Ingestion Agent]
-        NQLA[NQL Agent]
-        RLA[RL Agent]
-        AutoMLA[AutoML Agent]
-        EA[Embedding Agent]
-    end
-
-    %% Vector Database Layer
-    subgraph Vector_Layer ["Vector Database"]
-        VDB[Vector Index Manager]
-        HSE[Hybrid Search Engine]
-    end
-
-    %% Model System
-    subgraph Model_Layer ["Model System"]
-        Registry[Model Registry]
-        ModelsPkg[Models Package]
-    end
-
-    %% Tensor Operations Library
-    subgraph Ops_Layer ["Tensor Operations"]
-        TOps[TensorOps Library]
-    end
-
-    %% Primary UI Flow
-    UI -->|HTTP Requests| API
-
-    %% API Orchestration
-    API -->|Command Dispatch| IA
-    API -->|Command Dispatch| NQLA
-    API -->|Command Dispatch| RLA
-    API -->|Command Dispatch| AutoMLA
-    API -->|Vector Operations| EA
-    API -->|Model Training| Registry
-    API -->|Direct Query| TS_query
-
-    %% Vector Database Integration
-    EA -->|Vector Indexing| VDB
-    HSE -->|Hybrid Search| VDB
-    API -->|Search Requests| HSE
-
-    %% Model System Interactions
-    Registry -->|Uses Models| ModelsPkg
-    Registry -->|Load/Save| TS
-    ModelsPkg -->|Tensor Ops| TOps
-
-    %% Agent Storage Interactions
-    IA -->|Data Ingestion| TS_insert
-
-    NQLA -->|Query Execution| TS_query
-    NQLA -->|Record Retrieval| TS_get
-
-    RLA -->|State Persistence| TS_insert
-    RLA -->|Experience Sampling| TS_sample
-    RLA -->|State Retrieval| TS_get
-
-    AutoMLA -->|Trial Storage| TS_insert
-    AutoMLA -->|Data Retrieval| TS_query
-
-    EA -->|Embedding Storage| TS_insert
-    EA -->|Vector Retrieval| TS_query
-
-    %% Computational Operations
-    NQLA -->|Vector Operations| TOps
-    RLA -->|Policy Evaluation| TOps
-    AutoMLA -->|Model Optimization| TOps
-    HSE -->|Tensor Analysis| TOps
-
-    %% Indirect Storage Write-back
-    TOps -.->|Intermediate Results| TS_insert
 ```
+┌─────────────────────────────────────┐
+│   Client Applications               │
+│   (Python SDK, REST API calls)      │
+└────────────┬────────────────────────┘
+             │
+             v
+┌─────────────────────────────────────┐
+│   Tensorus SDK                      │
+│   - create_tensor()                 │
+│   - list_tensors()                  │
+│   - Tensor operations (matmul, etc) │
+└────────────┬────────────────────────┘
+             │
+             v
+┌─────────────────────────────────────┐
+│   TensorStorage                     │
+│   - Dataset management              │
+│   - Metadata indexing               │
+│   - Persistence (disk/S3)           │
+└────────────┬────────────────────────┘
+             │
+             v
+┌─────────────────────────────────────┐
+│   Storage Backends                  │
+│   - File system                     │
+│   - S3/Cloud storage                │
+│   - PostgreSQL (metadata)           │
+└─────────────────────────────────────┘
+```
+
+### Core Components
+
+1. **SDK (`sdk.py`)** - High-level Python interface
+   - Simplified API for common operations
+   - Automatic type conversion
+   - Error handling
+
+2. **TensorStorage (`tensor_storage.py`)** - Data management engine
+   - In-memory datasets with optional persistence
+   - Metadata storage and indexing
+   - Transaction support
+
+3. **TensorOps (`tensor_ops.py`)** - Operation library
+   - 40+ tensor operations
+   - Type checking and validation
+   - Memory-efficient implementations
+
+4. **REST API (`api.py`)** - HTTP interface
+   - FastAPI with OpenAPI documentation
+   - API key authentication
+   - JSON request/response
 
 ## 🚀 Installation & Setup
 
