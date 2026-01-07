@@ -345,124 +345,154 @@ Tensorus is designed for ML/AI workflows that need reliable tensor storage:
 
 *Note: Tensorus focuses on basic tensor database operations. For advanced features like distributed training, vector search, or AutoML, consider specialized tools.*
 
-## 🧪 Testing
 
-Run the test suite to verify your installation:
+### Embedding Generation
 
-```bash
-# Install dependencies (if not already done)
-./setup.sh
+Tensorus supports multiple embedding providers for generating high-quality vector representations of text:
 
-# Run all tests
-pytest
+*   **Sentence Transformers**: Local models including all-MiniLM-L6-v2, all-mpnet-base-v2, and specialized models
+*   **OpenAI**: Cloud-based models like text-embedding-3-small and text-embedding-3-large
+*   **Extensible Architecture**: Easy integration of additional embedding providers
 
-# Run specific test file
-pytest tests/test_tensor_storage.py
+### Vector Indexing
 
-# Run with verbose output
-pytest -v
+Advanced vector indexing capabilities for efficient similarity search:
+
+*   **Geometric Partitioning**: Automatic distribution of vectors across partitions using k-means clustering
+*   **Freshness Layers**: Real-time updates without requiring full index rebuilds
+*   **FAISS Integration**: High-performance similarity search with multiple distance metrics
+*   **Multi-tenancy**: Namespace and tenant isolation for secure multi-user deployments
+
+### Hybrid Search
+
+Unique hybrid search capabilities that combine semantic similarity with computational tensor properties:
+
+*   **Semantic Scoring**: Traditional vector similarity search based on text embeddings
+*   **Computational Scoring**: Mathematical property evaluation including shape compatibility, sparsity, rank analysis
+*   **Operation Compatibility**: Scoring tensors based on suitability for specific mathematical operations
+*   **Combined Ranking**: Weighted combination of semantic and computational relevance scores
+
+### Tensor Workflows
+
+Execute complex mathematical workflows with full computational lineage tracking:
+
+*   **Workflow Execution**: Chain multiple tensor operations with intermediate result storage
+*   **Lineage Tracking**: Complete provenance tracking of tensor transformations
+*   **Scientific Reproducibility**: Full audit trail of computational steps for research applications
+*   **Intermediate Storage**: Optional preservation of intermediate results for analysis
+
+## Completed Features
+
+The current codebase implements all of the items listed in
+[Key Features](#key-features). Tensorus already provides efficient tensor
+storage with optional file persistence, a natural query language, a flexible
+agent framework, a RESTful API, a Streamlit UI, robust tensor operations, and
+advanced vector database capabilities. The modular architecture makes future
+extensions straightforward.
+
+## Future Implementation
+
+*   **Enhanced NQL:** Integrate a local or remote LLM for more robust natural language understanding.
+*   **Advanced Agents:** Develop more sophisticated agents for specific tasks (e.g., anomaly detection, forecasting).
+*   **Persistent Storage Backend:** Replace/augment current file-based persistence with more robust database or cloud storage solutions (e.g., PostgreSQL, S3, MinIO).
+*   **Advanced Vector Indexing:** Implement HNSW and IVF-PQ algorithms for even more efficient similarity search.
+*   **Scalability & Performance:**
+    *   Implement tensor chunking for very large tensors.
+    *   Optimize query performance with indexing.
+    *   Asynchronous operations for agents and API calls.
+*   **Security:** Implement authentication and authorization mechanisms for the API and UI.
+*   **Real-World Integration:**
+    *   Connect Ingestion Agent to more data sources (e.g., cloud storage, databases, APIs).
+    *   Integrate RL Agent with real-world environments or more complex simulations.
+*   **Advanced AutoML:**
+    *   Implement sophisticated search algorithms (e.g., Bayesian Optimization, Hyperband).
+    *   Support for diverse model architectures and custom models.
+*   **Model Management:** Add capabilities for saving, loading, versioning, and deploying trained models (from RL/AutoML).
+*   **Streaming Data Support:** Enhance Ingestion Agent to handle real-time streaming data.
+*   **Resource Management:** Add tools and controls for monitoring and managing the resource consumption (CPU, memory) of agents.
+*   **Improved UI/UX:** Continuously refine the Streamlit UI for better usability and richer visualizations.
+*   **Comprehensive Testing:** Expand unit, integration, and end-to-end tests.
+*   **Multi-modal Embeddings:** Support for image, audio, and video embeddings alongside text.
+*   **Distributed Architecture:** Multi-node deployments for large-scale vector search workloads.
+
+## 🤝 Community & Contributing
+
+### 💬 Get Help & Support
+
+**Community Resources:**
+- **📚 [Documentation Hub](docs/index.md)** - Comprehensive guides and tutorials
+- **💬 [GitHub Discussions](https://github.com/tensorus/tensorus/discussions)** - Ask questions and share ideas
+- **🐛 [Issue Tracker](https://github.com/tensorus/tensorus/issues)** - Bug reports and feature requests
+- **🏷️ [Stack Overflow](https://stackoverflow.com/questions/tagged/tensorus)** - Technical Q&A with the community
+
+**Enterprise Support:**
+- **📧 Technical Support**: support@tensorus.com
+- **📧 Sales & Partnerships**: sales@tensorus.com  
+- **📧 Security Issues**: security@tensorus.com
+
+### 🚀 Contributing to Tensorus
+
+We welcome contributions from the community! Here's how to get involved:
+
+#### 🐛 Report Issues
+- Use our [issue templates](https://github.com/tensorus/tensorus/issues/new/choose) for bug reports
+- Include system information, reproduction steps, and expected behavior
+- Search existing issues before creating new ones
+
+#### 🔧 Code Contributions
+1. **Fork** the repository and create a feature branch
+2. **Develop** with proper tests and documentation
+3. **Test** your changes locally using `pytest`
+4. **Submit** a pull request with clear description and examples
+
+#### 📖 Documentation Improvements
+- Fix typos, improve clarity, and add examples
+- Translate documentation to other languages  
+- Create tutorials and use case guides
+- Update API documentation and code comments
+
+#### 💡 Feature Requests & Ideas
+- Propose new features via [GitHub Discussions](https://github.com/tensorus/tensorus/discussions)
+- Provide detailed use cases and implementation suggestions
+- Participate in design discussions and RFC processes
+
+**Development Resources:**
+- **📋 [Contributing Guide](CONTRIBUTING.md)** - Detailed contribution guidelines
+- **📜 [Code of Conduct](CODE_OF_CONDUCT.md)** - Community standards and expectations
+- **🏗️ [Development Setup](docs/getting_started.md#development-installation)** - Local development environment
+
+## 📄 License & Legal
+
+**MIT License** - See [LICENSE](LICENSE) file for complete terms.
+
+```
+Copyright (c) 2024 Tensorus Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 ```
 
-## 📚 API Reference
-
-### Core API Endpoints
-
-**Datasets:**
-- `POST /datasets/create` - Create a new dataset
-- `GET /datasets` - List all datasets
-- `DELETE /datasets/{name}` - Delete a dataset
-
-**Tensors:**
-- `POST /datasets/{name}/ingest` - Store a tensor
-- `GET /datasets/{name}/records` - List tensors (with pagination)
-- `GET /datasets/{name}/tensors/{id}` - Get specific tensor
-- `DELETE /datasets/{name}/tensors/{id}` - Delete tensor
-
-**Operations:**
-- See `/docs` endpoint for interactive API documentation
-
-### Authentication
-
-```bash
-# Generate an API key
-python generate_api_key.py
-
-# Use in requests
-curl -H "Authorization: Bearer tsr_your_key" http://localhost:8000/datasets
-```
-
-## 🔧 Configuration
-
-Tensorus can be configured via environment variables:
-
-```bash
-# Storage
-TENSORUS_STORAGE_BACKEND=in_memory  # or 'postgres'
-TENSORUS_TENSOR_STORAGE_PATH=tensor_data  # or S3 URI
-
-# Authentication
-TENSORUS_AUTH_ENABLED=true
-TENSORUS_API_KEYS=tsr_your_key_here
-
-# Logging
-TENSORUS_AUDIT_LOG_PATH=tensorus_audit.log
-```
-
-## 📖 Available Tensor Operations
-
-Tensorus provides 40+ tensor operations organized by category:
-
-**Arithmetic:** add, subtract, multiply, divide, power, log
-
-**Linear Algebra:** matmul, dot, transpose, svd, qr, eigenvalues, determinant, inverse
-
-**Reshaping:** reshape, flatten, squeeze, unsqueeze, permute
-
-**Reductions:** sum, mean, min, max, variance
-
-See `tensorus/tensor_ops.py` for the complete list and documentation.
-
-## 🧪 Testing
-
-Run the test suite to verify your installation:
-
-```bash
-# Install dependencies (if not already done)
-./setup.sh
-
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_tensor_storage.py
-
-# Run with verbose output
-pytest -v
-```
-
-## 🤝 Contributing
-
-We welcome contributions! To get started:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `pytest`
-5. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE) file for details.
-
-## 🔗 Resources
-
-- **Documentation:** See `docs/` directory
-- **Examples:** See `examples/` directory
-- **Issues:** [GitHub Issues](https://github.com/tensorus/tensorus/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/tensorus/tensorus/discussions)
+**Third-Party Licenses:** This project includes dependencies with their own licenses. See `requirements.txt` and individual package documentation for details.
 
 ---
 
-*Tensorus - A simple, reliable tensor database focused on fundamentals*
+<div align="center">
+
+### 🌟 Ready to Transform Your Tensor Workflows?
+
+[![Get Started](https://img.shields.io/badge/📚_Get_Started-blue?style=for-the-badge&logo=rocket)](docs/getting_started.md)
+[![Live Demo](https://img.shields.io/badge/🚀_Try_Demo-green?style=for-the-badge&logo=play)](https://tensorus-dashboard.hf.space)
+[![API Docs](https://img.shields.io/badge/📖_API_Reference-orange?style=for-the-badge&logo=swagger)](docs/api_reference.md)
+[![Enterprise](https://img.shields.io/badge/🏢_Enterprise-purple?style=for-the-badge&logo=building)](mailto:sales@tensorus.com)
+
+### ⭐ **Star us on GitHub** | **🔄 Share with your team** | **📢 Follow for updates**
+
+*Tensorus - Empowering Intelligent Tensor Data Management*
+
+</div>
