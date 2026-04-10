@@ -285,21 +285,38 @@ class Tensorus:
             storage_ref=self
         )
     
-    def get_tensor(self, tensor_id: UUID, dataset: str = "default") -> TensorWrapper:
-        """Retrieve a tensor by ID."""
-        result = self.storage.get(dataset, tensor_id)
-        if result is None:
-            raise TensorNotFoundError(f"Tensor {tensor_id} not found in dataset '{dataset}'")
+    def get_tensor(self, tensor_id: Union[UUID, str], dataset: str = "default") -> TensorWrapper:
+        """
+        Retrieve a tensor by ID.
         
-        tensor_data, metadata = result
-        return TensorWrapper(
-            tensor_data,
-            tensor_id=tensor_id,
-            name=metadata.get("name"),
-            metadata=metadata,
-            description=metadata.get("description"),
-            storage_ref=self
-        )
+        Args:
+            tensor_id: The unique record ID of the tensor (UUID or string)
+            dataset: Dataset name to search in
+            
+        Returns:
+            TensorWrapper object containing the tensor and metadata
+            
+        Raises:
+            TensorNotFoundError: If tensor is not found in the dataset
+        """
+        # Convert UUID to string if needed
+        record_id = str(tensor_id) if isinstance(tensor_id, UUID) else tensor_id
+        
+        try:
+            result = self.storage.get_tensor_by_id(dataset, record_id)
+            tensor_data = result["tensor"]
+            metadata = result["metadata"]
+            
+            return TensorWrapper(
+                tensor_data,
+                tensor_id=UUID(record_id) if not isinstance(tensor_id, UUID) else tensor_id,
+                name=metadata.get("name"),
+                metadata=metadata,
+                description=metadata.get("description"),
+                storage_ref=self
+            )
+        except (DatasetNotFoundError, TensorNotFoundError):
+            raise TensorNotFoundError(f"Tensor {tensor_id} not found in dataset '{dataset}'")
     
     def list_tensors(self, dataset: str = "default") -> List[Dict[str, Any]]:
         """List all tensors in a dataset."""
@@ -316,9 +333,24 @@ class Tensorus:
         except (ValueError, DatasetNotFoundError):
             return []
     
-    def delete_tensor(self, tensor_id: UUID, dataset: str = "default") -> bool:
-        """Delete a tensor from storage."""
-        return self.storage.delete(dataset, tensor_id)
+    def delete_tensor(self, tensor_id: Union[UUID, str], dataset: str = "default") -> bool:
+        """
+        Delete a tensor from storage.
+        
+        Args:
+            tensor_id: The unique record ID of the tensor (UUID or string)
+            dataset: Dataset name
+            
+        Returns:
+            True if deletion was successful
+            
+        Raises:
+            TensorNotFoundError: If tensor is not found
+            DatasetNotFoundError: If dataset is not found
+        """
+        # Convert UUID to string if needed
+        record_id = str(tensor_id) if isinstance(tensor_id, UUID) else tensor_id
+        return self.storage.delete_tensor(dataset, record_id)
     
     # ==================== Vector Database Operations ====================
     
@@ -607,10 +639,12 @@ class Tensorus:
         results = []
         
         try:
-            dataset_info = self.storage.get_dataset(dataset)
+            # Use get_dataset_with_metadata which returns List[Dict] with 'tensor' and 'metadata' keys
+            tensor_records = self.storage.get_dataset_with_metadata(dataset)
             
-            for tensor_id, tensor_info in dataset_info["tensors"].items():
-                metadata = tensor_info["metadata"]
+            for record in tensor_records:
+                tensor_data = record["tensor"]
+                metadata = record["metadata"]
                 
                 # Check if metadata matches all filters
                 match = True
@@ -630,10 +664,10 @@ class Tensorus:
                         break
                 
                 if match:
-                    tensor_data = self.storage.get(dataset, tensor_id)[0]
+                    record_id = metadata.get("record_id")
                     results.append(TensorWrapper(
                         tensor_data,
-                        tensor_id=tensor_id,
+                        tensor_id=UUID(record_id) if record_id else None,
                         name=metadata.get("name"),
                         metadata=metadata,
                         description=metadata.get("description"),
