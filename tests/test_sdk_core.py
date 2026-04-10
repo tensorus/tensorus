@@ -294,21 +294,27 @@ class TestTensorMathOperations:
         assert result.shape == (3, 2)
     
     def test_tensor_wrapper_arithmetic(self, sdk):
-        """Test TensorWrapper arithmetic operations."""
+        """Test TensorWrapper arithmetic operations with value verification."""
         a = sdk.create_tensor([[1, 2], [3, 4]], name="a")
         b = sdk.create_tensor([[5, 6], [7, 8]], name="b")
         
-        # Addition
+        # Addition - verify values
         add_result = a + b
         assert add_result.shape == (2, 2)
+        expected_add = torch.tensor([[6, 8], [10, 12]])
+        assert torch.equal(add_result._data, expected_add)
         
-        # Subtraction
+        # Subtraction - verify values
         sub_result = a - b
         assert sub_result.shape == (2, 2)
+        expected_sub = torch.tensor([[-4, -4], [-4, -4]])
+        assert torch.equal(sub_result._data, expected_sub)
         
-        # Multiplication
+        # Element-wise Multiplication - verify values
         mul_result = a * b
         assert mul_result.shape == (2, 2)
+        expected_mul = torch.tensor([[5, 12], [21, 32]])
+        assert torch.equal(mul_result._data, expected_mul)
 
 
 class TestVectorDatabaseOperations:

@@ -224,6 +224,12 @@ class Tensorus:
         
         logger.info("Tensorus SDK initialized successfully")
     
+    # ==================== Helper Methods ====================
+    
+    def _to_record_id(self, tensor_id: Union[UUID, str]) -> str:
+        """Convert tensor_id to string record_id for storage operations."""
+        return str(tensor_id) if isinstance(tensor_id, UUID) else tensor_id
+    
     # ==================== Tensor Creation & Management ====================
     
     def create_tensor(self,
@@ -299,17 +305,17 @@ class Tensorus:
         Raises:
             TensorNotFoundError: If tensor is not found in the dataset
         """
-        # Convert UUID to string if needed
-        record_id = str(tensor_id) if isinstance(tensor_id, UUID) else tensor_id
+        record_id = self._to_record_id(tensor_id)
         
         try:
             result = self.storage.get_tensor_by_id(dataset, record_id)
             tensor_data = result["tensor"]
             metadata = result["metadata"]
             
+            # Preserve original tensor_id for TensorWrapper
             return TensorWrapper(
                 tensor_data,
-                tensor_id=UUID(record_id) if not isinstance(tensor_id, UUID) else tensor_id,
+                tensor_id=tensor_id if isinstance(tensor_id, UUID) else UUID(record_id),
                 name=metadata.get("name"),
                 metadata=metadata,
                 description=metadata.get("description"),
@@ -348,8 +354,7 @@ class Tensorus:
             TensorNotFoundError: If tensor is not found
             DatasetNotFoundError: If dataset is not found
         """
-        # Convert UUID to string if needed
-        record_id = str(tensor_id) if isinstance(tensor_id, UUID) else tensor_id
+        record_id = self._to_record_id(tensor_id)
         return self.storage.delete_tensor(dataset, record_id)
     
     # ==================== Vector Database Operations ====================
