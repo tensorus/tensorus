@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-04-10T04:52:37.101152",
+  "system_info": {
+    "cuda_available": false,
+    "cuda_device": null,
+    "pytorch_version": "2.11.0+cu130"
+  },
+  "results": [
+    {
+      "name": "Storage: Insert 100 tensors (10x10)",
+      "duration_ms": 10.500293000006877,
+      "ops_per_sec": 95.2354377158185,
+      "memory_mb": 0.0,
+      "metadata": {
+        "tensor_shape": [
+          10,
+          10
+        ],
+        "count": 100
+      },
+      "timestamp": "2026-04-10T04:52:37.100250"
+    }
+  ]
+}
