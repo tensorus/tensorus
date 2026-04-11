@@ -1,52 +1,46 @@
 # Tensorus Documentation Hub
 
-Welcome to Tensorus, the world's first production-ready **Enterprise Tensor Database Platform**. Purpose-built for high-performance machine learning and AI applications, Tensorus transforms how organizations store, process, and analyze tensor data at scale.
+Welcome to Tensorus, a **Tensor Database Platform** purpose-built for machine learning and AI applications. Tensorus provides native tensor storage with tensor-operation-based queries.
 
 ## 🚀 Quick Navigation
 
 ### New to Tensorus?
 - **[Getting Started Guide](getting_started.md)** - Install, configure, and run your first tensors in 15 minutes
-- **[Executive Overview](executive_overview.md)** - Product positioning, market opportunity, and business value
+- **[Executive Overview](executive_overview.md)** - Product positioning and business value
 
 ### Developers
 - **[API Reference](api_reference.md)** - Complete REST API documentation with examples
-- **[Integration Guides](integration_guides.md)** - SDKs, frameworks, and third-party integrations
 - **[Examples & Tutorials](../examples/)** - Real-world use cases and implementation guides
 
 ### Operations Teams  
-- **[Production Deployment](production_deployment.md)** - Enterprise deployment strategies and best practices
-- **[Performance Benchmarks](performance_benchmarks.md)** - Scaling guide and optimization strategies
-- **[Security & Compliance](security_compliance.md)** - Enterprise security and regulatory compliance
-
-### Support & Resources
-- **[Troubleshooting Guide](troubleshooting_guide.md)** - Common issues and diagnostic tools
-- **[Monitoring & Observability](monitoring_guide.md)** - Production monitoring and alerting
-- **[Enterprise Features](enterprise_features.md)** - Advanced capabilities and licensing
+- **[Production Deployment](production_deployment.md)** - Deployment strategies and best practices
 
 ## 🎯 What Makes Tensorus Special
 
 ### Core Capabilities
 
-- **🔥 10-100x Performance** - Faster than traditional file-based tensor storage
-- **📊 Advanced Operations** - 40+ optimized tensor operations with GPU acceleration  
-- **🗜️ Smart Compression** - Up to 4x storage savings with intelligent algorithms
-- **🔍 Natural Language Queries** - Intuitive NQL interface for data discovery
+- **🔢 Tensor Embeddings** - Native tensor queries based on mathematical properties
+- **📊 40+ Tensor Operations** - Comprehensive library of tensor operations  
+- **🗜️ Smart Compression** - Storage savings with intelligent algorithms
 - **📈 Complete Lineage** - Full computational provenance for ML governance
-- **⚡ Real-time Processing** - Streaming operations for massive tensors
-- **🏢 Enterprise Ready** - Production-grade security, monitoring, and compliance
+- **🏢 Enterprise Ready** - Security, monitoring, and compliance
+
+### Future Capabilities *(Conceptual)*
+- **🔍 Natural Language Queries** - Planned NQL interface for data discovery
+- **🤖 Agent Framework** - Planned agents for ingestion, AutoML, RL
 
 ### Architecture Highlights
 
 ```mermaid
 graph TB
     A[Client Applications] --> B[Tensorus API Layer]
-    B --> C[Query Engine & NQL]
+    B --> C[Tensor Embeddings Engine]
     B --> D[Tensor Operations Engine]
     B --> E[Storage Management]
-    C --> F[Metadata Database]
+    C --> F[Property Index]
     D --> G[Compute Backends]
     E --> H[Compressed Storage]
-    E --> I[Indexing System]
+    E --> I[Tensor Index]
 ```
 
 ## 📋 Documentation Structure
@@ -58,21 +52,15 @@ graph TB
 
 ### Core Concepts
 - **Tensors & Datasets** - Data organization and management
+- **Tensor Embeddings** - Query tensors by mathematical properties
 - **Operations & History** - Computational tracking and lineage  
-- **Compression & Indexing** - Performance optimization
-- **Natural Language Queries** - Intuitive data discovery
+- **Compression & Indexing** - Storage optimization
 
 ### Production Deployment
 - **[Architecture Planning](production_deployment.md#deployment-architecture-options)** - Cloud, on-premise, hybrid options
 - **[Security Hardening](production_deployment.md#security-hardening)** - Enterprise security best practices
 - **[Monitoring Setup](production_deployment.md#monitoring--observability)** - Prometheus, Grafana, alerting
 - **[Backup & Recovery](production_deployment.md#backup--recovery)** - Data protection strategies
-
-### Performance & Scaling
-- **[Benchmark Results](performance_benchmarks.md#benchmark-overview)** - Comprehensive performance data
-- **[Optimization Guide](performance_benchmarks.md#performance-optimization-guide)** - Tuning for maximum performance
-- **[Capacity Planning](performance_benchmarks.md#capacity-planning)** - Resource requirements calculator
-- **[Load Testing](performance_benchmarks.md#load-testing)** - Stress testing strategies
 
 ## 🔗 Popular Resources
 

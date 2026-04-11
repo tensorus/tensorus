@@ -3,6 +3,12 @@ Tensorus Unified SDK
 
 This module provides a high-level, unified interface to all Tensorus components,
 making it easy to work with tensor storage, agents, vector search, and operations.
+
+Core features:
+- Tensor Storage with persistence
+- Tensor Embeddings for native tensor queries
+- 40+ tensor operations
+- Computational lineage tracking
 """
 
 import logging
@@ -15,8 +21,13 @@ from pathlib import Path
 from .tensor_storage import TensorStorage, TensorNotFoundError, DatasetNotFoundError
 from .tensor_ops import TensorOps
 from .vector_database import PartitionedVectorIndex, VectorMetadata, SearchResult
+from .tensor_embeddings import (
+    TensorEmbeddingIndex, TensorDescriptor, TensorSimilarityResult,
+    SimilarityMetric, TensorProperty
+)
 
 # Lazy imports for agents to avoid heavy dependencies on startup
+# Note: Agents are conceptual/future features
 EmbeddingAgent = None
 NQLAgent = None
 DataIngestionAgent = None
@@ -131,26 +142,25 @@ class SearchResults:
 
 class Tensorus:
     """
-    Unified interface to the Tensorus agentic tensor database.
+    Unified interface to the Tensorus tensor database.
     
     This class provides high-level methods for:
     - Creating and managing tensors
-    - Vector similarity search
-    - Natural language queries
-    - Autonomous agent operations
+    - Tensor Embeddings for native tensor queries
     - Tensor operations and transformations
+    - Future: Vector similarity search, NQL, Agent operations
     
     Example:
         >>> ts = Tensorus()
         >>> tensor = ts.create_tensor([[1, 2], [3, 4]], name="matrix_a")
-        >>> result = ts.matmul(tensor, tensor)
+        >>> similar = ts.find_similar_tensors(tensor)
     """
     
     def __init__(self,
                  storage_path: Optional[str] = None,
                  storage_backend: str = "in_memory",
-                 enable_nql: bool = True,
-                 enable_embeddings: bool = True,
+                 enable_nql: bool = False,        # Disabled by default (future feature)
+                 enable_embeddings: bool = False,  # Disabled by default (future feature)
                  enable_vector_search: bool = True,
                  embedding_model: str = "all-MiniLM-L6-v2",
                  **kwargs):
@@ -160,10 +170,10 @@ class Tensorus:
         Args:
             storage_path: Path for persistent storage (file or S3)
             storage_backend: Backend type ("in_memory", "postgres", "s3")
-            enable_nql: Enable Natural Query Language agent
-            enable_embeddings: Enable embedding generation
+            enable_nql: Enable Natural Query Language agent (future feature)
+            enable_embeddings: Enable text embedding generation (future feature)
             enable_vector_search: Enable vector similarity search
-            embedding_model: Model to use for embeddings
+            embedding_model: Model to use for text embeddings
             **kwargs: Additional configuration options
         """
         logger.info(f"Initializing Tensorus SDK with backend: {storage_backend}")
@@ -175,29 +185,32 @@ class Tensorus:
             compression_preset=compression_preset
         )
         
-        # Initialize agents
+        # Initialize Tensor Embedding Index (core feature)
+        self._tensor_index = TensorEmbeddingIndex()
+        
+        # Initialize agents (future features - disabled by default)
         self._nql_agent = None
         self._embedding_agent = None
         self._ingestion_agent = None
         self._rl_agent = None
         self._automl_agent = None
         
-        # Initialize NQL Agent if enabled
-        self._nql_agent = None
+        # Initialize NQL Agent if enabled (future feature)
         if enable_nql:
             try:
                 from .nql_agent import NQLAgent as NQLAgentClass
                 self._nql_agent = NQLAgentClass(self.storage)
-                logger.info("NQL Agent initialized")
+                logger.info("NQL Agent initialized (experimental)")
             except Exception as e:
                 logger.warning(f"Failed to initialize NQL Agent: {e}")
         
+        # Initialize text embedding agent if enabled (future feature)
         if enable_embeddings:
             try:
                 from .embedding_agent import EmbeddingAgent as EmbeddingAgentClass
                 self._embedding_agent = EmbeddingAgentClass(
                     self.storage,
-                    default_model=embedding_model,  # Fixed: use 'default_model' not 'model_name'
+                    default_model=embedding_model,
                     cache_dir=kwargs.get("cache_dir")
                 )
                 logger.info(f"Embedding Agent initialized with model: {embedding_model}")
@@ -237,7 +250,8 @@ class Tensorus:
                      name: Optional[str] = None,
                      metadata: Optional[Dict[str, Any]] = None,
                      description: Optional[str] = None,
-                     dataset: str = "default") -> TensorWrapper:
+                     dataset: str = "default",
+                     index_tensor: bool = True) -> TensorWrapper:
         """
         Create a new tensor with optional metadata.
         
@@ -247,6 +261,7 @@ class Tensorus:
             metadata: Additional metadata to attach
             description: Text description of the tensor
             dataset: Dataset name to store the tensor in
+            index_tensor: Whether to add tensor to the embedding index
             
         Returns:
             TensorWrapper object
@@ -281,6 +296,13 @@ class Tensorus:
         )
         
         logger.debug(f"Created tensor {tensor_id} in dataset '{dataset}'")
+        
+        # Add to tensor embedding index for efficient queries
+        if index_tensor:
+            self._tensor_index.add_tensor(
+                tensor_data, tensor_id=tensor_id, name=name,
+                dataset=dataset, metadata=full_metadata
+            )
         
         return TensorWrapper(
             tensor_data,
@@ -357,7 +379,216 @@ class Tensorus:
         record_id = self._to_record_id(tensor_id)
         return self.storage.delete_tensor(dataset, record_id)
     
-    # ==================== Vector Database Operations ====================
+    # ==================== Tensor Embeddings (Core Feature) ====================
+    
+    def index_tensor(self, tensor: Union[TensorWrapper, torch.Tensor],
+                     name: Optional[str] = None,
+                     dataset: str = "default",
+                     metadata: Optional[Dict[str, Any]] = None) -> TensorDescriptor:
+        """
+        Add a tensor to the embedding index for efficient queries.
+        
+        Args:
+            tensor: Tensor to index (TensorWrapper or torch.Tensor)
+            name: Optional name for the tensor
+            dataset: Dataset name
+            metadata: Additional metadata
+            
+        Returns:
+            TensorDescriptor with computed properties
+        """
+        if isinstance(tensor, TensorWrapper):
+            tensor_data = tensor.to_tensor()
+            tensor_id = tensor.id
+            name = name or tensor.name
+        else:
+            tensor_data = tensor
+            tensor_id = None
+        
+        return self._tensor_index.add_tensor(
+            tensor_data, tensor_id=tensor_id, name=name,
+            dataset=dataset, metadata=metadata
+        )
+    
+    def find_similar_tensors(
+        self,
+        query_tensor: Union[TensorWrapper, torch.Tensor],
+        metric: str = "frobenius",
+        top_k: int = 10,
+        dataset: Optional[str] = None,
+        include_tensors: bool = False
+    ) -> List[TensorSimilarityResult]:
+        """
+        Find tensors similar to the query tensor.
+        
+        Args:
+            query_tensor: The tensor to compare against
+            metric: Similarity metric ("frobenius", "cosine", "spectral", "relative")
+            top_k: Number of results to return
+            dataset: Filter by dataset (optional)
+            include_tensors: Include actual tensor data in results
+            
+        Returns:
+            List of TensorSimilarityResult sorted by similarity
+        """
+        if isinstance(query_tensor, TensorWrapper):
+            query_data = query_tensor.to_tensor()
+        else:
+            query_data = query_tensor
+        
+        # Convert metric string to enum
+        metric_enum = SimilarityMetric(metric)
+        
+        return self._tensor_index.find_similar_tensors(
+            query_data, metric=metric_enum, top_k=top_k,
+            dataset=dataset, include_tensors=include_tensors
+        )
+    
+    def find_tensors_by_shape(
+        self,
+        shape: Tuple[int, ...],
+        dataset: Optional[str] = None
+    ) -> List[TensorDescriptor]:
+        """
+        Find all tensors with a specific shape.
+        
+        Args:
+            shape: Target shape tuple
+            dataset: Filter by dataset (optional)
+            
+        Returns:
+            List of TensorDescriptor matching the shape
+        """
+        return self._tensor_index.find_tensors_by_shape(shape, dataset=dataset)
+    
+    def find_tensors_by_norm_range(
+        self,
+        min_norm: float = 0.0,
+        max_norm: float = float('inf'),
+        norm_type: str = "frobenius",
+        dataset: Optional[str] = None
+    ) -> List[TensorDescriptor]:
+        """
+        Find tensors with norm in the specified range.
+        
+        Args:
+            min_norm: Minimum norm value
+            max_norm: Maximum norm value
+            norm_type: Type of norm ("frobenius", "l1", "linf")
+            dataset: Filter by dataset (optional)
+            
+        Returns:
+            List of TensorDescriptor matching the norm range
+        """
+        return self._tensor_index.find_tensors_by_norm_range(
+            min_norm, max_norm, norm_type=norm_type, dataset=dataset
+        )
+    
+    def find_tensors_by_property(
+        self,
+        property_type: str,
+        dataset: Optional[str] = None
+    ) -> List[TensorDescriptor]:
+        """
+        Find tensors with a specific mathematical property.
+        
+        Args:
+            property_type: Property to search for:
+                - "symmetric": Symmetric matrices
+                - "positive_definite": Positive definite matrices
+                - "orthogonal": Orthogonal matrices
+                - "sparse": Sparse tensors (>50% zeros)
+                - "dense": Dense tensors
+                - "square": Square matrices
+                - "diagonal": Diagonal matrices
+            dataset: Filter by dataset (optional)
+            
+        Returns:
+            List of TensorDescriptor matching the property
+        """
+        prop_enum = TensorProperty(property_type)
+        return self._tensor_index.find_tensors_by_property(prop_enum, dataset=dataset)
+    
+    def find_matmul_compatible(
+        self,
+        query_tensor: Union[TensorWrapper, torch.Tensor],
+        dataset: Optional[str] = None
+    ) -> List[TensorDescriptor]:
+        """
+        Find tensors that can be multiplied with the query tensor.
+        
+        For A @ B, finds tensors B where A.shape[-1] == B.shape[-2].
+        
+        Args:
+            query_tensor: The tensor to find compatible tensors for
+            dataset: Filter by dataset (optional)
+            
+        Returns:
+            List of TensorDescriptor for compatible tensors
+        """
+        if isinstance(query_tensor, TensorWrapper):
+            query_data = query_tensor.to_tensor()
+        else:
+            query_data = query_tensor
+        
+        return self._tensor_index.find_matmul_compatible(query_data, dataset=dataset)
+    
+    def find_decomposition_candidates(
+        self,
+        decomposition_type: str = "svd",
+        min_size: int = 2,
+        dataset: Optional[str] = None
+    ) -> List[TensorDescriptor]:
+        """
+        Find tensors suitable for specific decompositions.
+        
+        Args:
+            decomposition_type: Type of decomposition ("svd", "qr", "cholesky", "eigen")
+            min_size: Minimum matrix size
+            dataset: Filter by dataset (optional)
+            
+        Returns:
+            List of TensorDescriptor for suitable tensors
+        """
+        return self._tensor_index.find_decomposition_candidates(
+            decomposition_type, min_size=min_size, dataset=dataset
+        )
+    
+    def get_tensor_descriptor(
+        self,
+        tensor: Union[TensorWrapper, torch.Tensor, UUID]
+    ) -> Optional[TensorDescriptor]:
+        """
+        Get the descriptor for a tensor (its mathematical "embedding").
+        
+        Args:
+            tensor: TensorWrapper, torch.Tensor, or UUID
+            
+        Returns:
+            TensorDescriptor with computed properties, or None
+        """
+        if isinstance(tensor, UUID):
+            return self._tensor_index.get_descriptor(tensor)
+        elif isinstance(tensor, TensorWrapper) and tensor.id:
+            return self._tensor_index.get_descriptor(tensor.id)
+        elif isinstance(tensor, torch.Tensor):
+            # Compute descriptor without adding to index
+            return TensorDescriptor.from_tensor(tensor)
+        return None
+    
+    def get_tensor_embedding_stats(self, dataset: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get statistics about indexed tensors.
+        
+        Args:
+            dataset: Filter by dataset (optional)
+            
+        Returns:
+            Dictionary with index statistics
+        """
+        return self._tensor_index.get_statistics(dataset)
+    
+    # ==================== Vector Database Operations (Text Embeddings) ====================
     
     def create_index(self, index_name: str, dimensions: int,
                     metric: str = "cosine", use_partitioning: bool = True) -> None:
