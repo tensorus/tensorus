@@ -1061,7 +1061,14 @@ Below are the primary Pydantic models used by the API. See `tensorus/api.py` and
 
 #### 🧩 Examples
 
-Explore our collection of examples to get started with Tensorus:
+Explore our collection of examples to get started with Tensorus in the [`examples/`](examples/) directory.
+
+#### Response Examples
+
+Success response:
+```json
+{
+  "success": true,
   "message": "Tensor ingested successfully.",
   "data": { "record_id": "abc123" }
 }
