@@ -18,19 +18,20 @@ short_description: Tensorus Core
 
 > **🎉 New in v0.0.5:** Unified Python SDK with intuitive API, Agent Orchestrator for multi-agent workflows, and comprehensive examples. See [What's New](#-whats-new-in-v005) for details.
 
-**Tensorus** is a production-ready, specialized data platform focused on the management and agent-driven manipulation of tensor data. It offers a streamlined environment for storing, retrieving, and operating on tensors at scale, providing the foundation for advanced AI and machine learning workflows.
+**Tensorus** is a specialized data platform focused on the native management and manipulation of tensor data. Unlike traditional databases that treat tensors as opaque blobs, Tensorus understands tensor structure and enables **tensor-native queries and operations**. It provides the foundation for AI and machine learning workflows where tensors are first-class citizens.
 
 ## 🎯 What Makes Tensorus Special
 
 Tensorus bridges the gap between traditional databases and AI/ML requirements by providing:
 
-- **🧠 Intelligent Agent Framework** - Built-in agents for data ingestion, reinforcement learning, AutoML, and embedding generation
-- **⚡ High-Performance Tensor Operations** - 40+ optimized operations with 10-100x performance improvements
-- **🔍 Natural Language Queries** - Intuitive NQL interface for tensor discovery and analysis
+- **🔢 Tensor Embeddings** - Native tensor storage with tensor-operation-based similarity queries (beyond simple vector embeddings)
+- **⚡ Native Tensor Operations** - 40+ tensor operations (decompositions, linear algebra, transformations) integrated with storage
 - **📊 Complete Observability** - Full computational lineage and operation history tracking
 - **🏗️ Production-Grade Architecture** - Enterprise security, scaling, and deployment capabilities
+- **🔮 Future: Intelligent Agents** - Planned agents for data ingestion, AutoML, and embedding generation *(conceptual)*
+- **🔮 Future: Natural Language Queries** - Planned NQL interface for tensor discovery *(conceptual)*
 
-The core purpose of Tensorus is to **simplify and accelerate** how developers and AI agents interact with tensor datasets, enabling faster development of automated data ingestion, reinforcement learning from stored experiences, AutoML processes, and intelligent data utilization in AI projects.
+The core purpose of Tensorus is to provide **tensor-native data management** where tensors are stored, queried, and operated on based on their mathematical properties—not just as raw bytes.
 
 ## 🚀 Quick Start (3 Minutes)
 
@@ -50,12 +51,8 @@ pip install -e .
 from tensorus import Tensorus
 import torch
 
-# Initialize Tensorus SDK (minimal dependencies)
-ts = Tensorus(
-    enable_nql=False,          # Disable if transformers not installed
-    enable_embeddings=False,   # Disable if sentence-transformers not installed
-    enable_vector_search=False
-)
+# Initialize Tensorus SDK
+ts = Tensorus()
 
 # Create a dataset
 ts.create_dataset("my_dataset")
@@ -101,14 +98,8 @@ The Tensorus SDK provides a unified interface for all tensor operations, agent c
 ```python
 from tensorus import Tensorus
 
-# Full initialization with all features
-ts = Tensorus(
-    enable_nql=True,              # Natural Query Language
-    enable_embeddings=True,       # Embedding generation  
-    enable_vector_search=True,    # Vector similarity search
-    enable_orchestrator=True,     # Multi-agent workflows
-    embedding_model="all-MiniLM-L6-v2"
-)
+# Initialize Tensorus
+ts = Tensorus()
 
 # Dataset management
 ts.create_dataset("research_data")
@@ -124,32 +115,18 @@ result = ts.matmul(a.to_tensor(), b.to_tensor())
 transposed = ts.transpose(a.to_tensor())
 eigenvals = ts.eigenvalues(a.to_tensor())
 
-# Natural language queries (requires enable_nql=True)
-results = ts.query("find tensors in research_data where shape is (2, 2)")
-
-# Vector operations (requires enable_embeddings=True)
-ts.create_index("docs", dimensions=384, metric="cosine")
-ts.embed_and_index(
-    texts=["Machine learning paper", "Deep learning tutorial"],
-    index_name="docs",
-    dataset="research_data"
-)
-search_results = ts.search("neural networks", index_name="docs", top_k=5)
-
-# Multi-agent workflows (requires enable_orchestrator=True)
-workflow = ts.create_workflow("data_pipeline")
-ts.orchestrator.add_task(workflow, "embed", "embedding", "generate", {...})
-ts.orchestrator.add_task(workflow, "index", "vector", "index", {...}, deps=["embed"])
-results = ts.execute_workflow(workflow)
+# Tensor Embedding queries - find tensors by mathematical properties
+similar_tensors = ts.find_similar_tensors(a, metric="frobenius", top_k=5)
+tensors_by_shape = ts.find_tensors_by_shape((2, 2), dataset="research_data")
+tensors_by_norm = ts.find_tensors_by_norm_range(min_norm=1.0, max_norm=10.0)
 ```
 
 ### SDK Benefits
 
 - **Unified Interface** - Single entry point for all Tensorus capabilities
-- **Lazy Loading** - Agents load only when enabled, reducing dependencies
+- **Tensor-Native Queries** - Find tensors by mathematical properties, not just metadata
 - **Type Safety** - Full type hints for IDE autocomplete and validation
 - **Error Handling** - Comprehensive exception handling with helpful messages
-- **Performance** - Optimized for both single-node and distributed workloads
 
 ## 📚 Documentation
 
@@ -250,43 +227,47 @@ See [QUICKSTART.md](QUICKSTART.md) for migration guide and [examples/](examples/
 
 ## 🌟 Core Capabilities
 
-### 🗄️ Advanced Tensor Storage System
-*   **High-Performance Storage** - Efficiently store and retrieve PyTorch tensors with rich metadata support
-*   **Intelligent Compression** - Multiple algorithms (LZ4, GZIP, quantization) with up to 4x space savings
+### 🗄️ Tensor Storage System
+*   **Native Tensor Storage** - Store and retrieve PyTorch tensors with rich metadata support
+*   **Intelligent Compression** - Multiple algorithms (LZ4, GZIP, quantization) for space savings
 *   **Schema Validation** - Optional per-dataset schemas enforce metadata fields and tensor shape/dtype constraints
 *   **Chunked Processing** - Handle tensors larger than available memory through intelligent chunking
 *   **Multi-Backend Support** - Local filesystem, PostgreSQL, S3, and cloud storage backends
 
-### 🤖 Intelligent Agent Ecosystem  
-*   **Data Ingestion Agent** - Automatically monitors directories and ingests files as tensors with preprocessing
-*   **Reinforcement Learning Agent** - Deep Q-Network (DQN) agent that learns from experiences stored in tensor datasets  
-*   **AutoML Agent** - Hyperparameter optimization and model selection using advanced search algorithms
-*   **Embedding Agent** - Multi-provider embedding generation with intelligent caching and vector indexing
-*   **Extensible Framework** - Build custom agents that interact intelligently with your tensor data
+### 🔢 Tensor Embeddings *(Core Feature)*
+*   **Native Tensor Queries** - Find tensors by mathematical properties (norm, rank, eigenvalues, shape)
+*   **Tensor Similarity Search** - Find similar tensors using Frobenius norm, cosine similarity, or custom metrics
+*   **Operation-Based Queries** - Search tensors based on their suitability for specific mathematical operations
+*   **Property-Based Filtering** - Filter tensors by sparsity, symmetry, positive-definiteness, and other mathematical properties
 
-### 🔍 Advanced Query & Search Engine
-*   **Natural Query Language (NQL)** - Query tensor data using intuitive, natural language-like syntax
-*   **Vector Database Integration** - Advanced similarity search with multi-provider embedding generation
-*   **Hybrid Search** - Combine semantic similarity with computational tensor properties  
-*   **Geometric Partitioning** - Efficient vector indexing with automatic clustering and freshness layers
-
-### 🔬 Production-Grade Operations
+### 🔬 Tensor Operations
 *   **40+ Tensor Operations** - Comprehensive library covering arithmetic, linear algebra, decompositions, and advanced operations
 *   **Computational Lineage** - Complete tracking of tensor transformations for reproducible scientific workflows
-*   **Operation History** - Full audit trail with performance metrics and error tracking
-*   **Asynchronous Processing** - Background operations and job queuing for long-running computations
+*   **Operation History** - Full audit trail with metrics and error tracking
 
 ### 🌐 Developer-Friendly Interface
 *   **RESTful API** - FastAPI backend with comprehensive OpenAPI documentation and authentication
-*   **Interactive Web UI** - Streamlit-based dashboard for data exploration and agent control
+*   **Interactive Web UI** - Streamlit-based dashboard for data exploration
 *   **Python SDK** - Rich client library with intuitive APIs and comprehensive error handling
-*   **Model Context Protocol** - Standardized integration for AI agents and LLMs via [tensorus/mcp](https://github.com/tensorus/mcp)
 
 ### 📊 Enterprise Features
 *   **Rich Metadata System** - Pydantic schemas for semantic, lineage, computational, quality, and usage metadata
 *   **Security & Authentication** - API key management, role-based access control, and audit logging  
-*   **Monitoring & Observability** - Health checks, performance metrics, and comprehensive logging
-*   **Scalable Architecture** - Horizontal scaling, load balancing, and distributed processing capabilities
+*   **Monitoring & Observability** - Health checks, metrics, and comprehensive logging
+
+### 🔮 Future Features *(Conceptual - Not Yet Implemented)*
+
+> **Note:** The following features are planned but not yet production-ready. They exist as conceptual implementations for future development.
+
+*   **🤖 Intelligent Agent Ecosystem** *(Future)*
+    *   Data Ingestion Agent - Monitors directories and ingests files as tensors
+    *   Reinforcement Learning Agent - DQN agent for stored experiences
+    *   AutoML Agent - Hyperparameter optimization using search algorithms
+    *   Embedding Agent - Multi-provider text embedding generation
+
+*   **🔍 Natural Query Language (NQL)** *(Future)*
+    *   Query tensor data using natural language-like syntax
+    *   LLM-powered query rewriting for complex queries
 
 ## Project Structure
 
@@ -517,50 +498,22 @@ docker run -p 8000:8000 \
   tensorus/tensorus:latest
 ```
 
-## ⚡ Performance & Scalability
-
-### 🏆 Benchmark Results
-Tensorus delivers **10-100x performance improvements** over traditional file-based tensor storage:
-
-| Operation Type | Traditional Files | Tensorus | Improvement |
-|----------------|------------------|----------|-------------|
-| **Tensor Retrieval** | 280 ops/sec | 15,000 ops/sec | **53.6x faster** |
-| **Query Processing** | 850ms | 45ms | **18.9x faster** |
-| **Storage Efficiency** | 1.0x baseline | 4.0x compressed | **75% space saved** |
-| **Vector Search** | 15,000ms | 125ms | **120x faster** |
-| **Concurrent Operations** | 450 ops/sec | 12,000 ops/sec | **26.7x higher throughput** |
-
-### 📈 Scaling Characteristics
-- **Linear scaling** up to 32+ nodes in distributed deployments
-- **Sub-200ms response times** at enterprise scale (millions of tensors)
-- **99.9% availability** with proper redundancy configuration
-- **Automatic load balancing** and intelligent request routing
-
 ## 🎯 Use Cases & Applications
 
 ### 🧠 AI/ML Development & Production
 - **Model Training Pipelines** - Store training data, model checkpoints, and experiment results
-- **Real-time Inference** - Fast retrieval of model weights and feature tensors for serving
+- **Tensor-Based Queries** - Find tensors by mathematical properties for model analysis
 - **Experiment Tracking** - Complete lineage of model development with reproducible workflows
-- **AutoML Platforms** - Automated hyperparameter optimization and model architecture search
 
 ### 🔬 Scientific Computing & Research
 - **Numerical Simulations** - Large-scale scientific computing with computational provenance
-- **Climate & Weather Modeling** - Multi-dimensional data analysis with temporal tracking
-- **Genomics & Bioinformatics** - DNA sequence analysis, protein folding, and molecular dynamics
-- **Materials Science** - Quantum chemistry simulations and materials property prediction
+- **Matrix Analysis** - Find tensors by rank, eigenvalues, or decomposition properties
+- **Reproducible Workflows** - Full audit trail of tensor transformations
 
-### 👁️ Computer Vision & Autonomous Systems
-- **Image/Video Processing** - Efficient storage and retrieval of visual data tensors
-- **Object Detection & Recognition** - Real-time inference with cached model components
-- **Autonomous Vehicles** - Sensor fusion, path planning, and decision-making algorithms
-- **Medical Imaging** - DICOM processing, radiological analysis, and diagnostic AI
-
-### 💰 Financial Services & Trading
-- **Risk Management** - Real-time portfolio optimization and risk assessment models
-- **Algorithmic Trading** - High-frequency trading with microsecond-latency model execution
-- **Fraud Detection** - Anomaly detection in transaction patterns and behavioral analysis
-- **Credit Scoring** - ML-driven creditworthiness assessment with regulatory compliance
+### 👁️ Computer Vision & Deep Learning
+- **Feature Storage** - Store and query feature tensors by shape and properties
+- **Weight Analysis** - Analyze model weights using tensor operations
+- **Tensor Similarity** - Find similar tensors using mathematical metrics
 
 ### Running the API Server
 
@@ -1108,7 +1061,14 @@ Below are the primary Pydantic models used by the API. See `tensorus/api.py` and
 
 #### 🧩 Examples
 
-Explore our collection of examples to get started with Tensorus:
+Explore our collection of examples to get started with Tensorus in the [`examples/`](examples/) directory.
+
+#### Response Examples
+
+Success response:
+```json
+{
+  "success": true,
   "message": "Tensor ingested successfully.",
   "data": { "record_id": "abc123" }
 }
@@ -1223,106 +1183,57 @@ Tensorus includes a detailed metadata subsystem for describing tensors beyond th
 
 The Streamlit UI provides a user-friendly interface for:
 
-*   **Dashboard:** View basic system metrics and agent status.
-*   **Agent Control:** Start, stop, and view logs for agents.
-*   **NQL Chat:** Enter natural language queries and view results.
+*   **Dashboard:** View basic system metrics.
 *   **Data Explorer:** Browse datasets, preview data, and perform tensor operations.
+*   **Tensor Queries:** Find tensors by mathematical properties.
 
-## Natural Query Language (NQL)
+## Natural Query Language (NQL) *(Future Feature)*
 
-Tensorus ships with a simple regex‑based Natural Query Language for retrieving
-tensors by metadata. You can issue NQL queries via the API or from the "NQL
-Chat" page in the Streamlit UI.
+> **⚠️ FUTURE FEATURE:** NQL is a conceptual feature planned for future releases. The current implementation is experimental and not recommended for production use.
 
-See also: [NQL Query Example](#nql-query-example) for a minimal API request.
+Tensorus includes a prototype regex-based Natural Query Language for retrieving
+tensors by metadata. This feature is being replaced by **Tensor Embeddings** which provide
+tensor-native queries based on mathematical properties rather than text-based queries.
 
-### Enabling LLM rewriting
+**Current recommendation:** Use the Tensor Embeddings API for tensor queries:
+- `find_similar_tensors()` - Find tensors by mathematical similarity
+- `find_tensors_by_shape()` - Query by tensor shape
+- `find_tensors_by_norm_range()` - Query by norm values
+- `find_tensors_by_property()` - Query by mathematical properties
 
-Set `NQL_USE_LLM=true` to enable parsing of free‑form queries with
-Google's Gemini model. Provide your API key in the `GOOGLE_API_KEY`
-environment variable and optionally set `NQL_LLM_MODEL` (defaults to
-`gemini-2.0-flash`) to choose the model version. The agent sends the
-current dataset schema and your query to Gemini via
-`langchain-google`. If the model or key are unavailable the agent
-silently falls back to the regex-based parser.
+## Agent Details *(Future Features)*
 
-Example query using the LLM parser:
+> **⚠️ FUTURE FEATURES:** The following agents are conceptual implementations planned for future releases. They exist as prototypes for demonstration purposes and are not recommended for production use.
 
-```text
-show me all images containing a dog from dataset animals where source is "mobile"
-```
+### Data Ingestion Agent *(Conceptual)*
 
-This phrasing is more natural than the regex format and will be
-rewritten into a structured NQL query by Gemini.
-
-## Agent Details
-
-### Data Ingestion Agent
-
+*   **Status:** Prototype - not production-ready
 *   **Functionality:** Monitors a source directory for new files, preprocesses them into tensors, and inserts them into TensorStorage.
 *   **Supported File Types:** CSV, PNG, JPG, JPEG, TIF, TIFF (can be extended).
-*   **Preprocessing:** Uses default functions for CSV and images (resize, normalize).
-*   **Configuration:**
-    *   `source_directory`: The directory to monitor.
-    *   `polling_interval_sec`: How often to check for new files.
-    *   `preprocessing_rules`: A dictionary mapping file extensions to custom preprocessing functions.
 
-### RL Agent
+### RL Agent *(Conceptual)*
 
+*   **Status:** Prototype - not production-ready
 *   **Functionality:** A Deep Q-Network (DQN) agent that learns from experiences stored in TensorStorage.
-*   **Environment:** Uses a `DummyEnv` for demonstration.
-*   **Experience Storage:** Stores experiences (state, action, reward, next_state, done) in TensorStorage.
-*   **Training:** Implements epsilon-greedy exploration and target network updates.
-*   **Configuration:**
-    *   `state_dim`: Dimensionality of the environment state.
-    *   `action_dim`: Number of discrete actions.
-    *   `hidden_size`: Hidden layer size for the DQN.
-    *   `lr`: Learning rate.
-    *   `gamma`: Discount factor.
-    *   `epsilon_*`: Epsilon-greedy parameters.
-    *   `target_update_freq`: Target network update frequency.
-    *   `batch_size`: Experience batch size.
-    *   `experience_dataset`: Dataset name for experiences.
-    *   `state_dataset`: Dataset name for state tensors.
+*   **Environment:** Uses a `DummyEnv` for demonstration only.
 
-### AutoML Agent
+### AutoML Agent *(Conceptual)*
 
+*   **Status:** Prototype - not production-ready
 *   **Functionality:** Performs hyperparameter optimization using random search.
-*   **Model:** Trains a simple `DummyMLP` model.
-*   **Search Space:** Configurable hyperparameter search space (learning rate, hidden size, activation).
-*   **Evaluation:** Trains and evaluates models on synthetic data.
-*   **Results:** Stores trial results (parameters, score) in TensorStorage.
-*   **Configuration:**
-    *   `search_space`: Dictionary defining the hyperparameter search space.
-    *   `input_dim`: Input dimension for the model.
-    *   `output_dim`: Output dimension for the model.
-    *   `task_type`: Type of task ('regression' or 'classification').
-    *   `results_dataset`: Dataset name for storing results.
+*   **Model:** Trains a simple `DummyMLP` model on synthetic data.
 
-### Embedding Agent
+### Embedding Agent *(Conceptual)*
 
-*   **Functionality:** Multi-provider embedding generation with intelligent caching and vector database integration.
-*   **Providers:** Supports Sentence Transformers, OpenAI, and extensible architecture for additional providers.
-*   **Features:** Automatic batching, embedding caching, vector indexing, and performance monitoring.
-*   **Configuration:**
-    *   `default_provider`: Default embedding provider to use.
-    *   `default_model`: Default model for embedding generation.
-    *   `batch_size`: Batch size for embedding generation.
-    *   `cache_ttl`: Time-to-live for embedding cache entries.
+*   **Status:** Prototype - being replaced by Tensor Embeddings
+*   **Note:** Text-based embedding generation is being superseded by native Tensor Embeddings.
 
-## Tensorus Models
+## Tensorus Models *(Future Feature)*
 
-The collection of example models previously bundled with Tensorus now lives in
-a separate repository: [tensorus/models](https://github.com/tensorus/models).
-Install it with:
+> **⚠️ FUTURE FEATURE:** The external models package is planned for future releases.
 
-```bash
-pip install tensorus-models
-```
-
-When the package is installed, Tensorus will automatically import it. Set the
-environment variable `TENSORUS_MINIMAL_IMPORT=1` before importing Tensorus to
-skip this optional dependency and keep startup lightweight.
+The collection of example models may be found in the separate repository: 
+[tensorus/models](https://github.com/tensorus/models).
 
 ## Basic Tensor Operations
 
@@ -1415,33 +1326,36 @@ available in TensorLy and related libraries.
 Examples of how to call these methods are provided in
 [`tensorus/tensor_decompositions.py`](tensorus/tensor_decompositions.py).
 
-## Vector Database Features
+## Tensor Embeddings *(Core Feature)*
 
-### Embedding Generation
+**Tensor Embeddings** go beyond traditional vector embeddings by storing native tensor data and enabling diverse queries using tensor operations. This is the primary query mechanism for Tensorus.
 
-Tensorus supports multiple embedding providers for generating high-quality vector representations of text:
+### Tensor Similarity Search
 
-*   **Sentence Transformers**: Local models including all-MiniLM-L6-v2, all-mpnet-base-v2, and specialized models
-*   **OpenAI**: Cloud-based models like text-embedding-3-small and text-embedding-3-large
-*   **Extensible Architecture**: Easy integration of additional embedding providers
+Find similar tensors based on mathematical properties:
 
-### Vector Indexing
+*   **Frobenius Norm Distance**: Find tensors with similar magnitude
+*   **Cosine Similarity**: Find tensors with similar direction (normalized)
+*   **Spectral Similarity**: Find tensors with similar eigenvalue distributions
+*   **Shape-Aware Search**: Constrain searches to compatible tensor shapes
 
-Advanced vector indexing capabilities for efficient similarity search:
+### Property-Based Queries
 
-*   **Geometric Partitioning**: Automatic distribution of vectors across partitions using k-means clustering
-*   **Freshness Layers**: Real-time updates without requiring full index rebuilds
-*   **FAISS Integration**: High-performance similarity search with multiple distance metrics
-*   **Multi-tenancy**: Namespace and tenant isolation for secure multi-user deployments
+Query tensors by their mathematical properties:
 
-### Hybrid Search
+*   **By Shape**: Find all tensors with specific dimensions
+*   **By Norm Range**: Find tensors within a norm range
+*   **By Rank**: Find matrices/tensors by their numerical rank
+*   **By Sparsity**: Find tensors with specific sparsity levels
+*   **By Symmetry**: Find symmetric, positive-definite, orthogonal tensors
 
-Unique hybrid search capabilities that combine semantic similarity with computational tensor properties:
+### Operation-Based Queries
 
-*   **Semantic Scoring**: Traditional vector similarity search based on text embeddings
-*   **Computational Scoring**: Mathematical property evaluation including shape compatibility, sparsity, rank analysis
-*   **Operation Compatibility**: Scoring tensors based on suitability for specific mathematical operations
-*   **Combined Ranking**: Weighted combination of semantic and computational relevance scores
+Find tensors suitable for specific operations:
+
+*   **Matrix Multiplication Compatible**: Find tensors that can multiply with a given tensor
+*   **Decomposition Candidates**: Find tensors suitable for SVD, QR, or eigendecomposition
+*   **Gradient-Ready**: Find tensors with compatible shapes for neural network operations
 
 ### Tensor Workflows
 
@@ -1450,41 +1364,44 @@ Execute complex mathematical workflows with full computational lineage tracking:
 *   **Workflow Execution**: Chain multiple tensor operations with intermediate result storage
 *   **Lineage Tracking**: Complete provenance tracking of tensor transformations
 *   **Scientific Reproducibility**: Full audit trail of computational steps for research applications
-*   **Intermediate Storage**: Optional preservation of intermediate results for analysis
+
+## Vector Database Features *(Future Enhancement)*
+
+> **Note:** The following features support text-based embeddings. For tensor-native queries, use **Tensor Embeddings** above.
+
+### Text Embedding Generation *(Experimental)*
+
+Tensorus supports multiple embedding providers for generating vector representations of text:
+
+*   **Sentence Transformers**: Local models including all-MiniLM-L6-v2
+*   **OpenAI**: Cloud-based models (requires API key)
 
 ## Completed Features
 
-The current codebase implements all of the items listed in
-[Key Features](#key-features). Tensorus already provides efficient tensor
-storage with optional file persistence, a natural query language, a flexible
-agent framework, a RESTful API, a Streamlit UI, robust tensor operations, and
-advanced vector database capabilities. The modular architecture makes future
-extensions straightforward.
+The current codebase implements:
+- ✅ Tensor Storage with persistence
+- ✅ 40+ Tensor Operations
+- ✅ Computational Lineage tracking
+- ✅ RESTful API with authentication
+- ✅ Streamlit UI for data exploration
+- ✅ Tensor Embeddings for native queries
 
 ## Future Implementation
 
-*   **Enhanced NQL:** Integrate a local or remote LLM for more robust natural language understanding.
-*   **Advanced Agents:** Develop more sophisticated agents for specific tasks (e.g., anomaly detection, forecasting).
-*   **Persistent Storage Backend:** Replace/augment current file-based persistence with more robust database or cloud storage solutions (e.g., PostgreSQL, S3, MinIO).
-*   **Advanced Vector Indexing:** Implement HNSW and IVF-PQ algorithms for even more efficient similarity search.
-*   **Scalability & Performance:**
-    *   Implement tensor chunking for very large tensors.
-    *   Optimize query performance with indexing.
-    *   Asynchronous operations for agents and API calls.
-*   **Security:** Implement authentication and authorization mechanisms for the API and UI.
-*   **Real-World Integration:**
-    *   Connect Ingestion Agent to more data sources (e.g., cloud storage, databases, APIs).
-    *   Integrate RL Agent with real-world environments or more complex simulations.
-*   **Advanced AutoML:**
-    *   Implement sophisticated search algorithms (e.g., Bayesian Optimization, Hyperband).
-    *   Support for diverse model architectures and custom models.
-*   **Model Management:** Add capabilities for saving, loading, versioning, and deploying trained models (from RL/AutoML).
-*   **Streaming Data Support:** Enhance Ingestion Agent to handle real-time streaming data.
-*   **Resource Management:** Add tools and controls for monitoring and managing the resource consumption (CPU, memory) of agents.
-*   **Improved UI/UX:** Continuously refine the Streamlit UI for better usability and richer visualizations.
-*   **Comprehensive Testing:** Expand unit, integration, and end-to-end tests.
-*   **Multi-modal Embeddings:** Support for image, audio, and video embeddings alongside text.
-*   **Distributed Architecture:** Multi-node deployments for large-scale vector search workloads.
+### Phase 1: Tensor Embeddings Enhancement
+*   Advanced tensor similarity metrics
+*   Eigenvalue-based queries
+*   Tensor property indexing
+
+### Phase 2: NQL and Agents *(Conceptual → Production)*
+*   Enhanced NQL with LLM integration
+*   Production-ready Ingestion Agent
+*   Advanced AutoML Agent with Bayesian optimization
+
+### Phase 3: Scalability
+*   Distributed tensor storage
+*   Multi-node deployments
+*   Streaming data support
 
 ## 🤝 Community & Contributing
 

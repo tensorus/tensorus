@@ -21,7 +21,7 @@ import torch
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, Set
 from uuid import uuid4
@@ -139,11 +139,11 @@ class FreshnessLayer:
         self.compaction_threshold = compaction_threshold
         self.fresh_vectors: Dict[str, Tuple[np.ndarray, VectorMetadata]] = {}
         self.deleted_ids: Set[str] = set()
-        self.last_compaction = datetime.utcnow()
+        self.last_compaction = datetime.now(timezone.utc)
         
     def add_vector(self, vector_id: str, vector: np.ndarray, metadata: VectorMetadata) -> None:
         """Add vector to freshness layer."""
-        metadata.updated_at = datetime.utcnow()
+        metadata.updated_at = datetime.now(timezone.utc)
         self.fresh_vectors[vector_id] = (vector, metadata)
         
         # Remove from deleted set if re-added
@@ -170,7 +170,7 @@ class FreshnessLayer:
         """Clear freshness layer after compaction."""
         self.fresh_vectors.clear()
         self.deleted_ids.clear()
-        self.last_compaction = datetime.utcnow()
+        self.last_compaction = datetime.now(timezone.utc)
 
 
 class VectorIndex(ABC):
@@ -304,7 +304,7 @@ if FAISS_AVAILABLE:
                 total_vectors=self.index.ntotal,
                 index_size_mb=self.index.ntotal * self.dimension * 4 / (1024 * 1024),  # 4 bytes per float32
                 partitions=1,
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             )
             
         def _matches_filters(self, metadata: VectorMetadata, filters: Dict[str, Any]) -> bool:
@@ -449,7 +449,7 @@ class HierarchicalVectorIndex:
             total_vectors=total_vectors,
             index_size_mb=total_size,
             partitions=len(self.shards),
-            last_updated=datetime.utcnow()
+            last_updated=datetime.now(timezone.utc)
         )
         
     def get_stats(self) -> IndexStats:
@@ -658,5 +658,5 @@ class PartitionedVectorIndex:
             total_vectors=total_vectors,
             index_size_mb=total_size,
             partitions=len(self.partitions),
-            last_updated=datetime.utcnow()
+            last_updated=datetime.now(timezone.utc)
         )

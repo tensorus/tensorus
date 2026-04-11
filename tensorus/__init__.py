@@ -1,4 +1,11 @@
-"""Tensorus core package."""
+"""Tensorus core package.
+
+Tensorus is a tensor database that provides:
+- Native tensor storage with persistence
+- Tensor Embeddings for tensor-operation-based queries
+- 40+ tensor operations (decompositions, linear algebra)
+- Computational lineage tracking
+"""
 
 import os
 import logging
@@ -20,6 +27,15 @@ from .base import TensorusModel
 # Import the unified SDK as the primary interface
 from .sdk import Tensorus, TensorWrapper, SearchResults
 
+# Import Tensor Embeddings (core feature)
+from .tensor_embeddings import (
+    TensorEmbeddingIndex,
+    TensorDescriptor,
+    TensorSimilarityResult,
+    SimilarityMetric,
+    TensorProperty
+)
+
 # The repository previously exposed a large collection of models under
 # ``tensorus.models``. These models have been moved to a separate package.
 # Tensorus now only attempts to import them if available.
@@ -29,8 +45,20 @@ if not os.environ.get("TENSORUS_MINIMAL_IMPORT"):
         import importlib
 
         models = importlib.import_module("tensorus.models")
-        __all__ = ["Tensorus", "TensorusModel", "TensorWrapper", "SearchResults", "models"]
+        __all__ = [
+            "Tensorus", "TensorusModel", "TensorWrapper", "SearchResults",
+            "TensorEmbeddingIndex", "TensorDescriptor", "TensorSimilarityResult",
+            "SimilarityMetric", "TensorProperty", "models"
+        ]
     except ModuleNotFoundError:
-        __all__ = ["Tensorus", "TensorusModel", "TensorWrapper", "SearchResults"]
+        __all__ = [
+            "Tensorus", "TensorusModel", "TensorWrapper", "SearchResults",
+            "TensorEmbeddingIndex", "TensorDescriptor", "TensorSimilarityResult",
+            "SimilarityMetric", "TensorProperty"
+        ]
 else:
-    __all__ = ["Tensorus", "TensorusModel", "TensorWrapper", "SearchResults"]
+    __all__ = [
+        "Tensorus", "TensorusModel", "TensorWrapper", "SearchResults",
+        "TensorEmbeddingIndex", "TensorDescriptor", "TensorSimilarityResult",
+        "SimilarityMetric", "TensorProperty"
+    ]

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from typing import Dict, List, Any, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import sys
 from pathlib import Path
@@ -30,7 +30,7 @@ class BenchmarkResult:
     operations_per_second: float
     memory_mb: float
     metadata: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class TensorusBenchmark:
@@ -75,7 +75,7 @@ class TensorusBenchmark:
     def save_results(self):
         """Save results to JSON file."""
         output = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "system_info": {
                 "cuda_available": torch.cuda.is_available(),
                 "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,

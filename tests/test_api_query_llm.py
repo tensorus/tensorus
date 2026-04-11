@@ -1,5 +1,3 @@
-import os
-import importlib.util
 import pytest
 from unittest.mock import patch
 pytest.importorskip("torch")
@@ -7,22 +5,18 @@ import torch
 
 from fastapi.testclient import TestClient
 
-spec = importlib.util.spec_from_file_location(
-    "tensorus.api_legacy",
-    os.path.join(os.path.dirname(__file__), "..", "tensorus", "api.py"),
-)
-api = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(api)
+from tensorus.api import app
+from tensorus.api.dependencies import get_nql_agent
 from tensorus.nql_agent import NQLAgent
 from tensorus.tensor_storage import TensorStorage
-from tensorus.llm_parser import LLMParser, NQLQuery
+from tensorus.llm_parser import NQLQuery
 
+from tests.conftest import TEST_API_KEY  # For auth headers and settings
+from tensorus.config import settings as global_settings  # To patch settings
 
-from tests.conftest import TEST_API_KEY # For auth headers and settings
-from tensorus.config import settings as global_settings # To patch settings
 
 @pytest.fixture
-def client_with_llm(monkeypatch):
+def client_with_llm():
     # Ensure global settings for the app instance have API keys configured
     original_api_keys = global_settings.API_KEYS
     original_auth_enabled = global_settings.AUTH_ENABLED
@@ -35,12 +29,16 @@ def client_with_llm(monkeypatch):
         storage.create_dataset("test_ds")
         storage.insert("test_ds", torch.tensor([1.0]), metadata={"record_id": "r1"})
         agent = NQLAgent(storage, use_llm=True)
-        monkeypatch.setattr(api, "nql_agent_instance", agent)
-        if hasattr(api.get_nql_agent, "_instance"):
-            monkeypatch.setattr(api.get_nql_agent, "_instance", agent, raising=False)
-        with TestClient(api.app) as client:
-            client.headers = {"Authorization": f"Bearer {TEST_API_KEY}"} # Add auth headers
+
+        # Override the FastAPI dependency to return our configured agent
+        app.dependency_overrides[get_nql_agent] = lambda: agent
+
+        with TestClient(app) as client:
+            client.headers = {"Authorization": f"Bearer {TEST_API_KEY}"}
             yield client
+
+        # Clean up dependency override
+        app.dependency_overrides.pop(get_nql_agent, None)
 
     # Restore original settings
     global_settings.API_KEYS = original_api_keys
@@ -49,7 +47,7 @@ def client_with_llm(monkeypatch):
 
 def test_query_endpoint_with_llm_rewrite(client_with_llm):
     # Client already has auth headers from the fixture
-    resp = client_with_llm.post("/query", json={"query": "get all data from test_dataset"})
+    resp = client_with_llm.post("/query", json={"query": "get all data from test_ds"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["success"] is True
