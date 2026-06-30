@@ -1,0 +1,38 @@
+[package]
+name = "tensorus-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "gRPC and REST API surface for Tensorus"
+
+[[bin]]
+name = "tensorus-server"
+path = "src/bin/server.rs"
+
+[dependencies]
+tensorus-core.workspace = true
+tensorus-storage.workspace = true
+tensorus-compute.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["fmt", "json", "env-filter"] }
+axum = "0.7"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tower = { version = "0.5", features = ["util"] }
+tempfile = "3"
+tensorus-index.workspace = true
+tensorus-search.workspace = true
+tensorus-ai.workspace = true
+rand.workspace = true
+criterion = "0.5"
+
+[[bench]]
+name = "tensorus_bench"
+harness = false

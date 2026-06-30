@@ -1,0 +1,23 @@
+Tensorus {{ .Chart.AppVersion }} has been deployed as release "{{ .Release.Name }}".
+
+1. Check the pods are ready:
+   kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+2. Port-forward the REST API:
+   kubectl port-forward svc/{{ include "tensorus.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+
+3. Health check (no auth required):
+   curl http://localhost:{{ .Values.service.port }}/health
+
+4. Authenticated request (API key is stored in Secret "{{ include "tensorus.fullname" . }}-auth"):
+   curl -H "x-api-key: <your-key>" http://localhost:{{ .Values.service.port }}/datasets
+
+{{- if not .Values.ingress.enabled }}
+
+NOTE: Ingress is disabled. Enable it with `--set ingress.enabled=true`.
+{{- end }}
+{{- if eq .Values.auth.apiKey "change-me-please" }}
+
+WARNING: You are using the default API key. Override it:
+   helm upgrade {{ .Release.Name }} ./deploy/helm/tensorus --set auth.apiKey=<strong-secret>
+{{- end }}

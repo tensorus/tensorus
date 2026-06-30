@@ -1,0 +1,23 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "tensorus"
+version = "1.0.0"
+description = "Tensorus v1.0 — an agentic tensor-native database (Python SDK)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+dependencies = ["numpy>=1.21"]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "hypothesis>=6"]
+
+[tool.maturin]
+# Mixed Rust/Python layout: the pure-Python `tensorus` package lives in this
+# directory and imports the compiled native module `tensorus._native`.
+manifest-path = "../crates/tensorus-python/Cargo.toml"
+module-name = "tensorus._native"
+python-source = "."
+features = ["python"]

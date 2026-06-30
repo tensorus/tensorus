@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tensorus.fullname" . }}-config
+  labels:
+    {{- include "tensorus.labels" . | nindent 4 }}
+data:
+  tensorus.toml: |
+    [server]
+    host = "0.0.0.0"
+    grpc_port = 9090
+    rest_port = {{ .Values.service.port }}
+
+    [storage]
+    backend = "lance"
+    data_dir = "/data"
+    wal_dir = "/data/wal"
+
+    [storage.tiering]
+    hot_max_bytes = 1_073_741_824
+    warm_path = "/data/warm"
+    cold_backend = "local"
+    cold_path = "/data/cold"
+
+    [index]
+    learned_index_epsilon = 64
+    hnsw_m = 16
+    hnsw_ef_construction = 200
+    hnsw_ef_search = 100
+
+    [compute]
+    gpu_enabled = {{ gt (.Values.gpu.nvidiaCount | int) 0 }}
+
+    [observability]
+    log_level = "{{ .Values.env.rustLog }}"
+    log_format = "json"
+    metrics_enabled = true

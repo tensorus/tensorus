@@ -1,0 +1,55 @@
+name: tensorus-v1 CI
+
+on:
+  push:
+    paths:
+      - "tensorus-v1/**"
+  pull_request:
+    paths:
+      - "tensorus-v1/**"
+
+defaults:
+  run:
+    working-directory: tensorus-v1
+
+jobs:
+  rust:
+    name: Rust build, test, lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tensorus-v1
+      - name: Format check
+        run: cargo fmt --all --check
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Build
+        run: cargo build --workspace
+      - name: Test
+        run: cargo test --workspace
+
+  python:
+    name: Python wheel build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build & install wheel
+        working-directory: tensorus-v1/python
+        run: |
+          pip install maturin pytest numpy
+          maturin build --release --out dist
+          pip install --no-index --find-links dist tensorus
+      - name: SDK tests
+        working-directory: tensorus-v1/python
+        run: pytest -q
+      - name: Smoke test
+        run: python -c "import tensorus; print(tensorus.__version__)"

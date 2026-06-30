@@ -1,0 +1,16 @@
+[package]
+name = "tensorus-compute"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Tensor descriptor computation and linear-algebra operations (CPU path)"
+
+[dependencies]
+tensorus-core.workspace = true
+ndarray.workspace = true
+nalgebra.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+approx = "0.5"

@@ -1,0 +1,193 @@
+syntax = "proto3";
+package tensorus.v1;
+
+service TensorusService {
+    // Dataset operations
+    rpc CreateDataset(CreateDatasetRequest) returns (CreateDatasetResponse);
+    rpc ListDatasets(ListDatasetsRequest) returns (ListDatasetsResponse);
+    rpc DeleteDataset(DeleteDatasetRequest) returns (DeleteDatasetResponse);
+
+    // Tensor CRUD
+    rpc InsertTensor(InsertTensorRequest) returns (InsertTensorResponse);
+    rpc GetTensor(GetTensorRequest) returns (GetTensorResponse);
+    rpc DeleteTensor(DeleteTensorRequest) returns (DeleteTensorResponse);
+    rpc ScanTensors(ScanTensorsRequest) returns (stream TensorRecord);
+
+    // Search
+    rpc SearchByProperty(PropertySearchRequest) returns (SearchResponse);
+    rpc SearchSimilar(SimilaritySearchRequest) returns (SearchResponse);
+    rpc SearchContraction(ContractionSearchRequest) returns (SearchResponse);
+
+    // NQL
+    rpc Query(NQLRequest) returns (QueryResponse);
+
+    // Agent
+    rpc RunAgent(AgentRequest) returns (stream AgentEvent);
+
+    // Health
+    rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message TensorData {
+    bytes data = 1;           // Raw tensor bytes
+    repeated uint64 shape = 2;
+    uint32 dtype = 3;         // DType enum value
+}
+
+message TensorDescriptor {
+    string tensor_id = 1;
+    repeated uint64 shape = 2;
+    uint32 dtype = 3;
+    double frobenius_norm = 4;
+    double l1_norm = 5;
+    double l_inf_norm = 6;
+    double mean = 7;
+    double std_dev = 8;
+    double sparsity = 9;
+    optional uint32 rank = 10;
+    optional double trace = 11;
+    optional double determinant = 12;
+    optional double condition_number = 13;
+    bool is_symmetric = 14;
+    bool is_positive_definite = 15;
+    bool is_orthogonal = 16;
+    bool is_sparse = 17;
+    bool is_square = 18;
+    bool is_diagonal = 19;
+}
+
+message InsertTensorRequest {
+    string dataset = 1;
+    TensorData tensor = 2;
+    string metadata_json = 3;  // JSON string
+}
+
+message InsertTensorResponse {
+    string tensor_id = 1;
+    TensorDescriptor descriptor = 2;
+}
+
+message GetTensorRequest {
+    string dataset = 1;
+    string tensor_id = 2;
+}
+
+message GetTensorResponse {
+    string tensor_id = 1;
+    TensorData tensor = 2;
+    TensorDescriptor descriptor = 3;
+    string metadata_json = 4;
+}
+
+message DeleteTensorRequest {
+    string dataset = 1;
+    string tensor_id = 2;
+}
+
+message DeleteTensorResponse {
+    bool deleted = 1;
+}
+
+message CreateDatasetRequest {
+    string name = 1;
+}
+
+message CreateDatasetResponse {
+    bool created = 1;
+}
+
+message ListDatasetsRequest {}
+
+message ListDatasetsResponse {
+    repeated string datasets = 1;
+}
+
+message DeleteDatasetRequest {
+    string name = 1;
+}
+
+message DeleteDatasetResponse {
+    bool deleted = 1;
+}
+
+message ScanTensorsRequest {
+    string dataset = 1;
+    uint32 limit = 2;
+    uint32 offset = 3;
+}
+
+message TensorRecord {
+    string tensor_id = 1;
+    string dataset = 2;
+    TensorDescriptor descriptor = 3;
+    string metadata_json = 4;
+    int64 created_at_us = 5;
+    uint64 version = 6;
+}
+
+message PropertySearchRequest {
+    string dataset = 1;
+    optional double min_norm = 2;
+    optional double max_norm = 3;
+    optional bool is_symmetric = 4;
+    optional bool is_positive_definite = 5;
+    optional uint32 rank = 6;
+    optional double max_condition_number = 7;
+    uint32 limit = 10;
+}
+
+message SimilaritySearchRequest {
+    string dataset = 1;
+    TensorData query = 2;
+    string metric = 3;  // "cosine", "l2", "contraction"
+    uint32 k = 4;
+}
+
+message ContractionSearchRequest {
+    string dataset = 1;
+    TensorData query = 2;
+    uint32 k = 3;
+}
+
+message SearchResponse {
+    repeated SearchResult results = 1;
+    uint32 total_count = 2;
+    double latency_ms = 3;
+}
+
+message SearchResult {
+    string tensor_id = 1;
+    double score = 2;
+    TensorDescriptor descriptor = 3;
+    string metadata_json = 4;
+}
+
+message NQLRequest {
+    string query = 1;
+    string dataset = 2;  // Optional default dataset context
+}
+
+message QueryResponse {
+    repeated SearchResult results = 1;
+    string executed_plan = 2;  // JSON of the QueryPlan that was executed
+    double latency_ms = 3;
+}
+
+message AgentRequest {
+    string task = 1;
+    uint32 max_steps = 2;
+    double budget_usd = 3;
+}
+
+message AgentEvent {
+    string event_type = 1;  // "thought", "action", "observation", "result"
+    string content = 2;
+    uint32 step = 3;
+}
+
+message HealthRequest {}
+message HealthResponse {
+    string status = 1;  // "healthy", "degraded"
+    string version = 2;
+    uint64 uptime_seconds = 3;
+}

@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+/data
+/python/target
+*.pyd
+*.so
+__pycache__/
+.pytest_cache/
+*.egg-info/

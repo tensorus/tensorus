@@ -1,0 +1,42 @@
+[server]
+host = "0.0.0.0"
+grpc_port = 9090
+rest_port = 8080
+
+[storage]
+backend = "lance"
+data_dir = "./data"
+wal_dir = "./data/wal"
+
+[storage.tiering]
+hot_max_bytes = 1_073_741_824  # 1GB for development
+warm_path = "./data/warm"
+cold_backend = "local"
+cold_path = "./data/cold"
+
+[index]
+learned_index_epsilon = 64
+hnsw_m = 16
+hnsw_ef_construction = 200
+hnsw_ef_search = 100
+
+[index.tensor_contraction]
+default_sketch_rank = 8
+
+[ai]
+default_strategy = "local_first"
+budget_per_hour_usd = 1.0
+max_retries = 3
+
+[ai.providers.mock]
+type = "openai_compat"
+base_url = "http://localhost:11434/v1"
+model = "qwen2.5:7b"
+
+[compute]
+gpu_enabled = false
+
+[observability]
+log_level = "info"
+log_format = "pretty"  # "json" in production
+metrics_enabled = true

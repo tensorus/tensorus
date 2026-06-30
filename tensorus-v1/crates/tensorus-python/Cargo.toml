@@ -1,0 +1,35 @@
+[package]
+name = "tensorus-python"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "PyO3 bindings exposing the Tensorus engine to Python"
+
+[lib]
+name = "_native"
+# `rlib` lets the workspace build it without linking CPython; `cdylib` is the
+# Python extension module produced by maturin with `--features python`.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tensorus-core.workspace = true
+serde_json.workspace = true
+# Everything below is only needed for the actual extension module and is gated
+# behind the non-default `python` feature so `cargo build --workspace` stays
+# green without a CPython link target.
+pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+numpy = { version = "0.22", optional = true }
+tensorus-storage = { workspace = true, optional = true }
+tensorus-compute = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[features]
+default = []
+python = [
+    "dep:pyo3",
+    "dep:numpy",
+    "dep:tensorus-storage",
+    "dep:tensorus-compute",
+    "dep:tokio",
+]

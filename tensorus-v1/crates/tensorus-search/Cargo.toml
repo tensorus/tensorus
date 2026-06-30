@@ -1,0 +1,17 @@
+[package]
+name = "tensorus-search"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Hybrid search and the tensor contraction similarity engine"
+
+[dependencies]
+tensorus-core.workspace = true
+tensorus-index.workspace = true
+tensorus-compute.workspace = true
+nalgebra.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

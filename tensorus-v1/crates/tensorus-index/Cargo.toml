@@ -1,0 +1,19 @@
+[package]
+name = "tensorus-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Learned indexes (PGM/ALEX), HNSW/DiskANN vector indexes, and metadata search"
+
+[dependencies]
+tensorus-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+rand.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+tempfile = "3"
