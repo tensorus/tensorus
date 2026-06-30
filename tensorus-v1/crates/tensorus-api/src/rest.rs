@@ -4,8 +4,11 @@
 //! Handlers are transport-thin wrappers over [`TensorService`]; the gRPC surface
 //! (the `grpc` module, optional) mirrors them over the same service.
 
-use crate::service::{HealthInfo, InsertRequest, PropertyQuery, TensorService};
+use crate::service::{
+    ContractionHit, HealthInfo, InsertRequest, PropertyQuery, SimilarHit, TensorService,
+};
 use crate::telemetry::Histogram;
+use crate::tools::default_tool_registry;
 use axum::{
     body::Body,
     extract::{Path, Query, State},
@@ -20,9 +23,40 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use tensorus_ai::{
+    AgentConfig, AgentOutcome, LlmProvider, LlmRouter, Nql, ReActAgent, RoutingStrategy,
+};
 use tensorus_core::error::TensorusError;
 use tensorus_core::types::TensorId;
+
+/// Configuration for the optional LLM-backed endpoints (`/query`, `/agent`).
+///
+/// Cloned per request to build a fresh [`LlmRouter`]; the providers themselves
+/// are shared via `Arc`.
+#[derive(Clone)]
+pub struct LlmConfig {
+    /// Ordered candidate providers.
+    pub providers: Vec<Arc<dyn LlmProvider>>,
+    /// How the router ranks providers.
+    pub strategy: RoutingStrategy,
+    /// Per-hour USD budget (`<= 0` disables enforcement).
+    pub budget_per_hour: f64,
+    /// Maximum NQL self-correction rounds.
+    pub max_correction: usize,
+    /// Maximum ReAct agent steps.
+    pub agent_max_steps: usize,
+}
+
+impl LlmConfig {
+    fn router(&self) -> LlmRouter {
+        LlmRouter::new(
+            self.providers.clone(),
+            self.strategy.clone(),
+            self.budget_per_hour,
+        )
+    }
+}
 
 /// API configuration.
 #[derive(Debug, Clone)]
@@ -82,6 +116,7 @@ pub struct AppState {
     config: Arc<ApiConfig>,
     bucket: Arc<Mutex<TokenBucket>>,
     metrics: Arc<Metrics>,
+    llm: Option<Arc<LlmConfig>>,
 }
 
 impl AppState {
@@ -97,7 +132,14 @@ impl AppState {
             config: Arc::new(config),
             bucket: Arc::new(Mutex::new(bucket)),
             metrics: Arc::new(Metrics::default()),
+            llm: None,
         }
+    }
+
+    /// Enable the LLM-backed endpoints (`/query`, `/agent`).
+    pub fn with_llm(mut self, llm: LlmConfig) -> Self {
+        self.llm = Some(Arc::new(llm));
+        self
     }
 }
 
@@ -111,6 +153,10 @@ pub fn build_app(state: AppState) -> Router {
             get(get_tensor).delete(delete_tensor),
         )
         .route("/datasets/:ds/search/property", post(search_property))
+        .route("/datasets/:ds/search/similar", post(search_similar))
+        .route("/datasets/:ds/search/contraction", post(search_contraction))
+        .route("/query", post(nql_query))
+        .route("/agent", post(run_agent))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_and_rate_limit,
@@ -205,6 +251,9 @@ fn parse_id(s: &str) -> Result<TensorId, ApiError> {
 #[derive(Deserialize)]
 struct CreateDatasetBody {
     name: String,
+    /// Optional vector metric: `cosine` (default) | `l2`/`euclidean` | `dot`.
+    #[serde(default)]
+    metric: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -247,9 +296,21 @@ async fn create_dataset(
     State(state): State<AppState>,
     Json(body): Json<CreateDatasetBody>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    state.service.create_dataset(&body.name).await?;
+    let metric = match &body.metric {
+        Some(m) => {
+            state
+                .service
+                .create_dataset_with_metric(&body.name, m)
+                .await?;
+            m.clone()
+        }
+        None => {
+            state.service.create_dataset(&body.name).await?;
+            crate::index::metric_name(state.service.dataset_metric(&body.name)).to_string()
+        }
+    };
     Ok(Json(
-        serde_json::json!({"created": true, "name": body.name}),
+        serde_json::json!({"created": true, "name": body.name, "metric": metric}),
     ))
 }
 
@@ -338,6 +399,172 @@ async fn search_property(
             })
             .collect(),
     ))
+}
+
+fn default_k() -> usize {
+    10
+}
+
+#[derive(Deserialize)]
+struct SimilarBody {
+    /// The query embedding/vector.
+    #[serde(default)]
+    vector: Option<Vec<f32>>,
+    /// Alternative to `vector`: a flattened tensor payload.
+    #[serde(default)]
+    data: Option<Vec<f32>>,
+    #[serde(default = "default_k")]
+    k: usize,
+    /// Optional metric; must match the dataset's index metric if provided.
+    #[serde(default)]
+    metric: Option<String>,
+}
+
+async fn search_similar(
+    State(state): State<AppState>,
+    Path(ds): Path<String>,
+    Json(body): Json<SimilarBody>,
+) -> Result<Json<Vec<SimilarHit>>, ApiError> {
+    let query = body.vector.or(body.data).ok_or_else(|| {
+        ApiError(
+            StatusCode::BAD_REQUEST,
+            "missing 'vector' (or 'data') in request body".into(),
+        )
+    })?;
+    if query.is_empty() {
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            "empty query vector".into(),
+        ));
+    }
+    let hits = state
+        .service
+        .search_similar(&ds, &query, body.k, body.metric.as_deref())
+        .await?;
+    Ok(Json(hits))
+}
+
+#[derive(Deserialize)]
+struct ContractionBody {
+    data: Vec<f32>,
+    shape: Vec<u64>,
+    #[serde(default = "default_k")]
+    k: usize,
+}
+
+async fn search_contraction(
+    State(state): State<AppState>,
+    Path(ds): Path<String>,
+    Json(body): Json<ContractionBody>,
+) -> Result<Json<Vec<ContractionHit>>, ApiError> {
+    let expected: u64 = body.shape.iter().product();
+    if expected as usize != body.data.len() {
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            format!(
+                "data length {} does not match shape product {}",
+                body.data.len(),
+                expected
+            ),
+        ));
+    }
+    let hits = state
+        .service
+        .search_contraction(&ds, &body.data, &body.shape, body.k)
+        .await?;
+    Ok(Json(hits))
+}
+
+#[derive(Deserialize)]
+struct QueryBody {
+    query: String,
+    /// Optional dataset hint, prepended to the natural-language query.
+    #[serde(default)]
+    dataset: Option<String>,
+}
+
+async fn nql_query(
+    State(state): State<AppState>,
+    Json(body): Json<QueryBody>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let llm = state.llm.as_ref().ok_or_else(llm_unconfigured)?;
+    let nl = match &body.dataset {
+        Some(ds) => format!("In dataset '{ds}': {}", body.query),
+        None => body.query.clone(),
+    };
+    let nql = Nql::new(llm.router());
+    let service = state.service.clone();
+    match nql.query(&nl, service.as_ref(), llm.max_correction).await {
+        Ok(res) => Ok(Json(serde_json::json!({
+            "plan": res.plan_json,
+            "rows": res.rows,
+            "count": res.rows.len(),
+        }))),
+        Err(e) => Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY, e)),
+    }
+}
+
+#[derive(Deserialize)]
+struct AgentBody {
+    task: String,
+    #[serde(default)]
+    max_steps: Option<usize>,
+}
+
+async fn run_agent(
+    State(state): State<AppState>,
+    Json(body): Json<AgentBody>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let llm = state.llm.as_ref().ok_or_else(llm_unconfigured)?;
+    let router = Arc::new(llm.router());
+    let tools = default_tool_registry(state.service.clone());
+    let cfg = AgentConfig {
+        max_steps: body.max_steps.unwrap_or(llm.agent_max_steps),
+        timeout: Duration::from_secs(60),
+    };
+    let agent = ReActAgent::new(router, tools, cfg);
+    let outcome = agent.run(&body.task).await;
+    Ok(Json(agent_outcome_json(&outcome)))
+}
+
+fn llm_unconfigured() -> ApiError {
+    ApiError(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "LLM is not configured; set TENSORUS_LLM_BASE_URL and TENSORUS_LLM_MODEL".into(),
+    )
+}
+
+fn steps_to_json(steps: &[tensorus_ai::agent::Step]) -> serde_json::Value {
+    serde_json::Value::Array(
+        steps
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "thought": s.thought,
+                    "tool": s.tool,
+                    "args": s.args,
+                    "observation": s.observation,
+                })
+            })
+            .collect(),
+    )
+}
+
+fn agent_outcome_json(outcome: &AgentOutcome) -> serde_json::Value {
+    match outcome {
+        AgentOutcome::Success { answer, steps } => serde_json::json!({
+            "status": "success", "answer": answer, "steps": steps_to_json(steps),
+        }),
+        AgentOutcome::MaxStepsReached { steps } => serde_json::json!({
+            "status": "max_steps_reached", "steps": steps_to_json(steps),
+        }),
+        AgentOutcome::TimedOut { steps } => serde_json::json!({
+            "status": "timed_out", "steps": steps_to_json(steps),
+        }),
+        AgentOutcome::BudgetExceeded { steps } => serde_json::json!({
+            "status": "budget_exceeded", "steps": steps_to_json(steps),
+        }),
+    }
 }
 
 async fn health(State(state): State<AppState>) -> Json<HealthInfo> {

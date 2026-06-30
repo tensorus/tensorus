@@ -74,7 +74,7 @@ cargo test -p tensorus-search  --release sketch_timing_64x64x3      -- --ignored
 
 ## Test inventory
 
-The workspace has ~120+ passing unit/integration tests plus the `#[ignore]`d
+The workspace has ~140+ passing unit/integration tests plus the `#[ignore]`d
 performance tests above:
 
 | Crate | Tests |
@@ -85,6 +85,10 @@ performance tests above:
 | `tensorus-index` | 24 (+ ignored benches) |
 | `tensorus-search` | 6 |
 | `tensorus-ai` | 27 |
-| `tensorus-api` | 7 unit + 16 integration |
+| `tensorus-api` | 18 unit + 25 integration |
 
-Run everything with `cargo test --workspace`.
+Run everything with `cargo test --workspace`. The `tensorus-api` suite now covers
+the full serving surface: index-backed property search, HNSW vector search
+(ranking + dimension-mismatch handling), contraction search, index recovery after
+a simulated restart, NQL `/query` and ReAct `/agent` over a mock LLM, and an
+`HttpTransport` round-trip.

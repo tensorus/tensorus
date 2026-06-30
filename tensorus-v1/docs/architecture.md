@@ -54,9 +54,9 @@ detailed reference under [`docs/services/`](./services/).
 
 The dependency graph is acyclic and flows downward: every crate may depend on
 `tensorus-core`; `search` depends on `index` and `compute`; `api` depends on
-`storage` and `compute` (and, in tests, on `index`/`search`/`ai`); nothing
-depends on `api` except the server binary and the Python bindings depend on
-`storage`/`compute`.
+`storage`, `compute`, `index`, `search`, and `ai` (the engines are wired into the
+running server, not merely test-only); nothing depends on `api` except the server
+binary, and the Python bindings depend on `storage`/`compute`.
 
 ---
 
@@ -98,18 +98,36 @@ client → tensorus-api (auth, rate limit)
             → append Put frame to dataset segment
             → insert into in-memory hot map (serves reads)
             → group-commit fsync every N writes
+       → IndexManager::on_insert(...)                      # update secondary indexes
+            → HNSW vector index (adopts dim from first tensor)
+            → contraction index (shape-locked, ndim ≥ 2)
+            → property index (per-field ALEX + boolean posting sets)
        → return (TensorId, TensorDescriptor)
 ```
 
-### 3.2 Property search
+The in-memory indexes are rebuilt from durable storage at startup via
+`TensorService::recover()`, so a restart loses no queryability.
+
+### 3.2 Property search (index-backed)
 
 ```
-client → POST /datasets/{ds}/search/property {is_symmetric, norm range, ...}
+client → POST /datasets/{ds}/search/property {is_symmetric, norm range, rank, ...}
        → TensorService::search_by_property
-       → scan dataset records, filter by descriptor predicates
-         (the learned indexes in tensorus-index accelerate the same predicates
-          when wired as the backing store)
-       → ranked SearchResult list
+       → PropertyIndex: numeric predicates → per-field ALEX range/point lookup;
+                        boolean predicates → posting sets; intersect candidates
+       → verify each candidate exactly against its descriptor
+       → matching (id, descriptor) list   # no full storage scan
+```
+
+### 3.2.1 Vector similarity search
+
+```
+client → POST /datasets/{ds}/search/similar {vector, k, metric?}
+       → TensorService::search_similar
+       → DatasetIndexes: HNSW search (metric fixed at dataset creation)
+            → dimension checked against the dataset's adopted dimension (400 on mismatch)
+       → hydrate descriptor + metadata, map distance → similarity score
+       → ranked SimilarHit list (deleted tensors excluded via HNSW tombstones)
 ```
 
 ### 3.3 Structural similarity (contraction)
@@ -187,6 +205,7 @@ trait/contract so the originally specified backend can be dropped in later.
 | In-memory ANN codes | Product Quantization | Scalar Quantization (SQ8) | Simpler; same role (approx distance) | `tensorus-index::diskann` docs |
 | SSD reads | `io_uring` async I/O | Synchronous `std::fs` reads | `io_uring` is Linux-only; host is Windows | `tensorus-index::diskann` docs |
 | gRPC server | tonic (default) | tonic behind optional `grpc` feature | tonic build needs `protoc` | `tensorus-api` lib docs |
+| LLM transport | HTTPS client (reqwest/native-TLS) | Built-in `http://` client (`HttpTransport`) | Pure-Rust TLS needs a C/asm crypto backend; local Ollama/vLLM use http | `tensorus-api::llm_http` docs |
 | OTEL export | OpenTelemetry/OTLP | `tracing` to stdout + Prometheus `/metrics` | Avoid the heavy OTel tree; OTLP is additive | `tensorus-api::telemetry` docs |
 | GPU paths | cuTENSOR/cuSOLVER/CUDA | CPU (`nalgebra`/`ndarray`) with `// TODO: GPU` markers | No GPU in environment | throughout compute/index/search |
 

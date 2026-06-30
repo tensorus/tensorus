@@ -48,12 +48,12 @@ fn bench_contraction_sketch(c: &mut Criterion) {
 fn bench_storage_insert(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let tmp = tempfile::TempDir::new().unwrap();
-    let storage = Arc::new(
-        FileStorage::open(tmp.path().join("data"), tmp.path().join("wal")).unwrap(),
-    );
+    let storage =
+        Arc::new(FileStorage::open(tmp.path().join("data"), tmp.path().join("wal")).unwrap());
     rt.block_on(storage.create_dataset("bench")).unwrap();
     let payload = vec![0u8; 128 * 4];
-    let descriptor = TensorDescriptor::empty(TensorId::new(), Shape::new(vec![128]), DType::Float32);
+    let descriptor =
+        TensorDescriptor::empty(TensorId::new(), Shape::new(vec![128]), DType::Float32);
 
     c.bench_function("storage_insert_128f32", |b| {
         b.iter(|| {

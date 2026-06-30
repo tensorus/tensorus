@@ -78,8 +78,13 @@ curl -H "x-api-key: $TENSORUS_API_KEY" \
   localhost:8080/datasets/weights/tensors
 ```
 
-REST endpoints: `POST/GET /datasets`, `POST/GET/DELETE /datasets/{ds}/tensors[/{id}]`,
-`POST /datasets/{ds}/search/property`, `GET /health`, `GET /metrics`.
+REST endpoints: `POST/GET /datasets` (optional per-dataset vector `metric`),
+`POST/GET/DELETE /datasets/{ds}/tensors[/{id}]`,
+`POST /datasets/{ds}/search/property` (index-backed),
+`POST /datasets/{ds}/search/similar` (HNSW vector search),
+`POST /datasets/{ds}/search/contraction` (structural similarity),
+`POST /query` (NQL) and `POST /agent` (ReAct) when an LLM is configured,
+`GET /health`, `GET /metrics`. See the [API reference](./docs/api-reference.md).
 
 ## Build, test, lint
 

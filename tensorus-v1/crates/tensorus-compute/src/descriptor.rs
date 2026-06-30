@@ -278,9 +278,9 @@ mod tests {
         assert_eq!(d.num_elements, 24);
     }
 
-    #[test]
-    fn descriptor_256x256_timing() {
-        // Deterministic, generally non-symmetric 256x256 matrix.
+    /// Deterministic, generally non-symmetric 256x256 matrix used by the
+    /// correctness and timing tests below.
+    fn sample_256x256() -> Vec<f32> {
         let n = 256usize;
         let mut data = vec![0.0f32; n * n];
         for i in 0..n {
@@ -289,13 +289,31 @@ mod tests {
                 data[i * n + j] = x;
             }
         }
-        let start = std::time::Instant::now();
-        let d = compute_descriptor(&data, &[n as u64, n as u64], DType::Float32);
-        let elapsed = start.elapsed();
-        println!("compute_descriptor(256x256) took {elapsed:?}");
+        data
+    }
+
+    #[test]
+    fn descriptor_256x256_correctness() {
+        let data = sample_256x256();
+        let d = compute_descriptor(&data, &[256, 256], DType::Float32);
         assert_eq!(d.shape.dims(), &[256, 256]);
         assert!(d.rank.is_some());
-        // Generous bound for debug/CI; the plan target is < 10ms (release).
-        assert!(elapsed.as_millis() < 2000, "too slow: {elapsed:?}");
+        assert!(d.is_square);
+    }
+
+    /// Wall-clock performance check. Ignored by default because the plan target
+    /// (< 10ms) only holds for an optimized build; debug builds run ~50x slower.
+    /// Run with: `cargo test -p tensorus-compute --release -- --ignored`.
+    #[test]
+    #[ignore = "performance benchmark; run in release with --ignored"]
+    fn descriptor_256x256_timing() {
+        let data = sample_256x256();
+        let start = std::time::Instant::now();
+        let d = compute_descriptor(&data, &[256, 256], DType::Float32);
+        let elapsed = start.elapsed();
+        println!("compute_descriptor(256x256) took {elapsed:?}");
+        assert!(d.rank.is_some());
+        // Generous bound vs the < 10ms release target, to absorb CI variance.
+        assert!(elapsed.as_millis() < 500, "too slow: {elapsed:?}");
     }
 }
