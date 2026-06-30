@@ -271,6 +271,33 @@ impl FileStorage {
         self.sync_all_locked()
     }
 
+    /// Create a consistent on-disk snapshot of every dataset under `dest`.
+    ///
+    /// Holds the writer lock so no insert/delete can interleave, durably flushes,
+    /// then copies each dataset's segment file to
+    /// `{dest}/datasets/{name}/segment.dat`. Reads are not blocked. The snapshot
+    /// is self-contained: restore by opening it with [`FileStorage::open`]
+    /// (pointing at a fresh, empty WAL directory).
+    pub fn snapshot(&self, dest: impl AsRef<Path>) -> Result<()> {
+        let dest = dest.as_ref();
+        let dest_datasets = dest.join("datasets");
+        std::fs::create_dir_all(&dest_datasets)?;
+        // Hold the writer lock across flush + copy for a consistent point-in-time
+        // image (writers block briefly; readers are unaffected).
+        let _g = self.inner.write_lock.lock();
+        self.sync_all_locked()?;
+        let names: Vec<String> = self.inner.datasets.read().keys().cloned().collect();
+        for name in names {
+            let src = self.inner.datasets_dir.join(&name).join("segment.dat");
+            let dst_dir = dest_datasets.join(&name);
+            std::fs::create_dir_all(&dst_dir)?;
+            if src.exists() {
+                std::fs::copy(&src, dst_dir.join("segment.dat"))?;
+            }
+        }
+        Ok(())
+    }
+
     fn sync_all_locked(&self) -> Result<()> {
         for ds in self.inner.datasets.read().values() {
             ds.lock().sync()?;

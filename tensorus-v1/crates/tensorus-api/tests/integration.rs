@@ -837,3 +837,416 @@ async fn journey_http_transport_roundtrip() {
     assert_eq!(resp.pointer("/choices/0/message/content").unwrap(), "pong");
     server.await.unwrap();
 }
+
+// --- multi-tenancy + durability ----------------------------------------------
+
+/// Send a request with an explicit API key (or none).
+async fn call_key(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    key: Option<&str>,
+    body: Option<serde_json::Value>,
+) -> (axum::http::StatusCode, serde_json::Value) {
+    use axum::body::{to_bytes, Body};
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    let mut builder = Request::builder().method(method).uri(uri);
+    if let Some(k) = key {
+        builder = builder.header("x-api-key", k);
+    }
+    let req = match body {
+        Some(j) => builder
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&j).unwrap()))
+            .unwrap(),
+        None => builder.body(Body::empty()).unwrap(),
+    };
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let status = resp.status();
+    let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let json = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+    (status, json)
+}
+
+/// Build a multi-tenant app with the given bootstrap admin key.
+fn tenant_app(admin: &str) -> (axum::Router, TempDir) {
+    use std::sync::Arc;
+    use tensorus_api::TenantRegistry;
+    let tmp = TempDir::new().unwrap();
+    let svc = TensorService::new(storage(&tmp));
+    let registry = Arc::new(TenantRegistry::in_memory());
+    let state = AppState::new(
+        svc,
+        ApiConfig {
+            api_key: None,
+            ..Default::default()
+        },
+    )
+    .with_tenancy(registry, Some(admin.to_string()));
+    (build_app(state), tmp)
+}
+
+/// Create a tenant and issue a key with the given role; returns the plaintext key.
+async fn provision(app: &axum::Router, admin: &str, tenant: &str, role: &str) -> String {
+    let (s, _) = call_key(
+        app,
+        "POST",
+        "/admin/tenants",
+        Some(admin),
+        Some(serde_json::json!({"id": tenant})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200, "create tenant");
+    let (s, b) = call_key(
+        app,
+        "POST",
+        &format!("/admin/tenants/{tenant}/keys"),
+        Some(admin),
+        Some(serde_json::json!({"role": role, "name": "test"})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200, "issue key");
+    b["key"].as_str().unwrap().to_string()
+}
+
+#[tokio::test]
+async fn journey_multi_tenant_end_to_end() {
+    let (app, _tmp) = tenant_app("ADMIN");
+    let key = provision(&app, "ADMIN", "acme", "read_write").await;
+
+    // Tenant creates a dataset, inserts, lists (unprefixed), and searches.
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/datasets",
+        Some(&key),
+        Some(serde_json::json!({"name": "vecs", "metric": "l2"})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+
+    let (s, ib) = call_key(
+        &app,
+        "POST",
+        "/datasets/vecs/tensors",
+        Some(&key),
+        Some(serde_json::json!({"data": [1.0, 0.0, 0.0], "shape": [3]})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+    let id = ib["tensor_id"].as_str().unwrap().to_string();
+
+    // The tenant sees only its own dataset, unprefixed.
+    let (_s, lb) = call_key(&app, "GET", "/datasets", Some(&key), None).await;
+    assert_eq!(lb, serde_json::json!(["vecs"]));
+
+    // Similarity search works through the tenant scope.
+    let (s, sb) = call_key(
+        &app,
+        "POST",
+        "/datasets/vecs/search/similar",
+        Some(&key),
+        Some(serde_json::json!({"vector": [0.9, 0.1, 0.0], "k": 1})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+    assert_eq!(sb.as_array().unwrap()[0]["tensor_id"], id);
+
+    // Usage reflects 1 dataset / 1 tensor.
+    let (_s, ub) = call_key(
+        &app,
+        "GET",
+        "/admin/tenants/acme/usage",
+        Some("ADMIN"),
+        None,
+    )
+    .await;
+    assert_eq!(ub["datasets"], 1);
+    assert_eq!(ub["tensors"], 1);
+}
+
+#[tokio::test]
+async fn journey_tenant_isolation() {
+    let (app, _tmp) = tenant_app("ADMIN");
+    let ka = provision(&app, "ADMIN", "alpha", "read_write").await;
+    let kb = provision(&app, "ADMIN", "beta", "read_write").await;
+
+    // Both tenants create a dataset of the same name and insert one tensor each.
+    for k in [&ka, &kb] {
+        call_key(
+            &app,
+            "POST",
+            "/datasets",
+            Some(k),
+            Some(serde_json::json!({"name": "data"})),
+        )
+        .await;
+    }
+    let (_s, ia) = call_key(
+        &app,
+        "POST",
+        "/datasets/data/tensors",
+        Some(&ka),
+        Some(serde_json::json!({"data": [1.0, 2.0, 3.0, 4.0], "shape": [2, 2]})),
+    )
+    .await;
+    let a_id = ia["tensor_id"].as_str().unwrap().to_string();
+    call_key(
+        &app,
+        "POST",
+        "/datasets/data/tensors",
+        Some(&kb),
+        Some(serde_json::json!({"data": [9.0, 9.0, 9.0, 9.0], "shape": [2, 2]})),
+    )
+    .await;
+
+    // Each tenant sees only its own single tensor.
+    let (_s, sa) = call_key(&app, "GET", "/datasets/data/tensors", Some(&ka), None).await;
+    assert_eq!(sa.as_array().unwrap().len(), 1);
+    let (_s, sb) = call_key(&app, "GET", "/datasets/data/tensors", Some(&kb), None).await;
+    assert_eq!(sb.as_array().unwrap().len(), 1);
+
+    // Beta cannot fetch Alpha's tensor id (it lives in beta.data, not alpha.data).
+    let (s, _) = call_key(
+        &app,
+        "GET",
+        &format!("/datasets/data/tensors/{a_id}"),
+        Some(&kb),
+        None,
+    )
+    .await;
+    assert_eq!(s.as_u16(), 404);
+}
+
+#[tokio::test]
+async fn journey_rbac_read_only_cannot_write() {
+    let (app, _tmp) = tenant_app("ADMIN");
+    // Seed a dataset with an admin-role tenant key first.
+    let rw = provision(&app, "ADMIN", "acme", "read_write").await;
+    call_key(
+        &app,
+        "POST",
+        "/datasets",
+        Some(&rw),
+        Some(serde_json::json!({"name": "d"})),
+    )
+    .await;
+
+    // Issue a read-only key for the same tenant.
+    let (_s, b) = call_key(
+        &app,
+        "POST",
+        "/admin/tenants/acme/keys",
+        Some("ADMIN"),
+        Some(serde_json::json!({"role": "read_only"})),
+    )
+    .await;
+    let ro = b["key"].as_str().unwrap().to_string();
+
+    // Read works.
+    let (s, _) = call_key(&app, "GET", "/datasets", Some(&ro), None).await;
+    assert_eq!(s.as_u16(), 200);
+    // Writes are forbidden.
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/datasets/d/tensors",
+        Some(&ro),
+        Some(serde_json::json!({"data": [1.0], "shape": [1]})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 403);
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/datasets",
+        Some(&ro),
+        Some(serde_json::json!({"name": "x"})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 403);
+}
+
+#[tokio::test]
+async fn journey_quota_enforced() {
+    use std::sync::Arc;
+    use tensorus_api::{Quota, TenantRegistry};
+    let tmp = TempDir::new().unwrap();
+    let svc = TensorService::new(storage(&tmp));
+    let registry = Arc::new(TenantRegistry::in_memory());
+    // Pre-create a tenant with tight quotas, then issue a key.
+    registry
+        .create_tenant(
+            "acme",
+            Quota {
+                max_datasets: 1,
+                max_tensors: 2,
+            },
+        )
+        .unwrap();
+    let (_id, key) = registry
+        .issue_key("acme", tensorus_api::Role::ReadWrite, "k")
+        .unwrap();
+    let app = build_app(
+        AppState::new(
+            svc,
+            ApiConfig {
+                api_key: None,
+                ..Default::default()
+            },
+        )
+        .with_tenancy(registry, Some("ADMIN".to_string())),
+    );
+
+    // One dataset allowed, a second is rejected (429).
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/datasets",
+        Some(&key),
+        Some(serde_json::json!({"name": "d"})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/datasets",
+        Some(&key),
+        Some(serde_json::json!({"name": "d2"})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 429);
+
+    // Two tensors allowed, the third is rejected (429).
+    for _ in 0..2 {
+        let (s, _) = call_key(
+            &app,
+            "POST",
+            "/datasets/d/tensors",
+            Some(&key),
+            Some(serde_json::json!({"data": [1.0], "shape": [1]})),
+        )
+        .await;
+        assert_eq!(s.as_u16(), 200);
+    }
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/datasets/d/tensors",
+        Some(&key),
+        Some(serde_json::json!({"data": [1.0], "shape": [1]})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 429);
+}
+
+#[tokio::test]
+async fn journey_auth_and_admin_guards() {
+    let (app, _tmp) = tenant_app("ADMIN");
+    let rw = provision(&app, "ADMIN", "acme", "read_write").await;
+
+    // Missing / invalid keys.
+    let (s, _) = call_key(&app, "GET", "/datasets", None, None).await;
+    assert_eq!(s.as_u16(), 401);
+    let (s, _) = call_key(&app, "GET", "/datasets", Some("bogus"), None).await;
+    assert_eq!(s.as_u16(), 401);
+
+    // System (admin) key cannot touch tenant data.
+    let (s, _) = call_key(&app, "GET", "/datasets", Some("ADMIN"), None).await;
+    assert_eq!(s.as_u16(), 403);
+
+    // A non-admin tenant key cannot use the control plane.
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/admin/tenants",
+        Some(&rw),
+        Some(serde_json::json!({"id": "evil"})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 403);
+
+    // A tenant key cannot manage another tenant's keys.
+    call_key(
+        &app,
+        "POST",
+        "/admin/tenants",
+        Some("ADMIN"),
+        Some(serde_json::json!({"id": "other"})),
+    )
+    .await;
+    let (s, _) = call_key(&app, "GET", "/admin/tenants/other/keys", Some(&rw), None).await;
+    assert_eq!(s.as_u16(), 403);
+}
+
+#[tokio::test]
+async fn journey_admin_routes_404_in_legacy_mode() {
+    // Legacy single-key app (no tenancy): the control plane is not mounted/active.
+    let tmp = TempDir::new().unwrap();
+    let app = keyed_app(TensorService::new(storage(&tmp)));
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/admin/tenants",
+        Some("k"),
+        Some(serde_json::json!({"id": "acme"})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 404);
+}
+
+#[tokio::test]
+async fn journey_snapshot_via_admin_then_restore() {
+    let (app, tmp) = tenant_app("ADMIN");
+    let key = provision(&app, "ADMIN", "acme", "read_write").await;
+    call_key(
+        &app,
+        "POST",
+        "/datasets",
+        Some(&key),
+        Some(serde_json::json!({"name": "w"})),
+    )
+    .await;
+    call_key(
+        &app,
+        "POST",
+        "/datasets/w/tensors",
+        Some(&key),
+        Some(serde_json::json!({"data": [1.0, 0.0, 0.0, 1.0], "shape": [2, 2]})),
+    )
+    .await;
+
+    // Trigger a snapshot to a sibling directory (system-admin only).
+    let dest = tmp.path().join("backup");
+    let dest_str = dest.to_string_lossy().to_string();
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/admin/snapshot",
+        Some("ADMIN"),
+        Some(serde_json::json!({"dest": dest_str})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+
+    // A tenant key may not snapshot.
+    let (s, _) = call_key(
+        &app,
+        "POST",
+        "/admin/snapshot",
+        Some(&key),
+        Some(serde_json::json!({"dest": dest_str})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 403);
+
+    // The snapshot is a complete, openable store containing the tenant's data
+    // under its composite key.
+    let restored = FileStorage::open(&dest, tmp.path().join("backup_wal")).unwrap();
+    let datasets = restored.list_datasets().await.unwrap();
+    assert!(datasets.contains(&"acme.w".to_string()));
+    assert_eq!(restored.scan("acme.w", 100, 0).await.unwrap().len(), 1);
+}

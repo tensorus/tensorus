@@ -19,6 +19,7 @@ pub mod llm_http;
 pub mod rest;
 pub mod service;
 pub mod telemetry;
+pub mod tenancy;
 pub mod tools;
 
 pub use index::{metric_from_str, metric_name, IndexManager};
@@ -26,3 +27,4 @@ pub use llm_http::HttpTransport;
 pub use rest::{build_app, ApiConfig, AppState, LlmConfig};
 pub use service::{HealthInfo, InsertRequest, PropertyQuery, TensorService};
 pub use telemetry::{init_tracing, Histogram};
+pub use tenancy::{Principal, Quota, Role, Scope, TenantRegistry};

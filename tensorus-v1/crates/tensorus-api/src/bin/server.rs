@@ -2,7 +2,9 @@
 //!
 //! Configured via environment variables:
 //! - `TENSORUS_DATA_DIR`  storage root (default `./data`)
-//! - `TENSORUS_API_KEY`   required API key (unset = auth disabled, dev only)
+//! - `TENSORUS_API_KEY`   legacy single-key auth (unset = auth disabled, dev only)
+//! - `TENSORUS_ADMIN_KEY` enables **multi-tenancy**; this is the bootstrap
+//!   system/control-plane key (create tenants, issue tenant keys, snapshot)
 //! - `TENSORUS_HOST`      bind host (default `0.0.0.0`)
 //! - `TENSORUS_REST_PORT` bind port (default `8080`)
 //! - `TENSORUS_LOG_JSON`  `true` for JSON logs (default pretty)
@@ -14,10 +16,12 @@
 //! - `TENSORUS_LLM_MODEL`     e.g. `qwen2.5:7b`
 //! - `TENSORUS_LLM_API_KEY`   optional bearer token
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tensorus_ai::{LlmProvider, OpenAiCompatProvider, RoutingStrategy};
 use tensorus_api::{
-    build_app, init_tracing, ApiConfig, AppState, HttpTransport, LlmConfig, TensorService,
+    build_app, init_tracing, ApiConfig, AppState, HttpTransport, LlmConfig, TenantRegistry,
+    TensorService,
 };
 use tensorus_storage::FileStorage;
 
@@ -37,6 +41,27 @@ fn llm_config_from_env() -> Option<LlmConfig> {
     })
 }
 
+/// Seed per-tenant usage counters from recovered storage so quotas are accurate
+/// across restarts. Composite dataset keys are `{tenant}.{dataset}`.
+async fn seed_usage(
+    service: &TensorService,
+    registry: &TenantRegistry,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut counts: HashMap<String, (usize, usize)> = HashMap::new();
+    for key in service.list_datasets().await? {
+        if let Some((tenant, _ds)) = key.split_once('.') {
+            let n = service.dataset_tensor_count(&key);
+            let e = counts.entry(tenant.to_string()).or_default();
+            e.0 += 1;
+            e.1 += n;
+        }
+    }
+    for (tenant, (datasets, tensors)) in counts {
+        registry.set_usage(&tenant, datasets, tensors);
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let json_logs = std::env::var("TENSORUS_LOG_JSON").as_deref() == Ok("true");
@@ -49,12 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(8080);
     let api_key = std::env::var("TENSORUS_API_KEY").ok();
-    if api_key.is_none() {
-        tracing::warn!(
-            "TENSORUS_API_KEY is not set: authentication is DISABLED (development only). \
-             Set it to require an API key on all data endpoints."
-        );
-    }
+    let admin_key = std::env::var("TENSORUS_ADMIN_KEY").ok();
 
     let wal_dir = format!("{data_dir}/wal");
     let storage = Arc::new(FileStorage::open(&data_dir, &wal_dir)?);
@@ -66,14 +86,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     service.recover().await?;
 
     let config = ApiConfig {
-        api_key,
+        api_key: api_key.clone(),
         rate_capacity: 1000.0,
         rate_per_sec: 1000.0,
     };
-    let mut state = AppState::new(service, config);
+    let mut state = AppState::new(service.clone(), config);
     if let Some(llm) = llm_config_from_env() {
         state = state.with_llm(llm);
     }
+
+    if let Some(admin) = admin_key {
+        // Multi-tenant mode: load the control plane and seed usage counters.
+        let registry = Arc::new(TenantRegistry::load(
+            format!("{data_dir}/control/registry.json").into(),
+        ));
+        seed_usage(&service, &registry).await?;
+        state = state.with_tenancy(registry, Some(admin));
+        tracing::info!("multi-tenancy ENABLED (control plane under /admin)");
+    } else if api_key.is_none() {
+        tracing::warn!(
+            "neither TENSORUS_ADMIN_KEY nor TENSORUS_API_KEY is set: authentication is DISABLED \
+             (development only)."
+        );
+    }
+
     let app = build_app(state);
 
     let addr = format!("{host}:{port}");

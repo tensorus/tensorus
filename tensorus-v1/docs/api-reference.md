@@ -11,10 +11,30 @@ behind an optional feature.
 
 ---
 
-## Authentication
+## Authentication & multi-tenancy
 
-Protected endpoints require an API key (when the server is configured with one),
-supplied via either header:
+Tensorus runs in one of two auth modes:
+
+**Legacy single-key mode** (default). A single API key (`TENSORUS_API_KEY`) grants
+full access; datasets live in one global namespace. If no key is set, auth is
+disabled (development only).
+
+**Multi-tenant mode** (when `TENSORUS_ADMIN_KEY` is set). Keys resolve to a
+**tenant** and a **role**, and each tenant's datasets are isolated under a
+private namespace (`{tenant}.{dataset}` internally; clients always use the bare
+name). Three roles, in increasing privilege:
+
+| Role | Data read | Data write | Manage own tenant's keys |
+|------|-----------|------------|--------------------------|
+| `read_only` | ✓ | — | — |
+| `read_write` | ✓ | ✓ | — |
+| `admin` | ✓ | ✓ | ✓ |
+
+The bootstrap **system** key (`TENSORUS_ADMIN_KEY`) runs the control plane
+(create tenants, issue keys for any tenant, snapshot) but cannot read or write
+tenant data — use a tenant-scoped key for that.
+
+Keys are supplied via either header:
 
 ```
 x-api-key: <key>
@@ -22,10 +42,11 @@ x-api-key: <key>
 Authorization: Bearer <key>
 ```
 
-- Missing/incorrect key → **401 Unauthorized**.
-- `/health` and `/metrics` are **public** (no key required).
-- If the server is started without a key (`TENSORUS_API_KEY` unset), auth is
-  disabled (development only) and a warning is logged.
+- Missing/invalid key → **401**. Insufficient role or wrong scope → **403**.
+- Per-tenant quota exceeded → **429**.
+- `/health` and `/metrics` are public.
+- Dataset names in multi-tenant mode must be slugs: 1–63 chars, lowercase
+  alphanumeric or hyphen, starting alphanumeric.
 
 ## Rate limiting
 
@@ -36,11 +57,14 @@ When exhausted → **429 Too Many Requests**.
 
 Errors return `{"error": "<message>"}` with status:
 
-| `TensorusError` | HTTP |
-|-----------------|------|
+| Condition | HTTP |
+|-----------|------|
 | `NotFound` | 404 |
 | `AlreadyExists` | 409 |
 | `InvalidArgument`, `DimensionMismatch` | 400 |
+| missing/invalid API key | 401 |
+| insufficient role / wrong scope | 403 |
+| rate limit or quota exceeded | 429 |
 | everything else | 500 |
 
 ---
@@ -350,6 +374,51 @@ normally. The built-in HTTP transport is plain-`http` only (a local-first design
 HTTPS/cloud providers require a TLS-enabled build.
 
 ---
+
+## Control plane (multi-tenant mode)
+
+These endpoints exist only when the server runs with `TENSORUS_ADMIN_KEY`. They
+return **404** otherwise. Unless noted, they require the **system** key; key
+management and usage also accept the tenant's own **admin** key.
+
+### `POST /admin/tenants` — create a tenant (system)
+```json
+{ "id": "acme", "max_datasets": 100, "max_tensors": 1000000 }
+```
+`max_*` of `0` (or omitted) means unlimited. Response `200`:
+```json
+{ "created": true, "id": "acme", "quota": {"max_datasets": 100, "max_tensors": 1000000}, "created_at": 1700000000 }
+```
+
+### `GET /admin/tenants` — list tenants (system)
+
+### `POST /admin/tenants/{tenant}/keys` — issue an API key (system or tenant admin)
+```json
+{ "role": "read_write", "name": "ci-pipeline" }
+```
+Response `200` (the plaintext key is shown **once**):
+```json
+{ "id": "key_ab12cd34", "key": "tns_acme_…", "tenant": "acme", "role": "read_write", "name": "ci-pipeline", "warning": "store this key now; it is shown only once" }
+```
+
+### `GET /admin/tenants/{tenant}/keys` — list key metadata (system or tenant admin)
+Returns id/tenant/role/name/created_at — never the key or its hash.
+
+### `DELETE /admin/keys/{id}` — revoke a key (system or the key's tenant admin)
+
+### `GET /admin/tenants/{tenant}/usage` — usage vs quota (system or tenant admin)
+```json
+{ "tenant": "acme", "datasets": 3, "tensors": 1422, "quota": {"max_datasets": 100, "max_tensors": 1000000} }
+```
+
+### `POST /admin/snapshot` — back up all data (system)
+```json
+{ "dest": "/backups/tensorus-2026-06-30" }
+```
+Flushes and copies every dataset's segment file to `dest` (a server-side path).
+**Restore** by pointing a server at the snapshot directory
+(`TENSORUS_DATA_DIR=dest`) with a fresh WAL; indexes rebuild on startup. Back up
+`{data_dir}/indexes/` and `{data_dir}/control/` alongside it for a full restore.
 
 ## gRPC service
 

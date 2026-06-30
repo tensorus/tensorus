@@ -7,13 +7,15 @@ REST surface (auth, rate limiting, metrics) and a runnable server binary.
 
 - **Depends on:** `tensorus-core`, `tensorus-storage`, `tensorus-compute`,
   `tensorus-index`, `tensorus-search`, `tensorus-ai`, `axum`, `tokio` (incl.
-  `net`), `tracing`, `tracing-subscriber`, `serde`/`serde_json`, `parking_lot`.
+  `net`), `tracing`, `tracing-subscriber`, `serde`/`serde_json`, `parking_lot`,
+  `rand` + `sha2` (API-key generation/hashing).
 - **Binary:** `tensorus-server`.
 
 | Module | Contents |
 |--------|----------|
-| `service` | `TensorService` (core logic), `QueryContext` impl, DTOs |
+| `service` | `TensorService` (core logic), `QueryContext`/`ScopedContext`, DTOs |
 | `index` | `IndexManager`, `DatasetIndexes`, `PropertyIndex`, metric helpers |
+| `tenancy` | `TenantRegistry`, `Principal`/`Scope`/`Role`, `Quota`, hashed keys |
 | `rest` | `build_app`, `AppState`, `ApiConfig`, `LlmConfig`, handlers, middleware |
 | `tools` | `default_tool_registry` — async agent tools backed by the service |
 | `llm_http` | `HttpTransport` — `http://` client implementing `tensorus_ai::HttpClient` |
@@ -171,17 +173,42 @@ pub fn build_app(state: AppState) -> axum::Router;
 | `POST /datasets/{ds}/search/contraction` | ✓ | contraction similarity search |
 | `POST /query` | ✓ | NQL natural-language query (needs LLM) |
 | `POST /agent` | ✓ | ReAct agent run (needs LLM) |
+| `POST/GET /admin/tenants` | ✓ (system) | create / list tenants |
+| `POST/GET /admin/tenants/{t}/keys` | ✓ (system or tenant admin) | issue / list API keys |
+| `DELETE /admin/keys/{id}` | ✓ (system or tenant admin) | revoke a key |
+| `GET /admin/tenants/{t}/usage` | ✓ (system or tenant admin) | usage vs quota |
+| `POST /admin/snapshot` | ✓ (system) | back up all data |
 | `GET /health` | — | health probe |
 | `GET /metrics` | — | Prometheus metrics |
 
 **Middleware** (protected routes): a token-bucket rate limiter (429 when
-exhausted), then API-key auth (401 if missing/wrong; key from `x-api-key` or
-`Authorization: Bearer …`). After the handler runs, latency is recorded into a
-histogram and a structured `tracing` event is emitted. `/query` and `/agent`
-return **503** when no `LlmConfig` is attached. `/health` and `/metrics` bypass
-auth.
+exhausted), then authentication, which resolves the caller to a
+[`Principal`](#multi-tenancy--rbac) stored in the request extensions. After the
+handler runs, latency is recorded into a histogram and a structured `tracing`
+event is emitted. `/query` and `/agent` return **503** when no `LlmConfig` is
+attached. `/health` and `/metrics` bypass auth.
 
 Request/response JSON shapes are in [API Reference](../api-reference.md).
+
+### Multi-tenancy & RBAC
+
+`AppState::with_tenancy(registry, admin_key)` switches authentication to the
+`tenancy` module's `TenantRegistry`. Each request becomes a `Principal { scope,
+role }`:
+
+- `Scope::Unscoped` — legacy single-key mode (full access, no dataset prefixing).
+- `Scope::System` — the bootstrap `admin_key`: control plane only (`/admin/*`),
+  no tenant data access.
+- `Scope::Tenant(t)` — a tenant key; data operations are transparently scoped to
+  the storage namespace `{t}.{dataset}` (handlers call `resolve_ds`).
+
+Roles (`read_only` < `read_write` < `admin`) gate writes and key management.
+`TenantRegistry` persists tenants and **SHA-256-hashed** keys to
+`{data_dir}/control/registry.json`; plaintext keys are shown once at issuance.
+Per-tenant `Quota` (max datasets / max tensors; `0` = unlimited) is enforced on
+create/insert via in-memory counters that are seeded from storage at startup.
+The `ScopedContext` decorator applies the same `{t}.{dataset}` prefixing to NQL
+queries and agent tools so the LLM surface is tenant-isolated too.
 
 ---
 
@@ -232,8 +259,9 @@ A runnable REST server configured by environment variables:
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `TENSORUS_DATA_DIR` | `./data` | storage root (WAL under `{dir}/wal`, index metric sidecar under `{dir}/indexes`) |
-| `TENSORUS_API_KEY` | *(unset)* | required key; **unset disables auth (dev only)** |
+| `TENSORUS_DATA_DIR` | `./data` | storage root (WAL under `{dir}/wal`, index metric sidecar under `{dir}/indexes`, control plane under `{dir}/control`) |
+| `TENSORUS_API_KEY` | *(unset)* | legacy single key; **unset disables auth (dev only)** |
+| `TENSORUS_ADMIN_KEY` | *(unset)* | enables **multi-tenancy**; bootstrap system/control-plane key |
 | `TENSORUS_HOST` | `0.0.0.0` | bind host |
 | `TENSORUS_REST_PORT` | `8080` | bind port |
 | `TENSORUS_LOG_JSON` | `false` | `true` → JSON logs |

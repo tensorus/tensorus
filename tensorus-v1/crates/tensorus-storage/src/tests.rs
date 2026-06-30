@@ -212,3 +212,34 @@ async fn insert_10k_throughput() {
         "10k insert took too long: {elapsed:?}"
     );
 }
+
+#[tokio::test]
+async fn snapshot_then_restore_preserves_data() {
+    let t = TempDir::new().unwrap();
+    let (d, w) = dirs(&t);
+    let id;
+    {
+        let store = FileStorage::open(&d, &w).unwrap();
+        store.create_dataset("weights").await.unwrap();
+        id = store
+            .insert("weights", &[1u8; 16], desc(), json!({"name": "a"}))
+            .await
+            .unwrap();
+        store
+            .insert("weights", &[2u8; 16], desc(), json!({"name": "b"}))
+            .await
+            .unwrap();
+
+        // Snapshot to a separate directory.
+        let snap = t.path().join("snap");
+        store.snapshot(&snap).unwrap();
+
+        // Open the snapshot with a fresh WAL dir; data is intact.
+        let restored = FileStorage::open(&snap, t.path().join("snap_wal")).unwrap();
+        let rec = restored.get("weights", id).await.unwrap();
+        assert_eq!(rec.data, vec![1u8; 16]);
+        assert_eq!(rec.metadata["name"], "a");
+        assert_eq!(restored.scan("weights", 100, 0).await.unwrap().len(), 2);
+        assert_eq!(restored.list_datasets().await.unwrap(), vec!["weights"]);
+    }
+}

@@ -84,7 +84,11 @@ REST endpoints: `POST/GET /datasets` (optional per-dataset vector `metric`),
 `POST /datasets/{ds}/search/similar` (HNSW vector search),
 `POST /datasets/{ds}/search/contraction` (structural similarity),
 `POST /query` (NQL) and `POST /agent` (ReAct) when an LLM is configured,
-`GET /health`, `GET /metrics`. See the [API reference](./docs/api-reference.md).
+`GET /health`, `GET /metrics`. With `TENSORUS_ADMIN_KEY` set, **multi-tenancy** is
+enabled: per-tenant scoped API keys with `read_only`/`read_write`/`admin` roles,
+isolated dataset namespaces, quotas, and a `/admin/*` control plane
+(create tenants, issue/revoke keys, usage, `/admin/snapshot` backup).
+See the [API reference](./docs/api-reference.md).
 
 ## Build, test, lint
 

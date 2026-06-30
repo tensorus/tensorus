@@ -82,6 +82,9 @@ binary, and the Python bindings depend on `storage`/`compute`.
    Prometheus `/metrics` endpoint with a latency histogram.
 7. **Safety.** Every crate is `#![forbid(unsafe_code)]`. Network endpoints
    require an API key by default.
+8. **Tenant isolation (optional).** With a control plane enabled, every key maps
+   to a tenant and role; datasets are namespaced per tenant so one tenant can
+   never read another's data, and per-tenant quotas bound resource use.
 
 ---
 
@@ -162,6 +165,21 @@ task → ReActAgent::run
     → AgentOutcome { Success | MaxStepsReached | TimedOut | BudgetExceeded }
 ```
 
+### 3.6 Request authentication & tenant scoping (multi-tenant mode)
+
+```
+request → tensorus-api middleware
+       → rate limit (429 if exhausted)
+       → authenticate API key:
+            admin_key            → Principal{ System,  Admin }   (control plane only)
+            registry.resolve(k)  → Principal{ Tenant(t), role }
+            otherwise            → 401
+       → handler: resolve_ds(principal, ds)
+            Tenant(t) → "{t}.{ds}"  (slug-validated; isolates tenant data)
+            require_write / quota checks for mutating routes
+       → TensorService over the composite key
+```
+
 ---
 
 ## 4. Storage and durability model
@@ -183,8 +201,14 @@ crash-safe engine:
 read the checkpoint, replay WAL entries with `seq > checkpoint` (idempotently,
 deduped by id), fsync, then truncate the WAL.
 
-See [storage](./services/tensorus-storage.md) for the frame format and the
-exact protocol.
+**Backup/restore.** `FileStorage::snapshot(dest)` takes the writer lock, flushes,
+and copies every dataset's segment file to `dest` for a consistent point-in-time
+image (reads are not blocked). Restore by opening the snapshot directory with a
+fresh WAL; secondary indexes rebuild on startup. The `/admin/snapshot` endpoint
+exposes this to the system admin.
+
+See [storage](./services/tensorus-storage.md) for the frame format and the exact
+protocol.
 
 ---
 

@@ -195,6 +195,34 @@ impl TensorService {
         self.indexes.metric_for(dataset)
     }
 
+    /// Whether a dataset has been created (present in the index manager).
+    pub fn has_dataset(&self, dataset: &str) -> bool {
+        self.indexes.dataset(dataset).is_some()
+    }
+
+    /// Whether a live tensor exists in a dataset (via the property index).
+    pub fn has_tensor(&self, dataset: &str, id: TensorId) -> bool {
+        self.indexes
+            .dataset(dataset)
+            .map(|d| d.props().contains(id))
+            .unwrap_or(false)
+    }
+
+    /// Live tensor count for a dataset, taken from the in-memory index.
+    pub fn dataset_tensor_count(&self, dataset: &str) -> usize {
+        self.indexes.dataset(dataset).map(|d| d.len()).unwrap_or(0)
+    }
+
+    /// Snapshot all datasets to `dest` for backup. The file copy runs on a
+    /// blocking thread so the async runtime is not stalled.
+    pub async fn snapshot(&self, dest: &str) -> Result<()> {
+        let storage = self.storage.clone();
+        let dest = dest.to_string();
+        tokio::task::spawn_blocking(move || storage.snapshot(&dest))
+            .await
+            .map_err(|e| TensorusError::Storage(format!("snapshot task failed: {e}")))?
+    }
+
     /// Insert a `Float32` tensor, computing its descriptor and updating indexes.
     #[tracing::instrument(skip(self, data, metadata), fields(dataset = %dataset, n = data.len()))]
     pub async fn insert(
@@ -535,5 +563,62 @@ impl QueryContext for TensorService {
             score: value,
             metadata: serde_json::json!({"function": function, "field": field, "value": value}),
         }])
+    }
+}
+
+/// A tenant-scoped [`QueryContext`] decorator: it prefixes dataset names with
+/// the tenant (`{tenant}.{dataset}`) before delegating to the underlying
+/// service, so NQL queries and agent tools stay isolated per tenant.
+///
+/// `tenant = None` is the legacy unscoped mode (no prefixing).
+pub struct ScopedContext {
+    service: Arc<TensorService>,
+    tenant: Option<String>,
+}
+
+impl ScopedContext {
+    pub fn new(service: Arc<TensorService>, tenant: Option<String>) -> Self {
+        ScopedContext { service, tenant }
+    }
+
+    fn key(&self, ds: &str) -> String {
+        match &self.tenant {
+            Some(t) => format!("{t}.{ds}"),
+            None => ds.to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl QueryContext for ScopedContext {
+    async fn scan(&self, ds: &str, limit: usize) -> std::result::Result<Vec<QueryRow>, String> {
+        QueryContext::scan(self.service.as_ref(), &self.key(ds), limit).await
+    }
+
+    async fn property_search(
+        &self,
+        ds: &str,
+        predicates: &[Predicate],
+        limit: usize,
+    ) -> std::result::Result<Vec<QueryRow>, String> {
+        QueryContext::property_search(self.service.as_ref(), &self.key(ds), predicates, limit).await
+    }
+
+    async fn vector_search(
+        &self,
+        ds: &str,
+        query: &[f32],
+        k: usize,
+    ) -> std::result::Result<Vec<QueryRow>, String> {
+        QueryContext::vector_search(self.service.as_ref(), &self.key(ds), query, k).await
+    }
+
+    async fn aggregate(
+        &self,
+        ds: &str,
+        function: &str,
+        field: &str,
+    ) -> std::result::Result<Vec<QueryRow>, String> {
+        QueryContext::aggregate(self.service.as_ref(), &self.key(ds), function, field).await
     }
 }

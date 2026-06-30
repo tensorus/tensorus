@@ -24,6 +24,8 @@ enum ToolKind {
 struct ServiceTool {
     service: Arc<TensorService>,
     kind: ToolKind,
+    /// Tenant to scope dataset names to (`None` = legacy unscoped).
+    tenant: Option<String>,
 }
 
 impl ServiceTool {
@@ -31,6 +33,14 @@ impl ServiceTool {
         args.get(key)
             .and_then(|v| v.as_str())
             .ok_or_else(|| format!("missing string argument '{key}'"))
+    }
+
+    /// Scope a user-facing dataset name to its storage key.
+    fn scoped(&self, ds: &str) -> String {
+        match &self.tenant {
+            Some(t) => format!("{t}.{ds}"),
+            None => ds.to_string(),
+        }
     }
 }
 
@@ -86,26 +96,37 @@ impl Tool for ServiceTool {
                     .list_datasets()
                     .await
                     .map_err(|e| e.to_string())?;
-                Ok(json!({ "datasets": names }).to_string())
+                // In tenant scope, show only this tenant's datasets (unprefixed).
+                let visible: Vec<String> = match &self.tenant {
+                    Some(t) => {
+                        let prefix = format!("{t}.");
+                        names
+                            .into_iter()
+                            .filter_map(|k| k.strip_prefix(&prefix).map(|s| s.to_string()))
+                            .collect()
+                    }
+                    None => names,
+                };
+                Ok(json!({ "datasets": visible }).to_string())
             }
             ToolKind::Scan => {
-                let dataset = Self::arg_str(&args, "dataset")?;
+                let dataset = self.scoped(Self::arg_str(&args, "dataset")?);
                 let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
                 let recs = self
                     .service
-                    .scan(dataset, limit, 0)
+                    .scan(&dataset, limit, 0)
                     .await
                     .map_err(|e| e.to_string())?;
                 let ids: Vec<String> = recs.iter().map(|r| r.id.to_string()).collect();
                 Ok(json!({ "count": ids.len(), "ids": ids }).to_string())
             }
             ToolKind::PropertySearch => {
-                let dataset = Self::arg_str(&args, "dataset")?;
+                let dataset = self.scoped(Self::arg_str(&args, "dataset")?);
                 let q: PropertyQuery =
                     serde_json::from_value(args.clone()).map_err(|e| e.to_string())?;
                 let hits = self
                     .service
-                    .search_by_property(dataset, &q)
+                    .search_by_property(&dataset, &q)
                     .await
                     .map_err(|e| e.to_string())?;
                 let results: Vec<Value> = hits
@@ -122,21 +143,22 @@ impl Tool for ServiceTool {
                 Ok(json!({ "count": results.len(), "results": results }).to_string())
             }
             ToolKind::Aggregate => {
-                let dataset = Self::arg_str(&args, "dataset")?;
+                let dataset = self.scoped(Self::arg_str(&args, "dataset")?);
                 let function = Self::arg_str(&args, "function")?;
                 let field = Self::arg_str(&args, "field")?;
-                let rows = QueryContext::aggregate(self.service.as_ref(), dataset, function, field)
-                    .await?;
+                let rows =
+                    QueryContext::aggregate(self.service.as_ref(), &dataset, function, field)
+                        .await?;
                 let value = rows.first().map(|r| r.score).unwrap_or(0.0);
                 Ok(json!({ "function": function, "field": field, "value": value }).to_string())
             }
             ToolKind::Get => {
-                let dataset = Self::arg_str(&args, "dataset")?;
+                let dataset = self.scoped(Self::arg_str(&args, "dataset")?);
                 let id_str = Self::arg_str(&args, "id")?;
                 let id = TensorId::from_str(id_str).map_err(|e| e.to_string())?;
                 let rec = self
                     .service
-                    .get(dataset, id)
+                    .get(&dataset, id)
                     .await
                     .map_err(|e| e.to_string())?;
                 Ok(json!({
@@ -153,8 +175,9 @@ impl Tool for ServiceTool {
     }
 }
 
-/// Build the default tool registry for the ReAct agent, backed by `service`.
-pub fn default_tool_registry(service: Arc<TensorService>) -> ToolRegistry {
+/// Build the default tool registry for the ReAct agent, backed by `service` and
+/// scoped to `tenant` (`None` = legacy unscoped).
+pub fn default_tool_registry(service: Arc<TensorService>, tenant: Option<String>) -> ToolRegistry {
     let mut reg = ToolRegistry::new();
     for kind in [
         ToolKind::ListDatasets,
@@ -166,6 +189,7 @@ pub fn default_tool_registry(service: Arc<TensorService>) -> ToolRegistry {
         reg.register(Arc::new(ServiceTool {
             service: service.clone(),
             kind,
+            tenant: tenant.clone(),
         }));
     }
     reg
