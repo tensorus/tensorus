@@ -15,7 +15,7 @@
 //!
 //! - **Append-only segment files** per dataset (`{data_dir}/datasets/{name}/segment.dat`),
 //!   the durable record of committed data — conceptually the role Lance plays.
-//! - **Write-ahead log** ([`wal`]) with checkpointing for crash recovery.
+//! - **Write-ahead log** (the `wal` module) with checkpointing for crash recovery.
 //! - **In-memory hot map** serving reads (the "hot tier"); the on-disk segment
 //!   is the source of truth on restart.
 //!

@@ -2,7 +2,7 @@
 //! limiting, health, and Prometheus-format metrics.
 //!
 //! Handlers are transport-thin wrappers over [`TensorService`]; the gRPC surface
-//! ([`crate::grpc`], optional) mirrors them over the same service.
+//! (the `grpc` module, optional) mirrors them over the same service.
 
 use crate::service::{HealthInfo, InsertRequest, PropertyQuery, TensorService};
 use crate::telemetry::Histogram;

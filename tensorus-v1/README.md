@@ -20,6 +20,15 @@ This is the ground-up Rust rewrite of the v0.1 prototype.
 | `tensorus-api` | Axum REST API (auth, rate limiting, metrics) + server binary |
 | `tensorus-python` | PyO3 bindings + the `tensorus` Python SDK |
 
+## Documentation
+
+Full documentation lives in [`docs/`](./docs/):
+
+- [Documentation index](./docs/README.md)
+- [Architecture](./docs/architecture.md) · [Data model](./docs/data-model.md) · [API reference](./docs/api-reference.md) · [Configuration](./docs/configuration.md)
+- Per-service references: [core](./docs/services/tensorus-core.md) · [compute](./docs/services/tensorus-compute.md) · [storage](./docs/services/tensorus-storage.md) · [index](./docs/services/tensorus-index.md) · [search](./docs/services/tensorus-search.md) · [ai](./docs/services/tensorus-ai.md) · [api](./docs/services/tensorus-api.md) · [python](./docs/services/tensorus-python.md)
+- Generate API-level (rustdoc) docs with `cargo doc --workspace --no-deps --open`.
+
 ## Quickstart (Rust)
 
 ```rust
