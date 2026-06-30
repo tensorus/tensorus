@@ -1250,3 +1250,223 @@ async fn journey_snapshot_via_admin_then_restore() {
     assert!(datasets.contains(&"acme.w".to_string()));
     assert_eq!(restored.scan("acme.w", 100, 0).await.unwrap().len(), 1);
 }
+
+// --- replication -------------------------------------------------------------
+
+#[tokio::test]
+async fn journey_replication_primary_to_replica() {
+    use std::sync::Arc;
+    use tensorus_api::{ReplOp, ReplicaSyncer};
+    use tensorus_core::types::TensorId;
+
+    // Primary: a legacy single-key app. (Default cosine metric — note that
+    // per-dataset metric config is control-plane state, not part of the data
+    // change-log, so replicas use the default metric.)
+    let tmp1 = TempDir::new().unwrap();
+    let primary = keyed_app(TensorService::new(storage(&tmp1)));
+    call(
+        &primary,
+        "POST",
+        "/datasets",
+        Some(serde_json::json!({"name": "vecs"})),
+    )
+    .await;
+    let (_s, b1) = call(
+        &primary,
+        "POST",
+        "/datasets/vecs/tensors",
+        Some(serde_json::json!({"data": [1.0, 0.0, 0.0], "shape": [3]})),
+    )
+    .await;
+    let id1 = b1["tensor_id"].as_str().unwrap().to_string();
+    call(
+        &primary,
+        "POST",
+        "/datasets/vecs/tensors",
+        Some(serde_json::json!({"data": [0.0, 1.0, 0.0], "shape": [3]})),
+    )
+    .await;
+
+    // Pull the change-log over REST.
+    let (s, body) = call(&primary, "GET", "/replication/changes?since=0", None).await;
+    assert_eq!(s.as_u16(), 200);
+    let ops: Vec<ReplOp> = serde_json::from_value(body).unwrap();
+    assert_eq!(ops.len(), 2);
+
+    // Apply to a fresh replica via the syncer.
+    let tmp2 = TempDir::new().unwrap();
+    let replica = Arc::new(TensorService::new(storage(&tmp2)));
+    let mut syncer = ReplicaSyncer::new(replica.clone()).unwrap();
+    let head = syncer.apply_batch(ops).await.unwrap();
+    assert!(head > 0);
+
+    // Replica converged: data is present and the vector index was rebuilt.
+    let parsed: TensorId = id1.parse().unwrap();
+    assert!(replica.get("vecs", parsed).await.is_ok());
+    let hits = replica
+        .search_similar("vecs", &[0.9, 0.1, 0.0], 1, None)
+        .await
+        .unwrap();
+    assert_eq!(hits[0].tensor_id.to_string(), id1);
+
+    // Incremental catch-up: a new primary write is picked up past the head.
+    call(
+        &primary,
+        "POST",
+        "/datasets/vecs/tensors",
+        Some(serde_json::json!({"data": [0.0, 0.0, 1.0], "shape": [3]})),
+    )
+    .await;
+    let (_s, body) = call(
+        &primary,
+        "GET",
+        &format!("/replication/changes?since={head}"),
+        None,
+    )
+    .await;
+    let delta: Vec<ReplOp> = serde_json::from_value(body).unwrap();
+    assert_eq!(delta.len(), 1);
+    syncer.apply_batch(delta).await.unwrap();
+    assert_eq!(replica.scan("vecs", 100, 0).await.unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn journey_replication_requires_admin() {
+    // In multi-tenant mode, a tenant key cannot read the global change-log.
+    let (app, _tmp) = tenant_app("ADMIN");
+    let key = provision(&app, "ADMIN", "acme", "read_write").await;
+    let (s, _) = call_key(
+        &app,
+        "GET",
+        "/replication/changes?since=0",
+        Some(&key),
+        None,
+    )
+    .await;
+    assert_eq!(s.as_u16(), 403);
+    // The system key can.
+    let (s, _) = call_key(
+        &app,
+        "GET",
+        "/replication/changes?since=0",
+        Some("ADMIN"),
+        None,
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+}
+
+// --- admin completeness: delete-tenant + online restore ----------------------
+
+#[tokio::test]
+async fn journey_admin_delete_tenant() {
+    let (app, _tmp) = tenant_app("ADMIN");
+    let key = provision(&app, "ADMIN", "acme", "read_write").await;
+    call_key(
+        &app,
+        "POST",
+        "/datasets",
+        Some(&key),
+        Some(serde_json::json!({"name": "d"})),
+    )
+    .await;
+    call_key(
+        &app,
+        "POST",
+        "/datasets/d/tensors",
+        Some(&key),
+        Some(serde_json::json!({"data": [1.0, 0.0], "shape": [2]})),
+    )
+    .await;
+    let (_s, u) = call_key(
+        &app,
+        "GET",
+        "/admin/tenants/acme/usage",
+        Some("ADMIN"),
+        None,
+    )
+    .await;
+    assert_eq!(u["tensors"], 1);
+
+    // Delete the tenant (system only).
+    let (s, _) = call_key(&app, "DELETE", "/admin/tenants/acme", Some("ADMIN"), None).await;
+    assert_eq!(s.as_u16(), 200);
+
+    // The tenant key no longer authenticates, and the tenant is gone.
+    let (s, _) = call_key(&app, "GET", "/datasets", Some(&key), None).await;
+    assert_eq!(s.as_u16(), 401);
+    let (s, _) = call_key(
+        &app,
+        "GET",
+        "/admin/tenants/acme/usage",
+        Some("ADMIN"),
+        None,
+    )
+    .await;
+    assert_eq!(s.as_u16(), 404);
+
+    // Re-creating the tenant shows no leftover datasets (data was purged).
+    let key2 = provision(&app, "ADMIN", "acme", "read_write").await;
+    let (_s, list) = call_key(&app, "GET", "/datasets", Some(&key2), None).await;
+    assert_eq!(list, serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn journey_admin_online_restore() {
+    let tmp = TempDir::new().unwrap();
+    let app = keyed_app(TensorService::new(storage(&tmp)));
+    call(
+        &app,
+        "POST",
+        "/datasets",
+        Some(serde_json::json!({"name": "w"})),
+    )
+    .await;
+    let (_s, b) = call(
+        &app,
+        "POST",
+        "/datasets/w/tensors",
+        Some(serde_json::json!({"data": [1.0, 0.0, 0.0, 1.0], "shape": [2, 2]})),
+    )
+    .await;
+    let id = b["tensor_id"].as_str().unwrap().to_string();
+
+    // Snapshot (works in legacy single-key mode too).
+    let dest = tmp.path().join("snap");
+    let dest_str = dest.to_string_lossy().to_string();
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/admin/snapshot",
+        Some(serde_json::json!({"dest": dest_str})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+
+    // Delete the tensor, then restore it from the snapshot.
+    call(&app, "DELETE", &format!("/datasets/w/tensors/{id}"), None).await;
+    let (_s, after) = call(&app, "GET", "/datasets/w/tensors", None).await;
+    assert_eq!(after.as_array().unwrap().len(), 0);
+
+    let (s, rb) = call(
+        &app,
+        "POST",
+        "/admin/restore",
+        Some(serde_json::json!({"src": dest_str})),
+    )
+    .await;
+    assert_eq!(s.as_u16(), 200);
+    assert_eq!(rb["records"], 1);
+
+    // The restored tensor is back (id preserved) and property-searchable.
+    let (s, _) = call(&app, "GET", &format!("/datasets/w/tensors/{id}"), None).await;
+    assert_eq!(s.as_u16(), 200);
+    let (_s, sym) = call(
+        &app,
+        "POST",
+        "/datasets/w/search/property",
+        Some(serde_json::json!({"is_symmetric": true})),
+    )
+    .await;
+    assert_eq!(sym.as_array().unwrap().len(), 1);
+}

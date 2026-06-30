@@ -19,7 +19,7 @@ use tensorus_core::error::{Result, TensorusError};
 use tensorus_core::types::{DType, Shape, TensorData, TensorDescriptor, TensorId, TensorRecord};
 use tensorus_core::Storage;
 use tensorus_index::Metric;
-use tensorus_storage::FileStorage;
+use tensorus_storage::{FileStorage, ReplOp};
 
 /// Default Tucker-sketch rank for contraction indexing (matches
 /// `tensorus.toml`'s `index.tensor_contraction.default_sketch_rank`).
@@ -100,17 +100,73 @@ impl TensorService {
         }
     }
 
-    /// Build a service whose per-dataset vector metrics persist to
-    /// `index_config_path` (so they survive a restart).
-    pub fn with_index_persistence(storage: Arc<FileStorage>, index_config_path: PathBuf) -> Self {
+    /// Build a service whose per-dataset vector metrics and HNSW graphs persist
+    /// under `indexes_dir` (so they survive a restart).
+    pub fn with_index_persistence(storage: Arc<FileStorage>, indexes_dir: PathBuf) -> Self {
         TensorService {
             storage,
             indexes: Arc::new(IndexManager::with_persistence(
                 DEFAULT_CONTRACTION_RANK,
-                index_config_path,
+                indexes_dir,
             )),
             started: Instant::now(),
         }
+    }
+
+    /// Persist all in-memory vector graphs to disk (no-op without persistence).
+    pub fn persist_graphs(&self) {
+        self.indexes.persist_graphs();
+    }
+
+    // --- replication ---
+
+    /// The highest change-log sequence number (a follower's sync target).
+    pub fn replication_head(&self) -> Result<u64> {
+        self.storage.replication_head()
+    }
+
+    /// Committed change-log operations with `seq > since`, up to `limit`.
+    pub fn changes_since(&self, since: u64, limit: usize) -> Result<Vec<ReplOp>> {
+        self.storage.changes_since(since, limit)
+    }
+
+    /// Apply a replicated operation from a leader: write it to storage (id and
+    /// sequence preserved) and update the secondary indexes. Idempotent.
+    pub async fn apply_replicated(&self, op: ReplOp) -> Result<()> {
+        // Capture indexing info before the op is moved into storage.
+        let put_info = match &op {
+            ReplOp::Put { record, .. } => Some((
+                record.dataset.clone(),
+                record.id,
+                record.descriptor.clone(),
+                record.data.clone(),
+            )),
+            ReplOp::Delete { .. } => None,
+        };
+        let del_info = match &op {
+            ReplOp::Delete { dataset, id, .. } => Some((dataset.clone(), *id)),
+            ReplOp::Put { .. } => None,
+        };
+
+        self.storage.apply_replicated(op)?;
+
+        if let Some((dataset, id, descriptor, bytes)) = put_info {
+            if descriptor.dtype == DType::Float32 {
+                let data: Vec<f32> = bytes
+                    .chunks_exact(4)
+                    .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
+                self.indexes
+                    .on_insert(&dataset, id, &data, descriptor.shape.dims(), &descriptor);
+            } else {
+                self.indexes
+                    .index_descriptor_only(&dataset, id, &descriptor);
+            }
+        }
+        if let Some((dataset, id)) = del_info {
+            self.indexes.on_delete(&dataset, id);
+        }
+        Ok(())
     }
 
     /// Rebuild the in-memory secondary indexes from durable storage. Call once
@@ -367,6 +423,56 @@ impl TensorService {
             }
         }
         Ok(out)
+    }
+
+    /// Online restore: ingest every record from a snapshot directory into the
+    /// live store (preserving ids) and update the indexes. Returns the number
+    /// of records restored.
+    pub async fn restore_from(&self, src: &str) -> Result<usize> {
+        let tmp_wal =
+            std::env::temp_dir().join(format!("tensorus_restore_wal_{}", TensorId::new()));
+        let snapshot = FileStorage::open(src, &tmp_wal)?;
+        let mut count = 0usize;
+        for ds in snapshot.list_datasets().await? {
+            let mut offset = 0;
+            const PAGE: usize = 1000;
+            loop {
+                let batch = snapshot.scan(&ds, PAGE, offset).await?;
+                let n = batch.len();
+                if n == 0 {
+                    break;
+                }
+                for rec in batch {
+                    self.storage.ingest(rec.clone())?;
+                    self.index_record(&ds, &rec);
+                    count += 1;
+                }
+                offset += n;
+                if n < PAGE {
+                    break;
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&tmp_wal);
+        Ok(count)
+    }
+
+    /// Delete every tensor in a dataset (propagated to followers) and drop the
+    /// dataset's storage directory and indexes.
+    pub async fn purge_dataset(&self, dataset: &str) -> Result<()> {
+        loop {
+            let batch = self.storage.scan(dataset, 1000, 0).await?;
+            if batch.is_empty() {
+                break;
+            }
+            for rec in &batch {
+                self.storage.delete(dataset, rec.id).await?;
+                self.indexes.on_delete(dataset, rec.id);
+            }
+        }
+        self.storage.delete_dataset(dataset)?;
+        self.indexes.drop_dataset(dataset);
+        Ok(())
     }
 
     pub fn health(&self) -> HealthInfo {

@@ -78,10 +78,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let wal_dir = format!("{data_dir}/wal");
     let storage = Arc::new(FileStorage::open(&data_dir, &wal_dir)?);
-    let index_config = format!("{data_dir}/indexes/metrics.json");
-    let service = TensorService::with_index_persistence(storage, index_config.into());
+    let indexes_dir = format!("{data_dir}/indexes");
+    let service = TensorService::with_index_persistence(storage, indexes_dir.into());
 
-    // Rebuild in-memory secondary indexes from durable storage.
+    // Rebuild in-memory secondary indexes from durable storage (loading any
+    // persisted HNSW graphs so vector indexes are not rebuilt from scratch).
     tracing::info!("recovering secondary indexes from storage...");
     service.recover().await?;
 
@@ -112,9 +113,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = build_app(state);
 
+    // Periodically persist vector graphs so a restart skips the rebuild.
+    let persister = service.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+        tick.tick().await; // consume the immediate first tick
+        loop {
+            tick.tick().await;
+            let s = persister.clone();
+            let _ = tokio::task::spawn_blocking(move || s.persist_graphs()).await;
+        }
+    });
+
     let addr = format!("{host}:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(%addr, "Tensorus REST API listening");
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+            tracing::info!("shutdown signal received");
+        })
+        .await?;
+
+    // Final persist on graceful shutdown.
+    tracing::info!("persisting vector graphs before exit...");
+    let s = service.clone();
+    let _ = tokio::task::spawn_blocking(move || s.persist_graphs()).await;
     Ok(())
 }

@@ -87,7 +87,10 @@ REST endpoints: `POST/GET /datasets` (optional per-dataset vector `metric`),
 `GET /health`, `GET /metrics`. With `TENSORUS_ADMIN_KEY` set, **multi-tenancy** is
 enabled: per-tenant scoped API keys with `read_only`/`read_write`/`admin` roles,
 isolated dataset namespaces, quotas, and a `/admin/*` control plane
-(create tenants, issue/revoke keys, usage, `/admin/snapshot` backup).
+(create tenants, issue/revoke keys, usage, delete-tenant, `/admin/snapshot`
+backup and `/admin/restore`). HNSW vector graphs are **persisted** (loaded on
+restart instead of rebuilt), and a single-leader **replication** change-log
+(`/replication/changes`) lets followers mirror a leader for read-scaling/standby.
 See the [API reference](./docs/api-reference.md).
 
 ## Build, test, lint

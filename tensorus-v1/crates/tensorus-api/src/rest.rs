@@ -33,6 +33,7 @@ use tensorus_ai::{
 };
 use tensorus_core::error::TensorusError;
 use tensorus_core::types::TensorId;
+use tensorus_storage::ReplOp;
 
 /// Configuration for the optional LLM-backed endpoints (`/query`, `/agent`).
 ///
@@ -188,8 +189,15 @@ pub fn build_app(state: AppState) -> Router {
             post(admin_issue_key).get(admin_list_keys),
         )
         .route("/admin/tenants/:tenant/usage", get(admin_tenant_usage))
+        .route(
+            "/admin/tenants/:tenant",
+            axum::routing::delete(admin_delete_tenant),
+        )
         .route("/admin/keys/:id", axum::routing::delete(admin_revoke_key))
         .route("/admin/snapshot", post(admin_snapshot))
+        .route("/admin/restore", post(admin_restore))
+        .route("/replication/changes", get(replication_changes))
+        .route("/replication/head", get(replication_head))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_and_rate_limit,
@@ -940,15 +948,111 @@ struct SnapshotBody {
     dest: String,
 }
 
+async fn admin_delete_tenant(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    Path(tenant): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    require_system(&state, &principal)?;
+    let reg = registry(&state)?;
+    if !reg.tenant_exists(&tenant) {
+        return Err(ApiError(
+            StatusCode::NOT_FOUND,
+            format!("unknown tenant '{tenant}'"),
+        ));
+    }
+    // Purge all of the tenant's datasets, then drop the tenant + its keys.
+    let prefix = format!("{tenant}.");
+    let datasets: Vec<String> = state
+        .service
+        .list_datasets()
+        .await?
+        .into_iter()
+        .filter(|k| k.starts_with(&prefix))
+        .collect();
+    for ds in datasets {
+        state.service.purge_dataset(&ds).await?;
+    }
+    reg.delete_tenant(&tenant)
+        .map_err(|e| ApiError(StatusCode::NOT_FOUND, e))?;
+    Ok(Json(serde_json::json!({"deleted": true, "tenant": tenant})))
+}
+
+#[derive(Deserialize)]
+struct RestoreBody {
+    src: String,
+}
+
+async fn admin_restore(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    Json(body): Json<RestoreBody>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    require_system_principal(&principal)?;
+    let restored = state.service.restore_from(&body.src).await?;
+    Ok(Json(
+        serde_json::json!({"restored": true, "src": body.src, "records": restored}),
+    ))
+}
+
 async fn admin_snapshot(
     State(state): State<AppState>,
     Extension(principal): Extension<Principal>,
     Json(body): Json<SnapshotBody>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    require_system(&state, &principal)?;
+    require_system_principal(&principal)?;
     state.service.snapshot(&body.dest).await?;
     Ok(Json(
         serde_json::json!({"snapshot": true, "dest": body.dest}),
+    ))
+}
+
+// --- replication (leader endpoints; system/admin only) ---
+
+/// Require a control-plane principal (the system key, or the single key in
+/// legacy mode). Used by node-level operations — snapshot, restore, and
+/// replication — that are not tied to multi-tenancy being enabled.
+fn require_system_principal(principal: &Principal) -> Result<(), ApiError> {
+    if principal.is_system() {
+        Ok(())
+    } else {
+        Err(ApiError(
+            StatusCode::FORBIDDEN,
+            "operation requires the system/admin key".into(),
+        ))
+    }
+}
+
+fn repl_default_limit() -> usize {
+    1000
+}
+
+#[derive(Deserialize)]
+struct ChangesParams {
+    #[serde(default)]
+    since: u64,
+    #[serde(default = "repl_default_limit")]
+    limit: usize,
+}
+
+async fn replication_changes(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    Query(params): Query<ChangesParams>,
+) -> Result<Json<Vec<ReplOp>>, ApiError> {
+    require_system_principal(&principal)?;
+    Ok(Json(
+        state.service.changes_since(params.since, params.limit)?,
+    ))
+}
+
+async fn replication_head(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    require_system_principal(&principal)?;
+    Ok(Json(
+        serde_json::json!({"head": state.service.replication_head()?}),
     ))
 }
 

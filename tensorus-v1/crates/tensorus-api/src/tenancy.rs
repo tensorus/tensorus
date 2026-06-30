@@ -343,6 +343,18 @@ impl TenantRegistry {
             .map(|r| r.tenant.clone())
     }
 
+    /// Remove a tenant along with all its keys and usage counters.
+    pub fn delete_tenant(&self, tenant: &str) -> Result<(), String> {
+        let mut state = self.state.lock();
+        if state.tenants.remove(tenant).is_none() {
+            return Err(format!("unknown tenant '{tenant}'"));
+        }
+        state.keys.retain(|_, r| r.tenant != tenant);
+        self.persist(&state);
+        self.usage.lock().remove(tenant);
+        Ok(())
+    }
+
     pub fn tenant_exists(&self, tenant: &str) -> bool {
         self.state.lock().tenants.contains_key(tenant)
     }

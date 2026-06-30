@@ -16,6 +16,7 @@ REST surface (auth, rate limiting, metrics) and a runnable server binary.
 | `service` | `TensorService` (core logic), `QueryContext`/`ScopedContext`, DTOs |
 | `index` | `IndexManager`, `DatasetIndexes`, `PropertyIndex`, metric helpers |
 | `tenancy` | `TenantRegistry`, `Principal`/`Scope`/`Role`, `Quota`, hashed keys |
+| `replication` | `ReplicaSyncer` — applies a leader's change-log to a follower |
 | `rest` | `build_app`, `AppState`, `ApiConfig`, `LlmConfig`, handlers, middleware |
 | `tools` | `default_tool_registry` — async agent tools backed by the service |
 | `llm_http` | `HttpTransport` — `http://` client implementing `tensorus_ai::HttpClient` |
@@ -177,7 +178,11 @@ pub fn build_app(state: AppState) -> axum::Router;
 | `POST/GET /admin/tenants/{t}/keys` | ✓ (system or tenant admin) | issue / list API keys |
 | `DELETE /admin/keys/{id}` | ✓ (system or tenant admin) | revoke a key |
 | `GET /admin/tenants/{t}/usage` | ✓ (system or tenant admin) | usage vs quota |
-| `POST /admin/snapshot` | ✓ (system) | back up all data |
+| `DELETE /admin/tenants/{t}` | ✓ (system) | delete tenant + purge its data |
+| `POST /admin/snapshot` | ✓ (system/legacy) | back up all data |
+| `POST /admin/restore` | ✓ (system/legacy) | online restore from a snapshot |
+| `GET /replication/head` | ✓ (system/legacy) | highest change-log seq |
+| `GET /replication/changes` | ✓ (system/legacy) | committed ops past a seq |
 | `GET /health` | — | health probe |
 | `GET /metrics` | — | Prometheus metrics |
 
@@ -209,6 +214,26 @@ Per-tenant `Quota` (max datasets / max tensors; `0` = unlimited) is enforced on
 create/insert via in-memory counters that are seeded from storage at startup.
 The `ScopedContext` decorator applies the same `{t}.{dataset}` prefixing to NQL
 queries and agent tools so the LLM surface is tenant-isolated too.
+
+### Durability, graph persistence & replication
+
+- **Vector-graph persistence.** HNSW graphs are serialized to
+  `{indexes_dir}/vectors/{dataset}.hnsw` (atomic temp+rename) periodically and on
+  graceful shutdown. On recovery they are loaded instead of rebuilt; record
+  replay then idempotently tops up anything written since the last persist. A
+  missing or corrupt graph simply falls back to a full rebuild.
+- **Backup/restore.** `POST /admin/snapshot` copies a consistent image of all
+  segments; `POST /admin/restore` ingests a snapshot back into the **running**
+  store (ids preserved) and rebuilds indexes. Both work in single-key and
+  multi-tenant mode.
+- **Replication.** The leader records every committed op in a durable
+  change-log; `GET /replication/changes?since=N` serves ops in order. A follower
+  runs a [`ReplicaSyncer`]: it fetches ops past its head and applies them
+  (`TensorService::apply_replicated`, which updates storage **and** indexes),
+  giving read-scaling and a warm standby. Replication is **single-leader and
+  asynchronous** — no automatic failover/consensus, and per-dataset metric
+  config and the tenant registry are control-plane state replicated separately
+  (followers default to cosine).
 
 ---
 

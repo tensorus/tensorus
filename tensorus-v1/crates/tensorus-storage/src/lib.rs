@@ -38,6 +38,7 @@ use crate::wal::Wal;
 use async_trait::async_trait;
 use chrono::{TimeZone, Utc};
 use parking_lot::{Mutex, RwLock};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -49,6 +50,31 @@ use tensorus_core::types::{Metadata, TensorDescriptor, TensorId, TensorRecord};
 
 /// Force an fsync after this many buffered write operations (group commit).
 const SYNC_EVERY: u64 = 512;
+
+/// A replicated operation from the change-data-capture log, in commit order by
+/// `seq`. Used for single-leader async replication: a follower pulls ops with
+/// [`FileStorage::changes_since`] and applies them via
+/// [`FileStorage::apply_replicated`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ReplOp {
+    /// Insert/overwrite a record (carries the full record, including its id).
+    Put { seq: u64, record: Box<TensorRecord> },
+    /// Delete a record by id.
+    Delete {
+        seq: u64,
+        dataset: String,
+        id: TensorId,
+    },
+}
+
+impl ReplOp {
+    /// The commit sequence number of this operation.
+    pub fn seq(&self) -> u64 {
+        match self {
+            ReplOp::Put { seq, .. } | ReplOp::Delete { seq, .. } => *seq,
+        }
+    }
+}
 
 /// In-memory + on-disk state for a single dataset.
 struct Dataset {
@@ -89,6 +115,8 @@ struct Inner {
     datasets_dir: PathBuf,
     datasets: RwLock<HashMap<String, Arc<Mutex<Dataset>>>>,
     wal: Mutex<Wal>,
+    /// Append-only change-data-capture log for replication (never truncated).
+    replog: Mutex<Wal>,
     /// Serializes writers so WAL sequence order matches checkpoint order.
     write_lock: Mutex<()>,
     next_seq: AtomicU64,
@@ -185,10 +213,14 @@ impl FileStorage {
         }
         wal.truncate()?;
 
+        // The replication log lives alongside the data and is never truncated.
+        let replog = Wal::open(&data_dir.as_ref().join("replog"))?;
+
         let inner = Inner {
             datasets_dir,
             datasets: RwLock::new(datasets),
             wal: Mutex::new(wal),
+            replog: Mutex::new(replog),
             write_lock: Mutex::new(()),
             next_seq: AtomicU64::new(max_seq + 1),
             unsynced: AtomicU64::new(0),
@@ -298,14 +330,137 @@ impl FileStorage {
         Ok(())
     }
 
+    /// Replication: return committed operations with `seq > since`, in commit
+    /// order, up to `limit`. Followers poll this to stay current. (Scans the
+    /// change-log; a production deployment would index it by `seq`.)
+    pub fn changes_since(&self, since: u64, limit: usize) -> Result<Vec<ReplOp>> {
+        let entries = self.inner.replog.lock().scan()?;
+        let mut out = Vec::new();
+        for e in entries {
+            if e.seq <= since {
+                continue;
+            }
+            let op = match e.frame {
+                Frame::Put(rec) => ReplOp::Put {
+                    seq: e.seq,
+                    record: Box::new(stored_to_record(&rec, &e.dataset)),
+                },
+                Frame::Del(id) => ReplOp::Delete {
+                    seq: e.seq,
+                    dataset: e.dataset,
+                    id,
+                },
+            };
+            out.push(op);
+            if out.len() >= limit {
+                break;
+            }
+        }
+        Ok(out)
+    }
+
+    /// The highest sequence number recorded in the change-log (a follower's
+    /// target), or 0 if empty.
+    pub fn replication_head(&self) -> Result<u64> {
+        Ok(self
+            .inner
+            .replog
+            .lock()
+            .scan()?
+            .iter()
+            .map(|e| e.seq)
+            .max()
+            .unwrap_or(0))
+    }
+
+    /// Replication: apply an operation received from a leader, preserving the
+    /// original id and sequence. Idempotent re-application is safe. Does not
+    /// re-record into this node's change-log (followers are leaves).
+    pub fn apply_replicated(&self, op: ReplOp) -> Result<()> {
+        match op {
+            ReplOp::Put { seq, record } => {
+                let record = *record;
+                let dataset = record.dataset.clone();
+                let ds = self.get_or_create_dataset(&dataset)?;
+                let _g = self.inner.write_lock.lock();
+                let stored = StoredRecord {
+                    id: record.id,
+                    created_at_us: record.created_at.timestamp_micros(),
+                    version: record.version,
+                    descriptor: record.descriptor,
+                    metadata: record.metadata,
+                    data: record.data,
+                };
+                self.inner
+                    .wal
+                    .lock()
+                    .append(seq, &dataset, &Frame::Put(stored.clone()))?;
+                ds.lock().apply_put(stored)?;
+                self.inner.next_seq.fetch_max(seq + 1, Ordering::SeqCst);
+                self.maybe_sync()?;
+            }
+            ReplOp::Delete { seq, dataset, id } => {
+                let ds = self.get_or_create_dataset(&dataset)?;
+                let _g = self.inner.write_lock.lock();
+                self.inner
+                    .wal
+                    .lock()
+                    .append(seq, &dataset, &Frame::Del(id))?;
+                ds.lock().apply_del(id)?;
+                self.inner.next_seq.fetch_max(seq + 1, Ordering::SeqCst);
+                self.maybe_sync()?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Insert a full record preserving its id (used by restore/import). Assigns a
+    /// fresh local sequence and records it to the change-log so followers also
+    /// receive the restored data.
+    pub fn ingest(&self, record: TensorRecord) -> Result<()> {
+        let dataset = record.dataset.clone();
+        let ds = self.get_or_create_dataset(&dataset)?;
+        let _g = self.inner.write_lock.lock();
+        let seq = self.inner.next_seq.fetch_add(1, Ordering::SeqCst);
+        let stored = StoredRecord {
+            id: record.id,
+            created_at_us: record.created_at.timestamp_micros(),
+            version: record.version,
+            descriptor: record.descriptor,
+            metadata: record.metadata,
+            data: record.data,
+        };
+        let put = Frame::Put(stored.clone());
+        self.inner.wal.lock().append(seq, &dataset, &put)?;
+        self.inner.replog.lock().append(seq, &dataset, &put)?;
+        ds.lock().apply_put(stored)?;
+        self.maybe_sync()?;
+        Ok(())
+    }
+
+    /// Remove a dataset entirely: drop its in-memory state and delete its
+    /// on-disk directory. (Per-tensor deletes are what propagate to followers;
+    /// the directory drop is a local operation.)
+    pub fn delete_dataset(&self, name: &str) -> Result<()> {
+        let removed = self.inner.datasets.write().remove(name);
+        if removed.is_some() {
+            let dir = self.inner.datasets_dir.join(name);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+        Ok(())
+    }
+
     fn sync_all_locked(&self) -> Result<()> {
         for ds in self.inner.datasets.read().values() {
             ds.lock().sync()?;
         }
-        let mut wal = self.inner.wal.lock();
-        wal.sync()?;
-        let committed = self.inner.next_seq.load(Ordering::SeqCst).saturating_sub(1);
-        wal.write_checkpoint(committed)?;
+        {
+            let mut wal = self.inner.wal.lock();
+            wal.sync()?;
+            let committed = self.inner.next_seq.load(Ordering::SeqCst).saturating_sub(1);
+            wal.write_checkpoint(committed)?;
+        }
+        self.inner.replog.lock().sync()?;
         self.inner.unsynced.store(0, Ordering::SeqCst);
         Ok(())
     }
@@ -342,11 +497,11 @@ impl Storage for FileStorage {
         };
 
         let seq = self.inner.next_seq.fetch_add(1, Ordering::SeqCst);
-        // WAL first, then segment (write-ahead ordering).
-        self.inner
-            .wal
-            .lock()
-            .append(seq, dataset, &Frame::Put(rec.clone()))?;
+        // WAL first, then segment (write-ahead ordering); also record in the
+        // replication change-log.
+        let put = Frame::Put(rec.clone());
+        self.inner.wal.lock().append(seq, dataset, &put)?;
+        self.inner.replog.lock().append(seq, dataset, &put)?;
         ds.lock().apply_put(rec)?;
         // Group-commit check runs while the writer lock is still held so the
         // checkpoint never outruns a segment write that is still in flight.
@@ -396,10 +551,9 @@ impl Storage for FileStorage {
         };
         let _g = self.inner.write_lock.lock();
         let seq = self.inner.next_seq.fetch_add(1, Ordering::SeqCst);
-        self.inner
-            .wal
-            .lock()
-            .append(seq, dataset, &Frame::Del(id))?;
+        let del = Frame::Del(id);
+        self.inner.wal.lock().append(seq, dataset, &del)?;
+        self.inner.replog.lock().append(seq, dataset, &del)?;
         ds.lock().apply_del(id)?;
         self.maybe_sync()?;
         Ok(())
@@ -427,6 +581,8 @@ impl Drop for Inner {
         let _ = wal.sync();
         let committed = self.next_seq.load(Ordering::SeqCst).saturating_sub(1);
         let _ = wal.write_checkpoint(committed);
+        drop(wal);
+        let _ = self.replog.lock().sync();
     }
 }
 

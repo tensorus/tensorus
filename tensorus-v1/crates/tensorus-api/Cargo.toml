@@ -19,7 +19,7 @@ tensorus-search.workspace = true
 tensorus-ai.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["net"] }
+tokio = { workspace = true, features = ["net", "signal"] }
 async-trait.workspace = true
 parking_lot.workspace = true
 rand.workspace = true

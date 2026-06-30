@@ -203,9 +203,22 @@ deduped by id), fsync, then truncate the WAL.
 
 **Backup/restore.** `FileStorage::snapshot(dest)` takes the writer lock, flushes,
 and copies every dataset's segment file to `dest` for a consistent point-in-time
-image (reads are not blocked). Restore by opening the snapshot directory with a
-fresh WAL; secondary indexes rebuild on startup. The `/admin/snapshot` endpoint
-exposes this to the system admin.
+image (reads are not blocked). Restore is either offline (open the snapshot dir)
+or **online** via `/admin/restore`, which ingests a snapshot's records into the
+running store (ids preserved) and rebuilds indexes. `/admin/snapshot` exposes the
+backup to the system admin.
+
+**Vector-graph persistence.** HNSW graphs are serialized to
+`{data_dir}/indexes/vectors/` periodically and on shutdown, and loaded on
+restart so the expensive graph construction is skipped (a missing/corrupt graph
+falls back to a rebuild). Property and contraction indexes are rebuilt from the
+(cheap) descriptor replay.
+
+**Replication.** Every committed operation is also appended to a durable,
+never-truncated change-log (`{data_dir}/replog`). A follower polls the leader's
+`GET /replication/changes?since=N`, applies ops in order (preserving ids), and
+advances its cursor — single-leader, asynchronous read replication (no automatic
+failover/consensus).
 
 See [storage](./services/tensorus-storage.md) for the frame format and the exact
 protocol.

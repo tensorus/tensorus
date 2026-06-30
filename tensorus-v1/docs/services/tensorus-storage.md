@@ -25,6 +25,13 @@ pub struct FileStorage { /* … */ }
 impl FileStorage {
     pub fn open(data_dir: impl AsRef<Path>, wal_dir: impl AsRef<Path>) -> Result<Self>;
     pub fn flush(&self) -> Result<()>;
+    pub fn snapshot(&self, dest: impl AsRef<Path>) -> Result<()>;   // consistent backup
+    pub fn ingest(&self, record: TensorRecord) -> Result<()>;       // id-preserving import
+    pub fn delete_dataset(&self, name: &str) -> Result<()>;
+    // replication change-log (CDC)
+    pub fn changes_since(&self, since: u64, limit: usize) -> Result<Vec<ReplOp>>;
+    pub fn replication_head(&self) -> Result<u64>;
+    pub fn apply_replicated(&self, op: ReplOp) -> Result<()>;
 }
 // plus the full async `Storage` trait impl (insert/get/scan/delete/create_dataset/list_datasets)
 ```
@@ -33,6 +40,13 @@ impl FileStorage {
 |--------|-------------|
 | `open(data_dir, wal_dir)` | Open or create a store; loads segments and **replays the WAL** (crash recovery). |
 | `flush()` | Force all buffered writes to stable storage and advance the checkpoint. Durability is guaranteed for everything inserted before it returns. |
+| `snapshot(dest)` | Writer-locked, flushed, copies all segments to `dest` for a consistent backup (reads not blocked). |
+| `ingest(record)` | Insert a full record preserving its id (used by online restore); also enters the change-log. |
+| `changes_since/replication_head/apply_replicated` | Single-leader replication: read committed ops past a seq, the current head, and apply a leader's op (id/seq preserved). |
+
+The change-log lives at `{data_dir}/replog` — a second append-only WAL that is
+**never truncated**, so followers can pull historical ops. It roughly doubles
+write volume on disk; compaction below a consumed watermark is future work.
 
 `FileStorage` is `Clone` (an `Arc` handle) and `Send + Sync`. On drop, it
 best-effort fsyncs and checkpoints.

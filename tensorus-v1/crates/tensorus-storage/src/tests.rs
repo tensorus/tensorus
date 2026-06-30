@@ -243,3 +243,67 @@ async fn snapshot_then_restore_preserves_data() {
         assert_eq!(restored.list_datasets().await.unwrap(), vec!["weights"]);
     }
 }
+
+#[tokio::test]
+async fn replication_changes_and_apply() {
+    let t1 = TempDir::new().unwrap();
+    let (d1, w1) = dirs(&t1);
+    let primary = FileStorage::open(&d1, &w1).unwrap();
+    let a = primary
+        .insert("ds", &[1u8; 16], desc(), json!({"n": "a"}))
+        .await
+        .unwrap();
+    let b = primary
+        .insert("ds", &[2u8; 16], desc(), json!({"n": "b"}))
+        .await
+        .unwrap();
+    primary.delete("ds", a).await.unwrap();
+
+    // The change-log captures all three ops in order.
+    let ops = primary.changes_since(0, 1000).unwrap();
+    assert_eq!(ops.len(), 3);
+    assert_eq!(
+        primary.replication_head().unwrap(),
+        ops.last().unwrap().seq()
+    );
+
+    // Apply them to a fresh replica; it converges to the same state.
+    let t2 = TempDir::new().unwrap();
+    let (d2, w2) = dirs(&t2);
+    let replica = FileStorage::open(&d2, &w2).unwrap();
+    for op in ops {
+        replica.apply_replicated(op).unwrap();
+    }
+    assert!(replica.get("ds", b).await.is_ok());
+    assert!(replica.get("ds", a).await.is_err()); // deleted on the primary
+    assert_eq!(replica.scan("ds", 100, 0).await.unwrap().len(), 1);
+
+    // Incremental catch-up: only the new op is returned past the head.
+    let head = primary.replication_head().unwrap();
+    let c = primary
+        .insert("ds", &[3u8; 16], desc(), json!({"n": "c"}))
+        .await
+        .unwrap();
+    let delta = primary.changes_since(head, 1000).unwrap();
+    assert_eq!(delta.len(), 1);
+    replica
+        .apply_replicated(delta.into_iter().next().unwrap())
+        .unwrap();
+    assert!(replica.get("ds", c).await.is_ok());
+}
+
+#[tokio::test]
+async fn replication_log_survives_reopen() {
+    let t = TempDir::new().unwrap();
+    let (d, w) = dirs(&t);
+    {
+        let store = FileStorage::open(&d, &w).unwrap();
+        store
+            .insert("ds", &[7u8; 16], desc(), json!({}))
+            .await
+            .unwrap();
+    }
+    // Reopen: the change-log is retained (not truncated like the WAL).
+    let store = FileStorage::open(&d, &w).unwrap();
+    assert_eq!(store.changes_since(0, 1000).unwrap().len(), 1);
+}

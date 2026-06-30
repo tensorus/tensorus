@@ -416,9 +416,35 @@ Returns id/tenant/role/name/created_at — never the key or its hash.
 { "dest": "/backups/tensorus-2026-06-30" }
 ```
 Flushes and copies every dataset's segment file to `dest` (a server-side path).
-**Restore** by pointing a server at the snapshot directory
-(`TENSORUS_DATA_DIR=dest`) with a fresh WAL; indexes rebuild on startup. Back up
-`{data_dir}/indexes/` and `{data_dir}/control/` alongside it for a full restore.
+Works in both single-key and multi-tenant mode.
+
+### `POST /admin/restore` — online restore (system)
+```json
+{ "src": "/backups/tensorus-2026-06-30" }
+```
+Ingests every record from a snapshot directory into the **running** store,
+preserving tensor ids and rebuilding indexes. Response: `{ "restored": true, "records": N }`.
+Restored data also enters the change-log, so followers receive it.
+
+### `DELETE /admin/tenants/{tenant}` — delete a tenant (system)
+Purges all of the tenant's datasets (tensor deletes propagate to followers),
+then removes the tenant, its keys, and usage counters.
+
+## Replication (leader endpoints)
+
+Single-leader async replication. A follower polls these (with the system key, or
+the single key in legacy mode) and applies ops locally. **404**-free in legacy
+mode; in multi-tenant mode only the system key may read the global change-log.
+
+### `GET /replication/head` — highest change-log sequence
+```json
+{ "head": 4096 }
+```
+
+### `GET /replication/changes?since=N&limit=M` — committed ops past `N`
+Returns an ordered array of operations (`Put` with the full record, or `Delete`),
+each tagged with its `seq`. A follower applies them in order and advances its
+cursor to the last `seq`. `limit` defaults to 1000.
 
 ## gRPC service
 

@@ -107,8 +107,13 @@ impl Hnsw {
     pub fn insert(&self, id: TensorId, vector: &[f32]);
     pub fn search(&self, query: &[f32], k: usize) -> Vec<(TensorId, f32)>; // (id, distance)
     pub fn delete(&self, id: TensorId);            // tombstone
+    pub fn contains(&self, id: TensorId) -> bool;
     pub fn len(&self) -> usize;
     pub fn is_empty(&self) -> bool;
+    pub fn dim(&self) -> Option<usize>;            // vector dimension, if any
+    pub fn metric(&self) -> Metric;
+    pub fn save(&self, path) -> io::Result<()>;    // versioned binary format
+    pub fn load(path) -> io::Result<Hnsw>;         // reconstruct (id map rebuilt)
 }
 ```
 
@@ -117,6 +122,11 @@ impl Hnsw {
 - Thread-safe via an internal `RwLock`; `delete` is a tombstone (excluded from
   results, edges kept for navigation).
 - Also usable through the async `VectorIndex` trait.
+- **Persistence:** `save`/`load` serialize the full graph (config, entry point,
+  per-node vectors + neighbor lists, tombstones) to a versioned binary file, so
+  the API can reload a graph on restart instead of rebuilding it. `insert`
+  ignores ids already present, so a loaded graph is safely "topped up" by record
+  replay.
 
 **Measured (10k × 128-dim, release):** search ~0.3–0.6 ms/query (meets `<1 ms`);
 recall@10 ≈ 0.95 on low-dimensional/clustered data (≈ 0.83 on adversarial

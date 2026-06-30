@@ -27,7 +27,15 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
+use std::fs::File;
+use std::io::{self, BufWriter, Read, Write};
+use std::path::Path;
 use tensorus_core::types::TensorId;
+
+/// Magic header for the on-disk HNSW graph format ("HNSW").
+const HNSW_MAGIC: u32 = 0x484E_5357;
+/// Version of the on-disk HNSW graph format.
+const HNSW_FORMAT_VERSION: u32 = 1;
 
 /// Distance metric used by the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +72,62 @@ impl Metric {
             Metric::Cosine => 1.0 - a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>(),
             Metric::Dot => -a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>(),
         }
+    }
+
+    /// Stable discriminant for on-disk serialization.
+    fn to_u8(self) -> u8 {
+        match self {
+            Metric::L2 => 0,
+            Metric::Cosine => 1,
+            Metric::Dot => 2,
+        }
+    }
+
+    fn from_u8(v: u8) -> io::Result<Metric> {
+        match v {
+            0 => Ok(Metric::L2),
+            1 => Ok(Metric::Cosine),
+            2 => Ok(Metric::Dot),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unknown HNSW metric discriminant",
+            )),
+        }
+    }
+}
+
+/// A little-endian byte cursor for decoding the HNSW format with bounds checks.
+struct Cursor<'a> {
+    buf: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> Cursor<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        Cursor { buf, pos: 0 }
+    }
+    fn take(&mut self, n: usize) -> io::Result<&'a [u8]> {
+        if self.pos + n > self.buf.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "truncated HNSW graph file",
+            ));
+        }
+        let s = &self.buf[self.pos..self.pos + n];
+        self.pos += n;
+        Ok(s)
+    }
+    fn u8(&mut self) -> io::Result<u8> {
+        Ok(self.take(1)?[0])
+    }
+    fn u32(&mut self) -> io::Result<u32> {
+        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+    }
+    fn u64(&mut self) -> io::Result<u64> {
+        Ok(u64::from_le_bytes(self.take(8)?.try_into().unwrap()))
+    }
+    fn f32(&mut self) -> io::Result<f32> {
+        Ok(f32::from_le_bytes(self.take(4)?.try_into().unwrap()))
     }
 }
 
@@ -194,6 +258,146 @@ impl Hnsw {
             g.nodes[idx as usize].deleted = true;
             g.id_map.remove(&id);
         }
+    }
+
+    /// Whether a live (non-deleted) vector with this id is present.
+    pub fn contains(&self, id: TensorId) -> bool {
+        self.inner.read().id_map.contains_key(&id)
+    }
+
+    /// The vector dimension of the index (from any stored node), or `None` if empty.
+    pub fn dim(&self) -> Option<usize> {
+        let g = self.inner.read();
+        g.nodes
+            .iter()
+            .find(|n| !n.deleted)
+            .or_else(|| g.nodes.first())
+            .map(|n| n.vector.len())
+    }
+
+    /// The distance metric this index was built with.
+    pub fn metric(&self) -> Metric {
+        self.inner.read().cfg.metric
+    }
+
+    /// Serialize the graph to `path` in a versioned binary format, so a restart
+    /// can [`load`](Self::load) it instead of rebuilding from scratch.
+    pub fn save(&self, path: impl AsRef<Path>) -> io::Result<()> {
+        let g = self.inner.read();
+        let mut w = BufWriter::new(File::create(path)?);
+        w.write_all(&HNSW_MAGIC.to_le_bytes())?;
+        w.write_all(&HNSW_FORMAT_VERSION.to_le_bytes())?;
+        w.write_all(&[g.cfg.metric.to_u8()])?;
+        w.write_all(&(g.cfg.m as u32).to_le_bytes())?;
+        w.write_all(&(g.cfg.ef_construction as u32).to_le_bytes())?;
+        w.write_all(&(g.cfg.ef_search as u32).to_le_bytes())?;
+        w.write_all(&g.cfg.seed.to_le_bytes())?;
+        let entry = g.entry.map(|e| e as u64).unwrap_or(u64::MAX);
+        w.write_all(&entry.to_le_bytes())?;
+        w.write_all(&(g.max_level as u32).to_le_bytes())?;
+        w.write_all(&(g.nodes.len() as u32).to_le_bytes())?;
+        for node in &g.nodes {
+            w.write_all(node.id.as_bytes())?;
+            w.write_all(&[node.deleted as u8])?;
+            w.write_all(&(node.vector.len() as u32).to_le_bytes())?;
+            for &x in &node.vector {
+                w.write_all(&x.to_le_bytes())?;
+            }
+            w.write_all(&(node.neighbors.len() as u32).to_le_bytes())?;
+            for level in &node.neighbors {
+                w.write_all(&(level.len() as u32).to_le_bytes())?;
+                for &nb in level {
+                    w.write_all(&nb.to_le_bytes())?;
+                }
+            }
+        }
+        w.flush()?;
+        Ok(())
+    }
+
+    /// Load a graph previously written by [`save`](Self::save).
+    pub fn load(path: impl AsRef<Path>) -> io::Result<Hnsw> {
+        let mut bytes = Vec::new();
+        File::open(path)?.read_to_end(&mut bytes)?;
+        let mut c = Cursor::new(&bytes);
+        if c.u32()? != HNSW_MAGIC {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "not an HNSW file",
+            ));
+        }
+        if c.u32()? != HNSW_FORMAT_VERSION {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unsupported HNSW format version",
+            ));
+        }
+        let metric = Metric::from_u8(c.u8()?)?;
+        let m = c.u32()? as usize;
+        let ef_construction = c.u32()? as usize;
+        let ef_search = c.u32()? as usize;
+        let seed = c.u64()?;
+        let entry_raw = c.u64()?;
+        let entry = if entry_raw == u64::MAX {
+            None
+        } else {
+            Some(entry_raw as u32)
+        };
+        let max_level = c.u32()? as usize;
+        let node_count = c.u32()? as usize;
+
+        let mut nodes = Vec::with_capacity(node_count);
+        let mut id_map = HashMap::new();
+        for idx in 0..node_count {
+            let mut id_bytes = [0u8; 16];
+            id_bytes.copy_from_slice(c.take(16)?);
+            let id = TensorId::from_bytes(id_bytes);
+            let deleted = c.u8()? != 0;
+            let vlen = c.u32()? as usize;
+            let mut vector = Vec::with_capacity(vlen);
+            for _ in 0..vlen {
+                vector.push(c.f32()?);
+            }
+            let level_count = c.u32()? as usize;
+            let mut neighbors = Vec::with_capacity(level_count);
+            for _ in 0..level_count {
+                let nc = c.u32()? as usize;
+                let mut level = Vec::with_capacity(nc);
+                for _ in 0..nc {
+                    level.push(c.u32()?);
+                }
+                neighbors.push(level);
+            }
+            if !deleted {
+                id_map.insert(id, idx as u32);
+            }
+            nodes.push(Node {
+                vector,
+                id,
+                deleted,
+                neighbors,
+            });
+        }
+
+        let cfg = HnswConfig {
+            m,
+            ef_construction,
+            ef_search,
+            metric,
+            seed,
+        };
+        let ml = if m > 1 { 1.0 / (m as f64).ln() } else { 1.0 };
+        Ok(Hnsw {
+            inner: RwLock::new(Graph {
+                nodes,
+                entry,
+                max_level,
+                id_map,
+                rng: StdRng::seed_from_u64(seed),
+                cfg,
+                ml,
+            }),
+        })
     }
 }
 
@@ -548,6 +752,51 @@ mod tests {
         let got: Vec<TensorId> = res.iter().map(|(id, _)| *id).collect();
         assert_eq!(got[0], a);
         assert!(got.contains(&b));
+    }
+
+    #[test]
+    fn save_load_roundtrip() {
+        let dim = 16;
+        let n = 200;
+        let vectors = random_vectors(n, dim, 42);
+        let hnsw = Hnsw::with_metric(Metric::Cosine);
+        let ids: Vec<TensorId> = (0..n).map(|_| TensorId::new()).collect();
+        for i in 0..n {
+            hnsw.insert(ids[i], &vectors[i]);
+        }
+        hnsw.delete(ids[5]); // tombstone one entry
+        let query = &vectors[10];
+        let before: Vec<TensorId> = hnsw
+            .search(query, 10)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+
+        let path = std::env::temp_dir().join(format!(
+            "tensorus_hnsw_{}.bin",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        hnsw.save(&path).unwrap();
+        let loaded = Hnsw::load(&path).unwrap();
+
+        assert_eq!(loaded.len(), hnsw.len());
+        assert!(!loaded.contains(ids[5]), "deleted entry must stay excluded");
+        assert!(loaded.contains(ids[0]));
+        // The reconstructed graph yields identical search results.
+        let after: Vec<TensorId> = loaded
+            .search(query, 10)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        assert_eq!(before, after);
+
+        // Corrupt-header load fails cleanly.
+        std::fs::write(&path, b"not an hnsw file at all").unwrap();
+        assert!(Hnsw::load(&path).is_err());
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

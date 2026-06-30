@@ -25,7 +25,7 @@
 
 use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tensorus_core::types::{TensorDescriptor, TensorId};
 use tensorus_index::{AlexIndex, Hnsw, HnswConfig, Metric};
@@ -344,6 +344,27 @@ impl DatasetIndexes {
         }
     }
 
+    /// Build from a persisted vector graph (metric and dimension are taken from
+    /// the loaded graph). Property and contraction indexes start empty and are
+    /// repopulated by replaying records.
+    fn new_with_vector(contraction_rank: usize, vector: Hnsw) -> Self {
+        let metric = vector.metric();
+        let dim = vector.dim();
+        DatasetIndexes {
+            metric,
+            contraction_rank,
+            vector,
+            vector_dim: RwLock::new(dim),
+            contraction: Mutex::new(None),
+            props: PropertyIndex::new(),
+        }
+    }
+
+    /// Persist the vector graph to `path`.
+    fn save_vector(&self, path: &Path) -> std::io::Result<()> {
+        self.vector.save(path)
+    }
+
     /// The vector metric this dataset's index was built with.
     pub fn metric(&self) -> Metric {
         self.metric
@@ -463,30 +484,34 @@ impl DatasetIndexes {
 }
 
 /// Owns the secondary indexes for every dataset and (optionally) persists each
-/// dataset's vector metric so it survives a restart.
+/// dataset's vector metric and HNSW graph so they survive a restart.
 pub struct IndexManager {
     datasets: RwLock<HashMap<String, Arc<DatasetIndexes>>>,
     contraction_rank: usize,
     /// Path to the metric-config sidecar (`None` = in-memory only, for tests).
     config_path: Option<PathBuf>,
+    /// Directory holding persisted HNSW graphs (`{vectors_dir}/{dataset}.hnsw`).
+    vectors_dir: Option<PathBuf>,
     /// Dataset -> metric name, mirrored to `config_path` when set.
     config: Mutex<HashMap<String, String>>,
 }
 
 impl IndexManager {
-    /// In-memory manager (no metric persistence); used by tests.
+    /// In-memory manager (no persistence); used by tests.
     pub fn in_memory(contraction_rank: usize) -> Self {
         IndexManager {
             datasets: RwLock::new(HashMap::new()),
             contraction_rank,
             config_path: None,
+            vectors_dir: None,
             config: Mutex::new(HashMap::new()),
         }
     }
 
-    /// Manager that persists dataset metrics to `config_path`, loading any
-    /// existing config.
-    pub fn with_persistence(contraction_rank: usize, config_path: PathBuf) -> Self {
+    /// Manager that persists dataset metrics (`{indexes_dir}/metrics.json`) and
+    /// HNSW graphs (`{indexes_dir}/vectors/`), loading any existing config.
+    pub fn with_persistence(contraction_rank: usize, indexes_dir: PathBuf) -> Self {
+        let config_path = indexes_dir.join("metrics.json");
         let config = std::fs::read(&config_path)
             .ok()
             .and_then(|b| serde_json::from_slice::<HashMap<String, String>>(&b).ok())
@@ -495,7 +520,57 @@ impl IndexManager {
             datasets: RwLock::new(HashMap::new()),
             contraction_rank,
             config_path: Some(config_path),
+            vectors_dir: Some(indexes_dir.join("vectors")),
             config: Mutex::new(config),
+        }
+    }
+
+    /// Build a dataset's indexes, loading a persisted vector graph if present so
+    /// the expensive HNSW construction is skipped on restart.
+    fn make_dataset_indexes(&self, name: &str, metric: Metric) -> Arc<DatasetIndexes> {
+        if let Some(vdir) = &self.vectors_dir {
+            let path = vdir.join(format!("{name}.hnsw"));
+            if path.exists() {
+                match Hnsw::load(&path) {
+                    Ok(h) => {
+                        tracing::debug!(dataset = %name, "loaded persisted HNSW graph");
+                        return Arc::new(DatasetIndexes::new_with_vector(self.contraction_rank, h));
+                    }
+                    Err(e) => {
+                        tracing::warn!(dataset = %name, "failed to load HNSW graph: {e}; rebuilding")
+                    }
+                }
+            }
+        }
+        Arc::new(DatasetIndexes::new(metric, self.contraction_rank))
+    }
+
+    /// Persist every dataset's HNSW graph to disk (atomic temp+rename). No-op
+    /// when persistence is disabled. Safe to call periodically and on shutdown;
+    /// a missing/stale graph is simply rebuilt on next startup.
+    pub fn persist_graphs(&self) {
+        let vdir = match &self.vectors_dir {
+            Some(d) => d,
+            None => return,
+        };
+        if std::fs::create_dir_all(vdir).is_err() {
+            return;
+        }
+        let snapshot: Vec<(String, Arc<DatasetIndexes>)> = self
+            .datasets
+            .read()
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        for (name, di) in snapshot {
+            let final_path = vdir.join(format!("{name}.hnsw"));
+            let tmp_path = vdir.join(format!("{name}.hnsw.tmp"));
+            match di.save_vector(&tmp_path) {
+                Ok(()) => {
+                    let _ = std::fs::rename(&tmp_path, &final_path);
+                }
+                Err(e) => tracing::warn!(dataset = %name, "failed to persist HNSW graph: {e}"),
+            }
         }
     }
 
@@ -520,30 +595,33 @@ impl IndexManager {
             .unwrap_or(Metric::Cosine)
     }
 
-    /// Record a dataset's chosen vector metric and create its (empty) indexes.
+    /// Record a dataset's chosen vector metric and create its indexes (loading a
+    /// persisted graph if available).
     pub fn create_dataset(&self, name: &str, metric: Metric) {
         {
             let mut cfg = self.config.lock();
             cfg.insert(name.to_string(), metric_name(metric).to_string());
         }
         self.persist_config();
-        let mut datasets = self.datasets.write();
-        datasets
-            .entry(name.to_string())
-            .or_insert_with(|| Arc::new(DatasetIndexes::new(metric, self.contraction_rank)));
+        if self.datasets.read().contains_key(name) {
+            return;
+        }
+        let di = self.make_dataset_indexes(name, metric);
+        self.datasets.write().entry(name.to_string()).or_insert(di);
     }
 
     /// Get a dataset's indexes, creating them (with the configured/default
-    /// metric) if absent.
+    /// metric, loading a persisted graph if available) if absent.
     fn get_or_create(&self, name: &str) -> Arc<DatasetIndexes> {
         if let Some(di) = self.datasets.read().get(name) {
             return di.clone();
         }
         let metric = self.metric_for(name);
-        let mut datasets = self.datasets.write();
-        datasets
+        let di = self.make_dataset_indexes(name, metric);
+        self.datasets
+            .write()
             .entry(name.to_string())
-            .or_insert_with(|| Arc::new(DatasetIndexes::new(metric, self.contraction_rank)))
+            .or_insert(di)
             .clone()
     }
 
@@ -580,6 +658,20 @@ impl IndexManager {
     pub fn on_delete(&self, dataset: &str, id: TensorId) {
         if let Some(di) = self.dataset(dataset) {
             di.on_delete(id);
+        }
+    }
+
+    /// Drop a dataset's indexes entirely: remove its in-memory state, metric
+    /// config entry, and persisted graph file.
+    pub fn drop_dataset(&self, name: &str) {
+        self.datasets.write().remove(name);
+        {
+            let mut cfg = self.config.lock();
+            cfg.remove(name);
+        }
+        self.persist_config();
+        if let Some(vdir) = &self.vectors_dir {
+            let _ = std::fs::remove_file(vdir.join(format!("{name}.hnsw")));
         }
     }
 }
@@ -711,5 +803,33 @@ mod tests {
         let di = mgr.dataset("vecs").unwrap();
         assert_eq!(di.vector_dim(), Some(3));
         assert_eq!(di.metric(), Metric::L2);
+    }
+
+    #[test]
+    fn persisted_graph_loads_without_reinsert() {
+        let dir = std::env::temp_dir().join(format!(
+            "tns_idx_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let id = TensorId::new();
+        {
+            let mgr = IndexManager::with_persistence(8, dir.clone());
+            mgr.create_dataset("vecs", Metric::L2);
+            mgr.on_insert("vecs", id, &[1.0, 0.0, 0.0], &[3], &desc(1.0, false, None));
+            mgr.persist_graphs();
+        }
+        // A fresh manager on the same directory loads the graph on create — the
+        // vector index is queryable WITHOUT any record replay.
+        let mgr2 = IndexManager::with_persistence(8, dir.clone());
+        mgr2.create_dataset("vecs", Metric::L2);
+        let di = mgr2.dataset("vecs").unwrap();
+        assert_eq!(di.vector_dim(), Some(3));
+        let res = di.search_vector(&[1.0, 0.0, 0.0], 1).unwrap();
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].0, id);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
