@@ -4,6 +4,13 @@ Tensorus is an agentic, **tensor-native database**: tensors are stored in their
 native shape and made queryable by their mathematical properties and structural
 similarity, with a built-in AI query/agent layer.
 
+**Capabilities at a glance:** dataset CRUD; index-backed property search; HNSW
+vector similarity search; tensor-contraction (structural) similarity; neural
+query language (NQL) and a ReAct agent over a model-agnostic LLM router;
+multi-tenancy with RBAC and quotas; durable storage with snapshot/restore,
+persisted vector graphs, and single-leader replication; API-key auth, rate
+limiting, Prometheus metrics, and structured tracing.
+
 ## Start here
 
 | Document | What it covers |
@@ -22,11 +29,11 @@ The system is a Cargo workspace of eight crates. Each has a detailed reference:
 |---------|----------------|
 | [`tensorus-core`](./services/tensorus-core.md) | Shared types, traits, errors, Arrow bridge |
 | [`tensorus-compute`](./services/tensorus-compute.md) | `TensorDescriptor` computation (norms, rank, eigenvalues, booleans) |
-| [`tensorus-storage`](./services/tensorus-storage.md) | Crash-safe segment+WAL storage, adaptive compression, tiering |
-| [`tensorus-index`](./services/tensorus-index.md) | Learned (PGM/ALEX), vector (HNSW/DiskANN), metadata indexes |
+| [`tensorus-storage`](./services/tensorus-storage.md) | Crash-safe segment+WAL storage, compression, tiering, snapshot/restore, replication change-log |
+| [`tensorus-index`](./services/tensorus-index.md) | Learned (PGM/ALEX), vector (HNSW + persistence/DiskANN), metadata indexes |
 | [`tensorus-search`](./services/tensorus-search.md) | Tensor contraction similarity engine |
 | [`tensorus-ai`](./services/tensorus-ai.md) | LLM router, NQL, ReAct agent, auto-optimizer |
-| [`tensorus-api`](./services/tensorus-api.md) | REST API, server binary, telemetry |
+| [`tensorus-api`](./services/tensorus-api.md) | REST API (search/NQL/agent), multi-tenancy + RBAC, replication, server binary, telemetry |
 | [`tensorus-python`](./services/tensorus-python.md) | PyO3 bindings + Python SDK |
 
 ## Other resources
@@ -39,16 +46,18 @@ The system is a Cargo workspace of eight crates. Each has a detailed reference:
 ## How the services compose (at a glance)
 
 ```
-Client → tensorus-api (auth, rate limit, metrics)
+Client → tensorus-api (auth/RBAC, rate limit, metrics; multi-tenant scoping)
        → TensorService
            ├─ tensorus-compute   (compute descriptor on insert)
-           ├─ tensorus-storage   (durable segment+WAL, hot map, tiering, compression)
-           ├─ tensorus-index     (PGM/ALEX/HNSW/DiskANN/metadata)
+           ├─ tensorus-storage   (durable segment+WAL, hot map, tiering, compression,
+           │                      snapshot/restore, replication change-log)
+           ├─ tensorus-index     (PGM/ALEX/HNSW[+persistence]/DiskANN/metadata)
            ├─ tensorus-search    (contraction similarity)
            └─ tensorus-ai        (LLM router → NQL plan → execute; ReAct agent; optimizer)
+       + control plane: /admin (tenants, keys, snapshot/restore) · /replication (followers)
        (all built on tensorus-core types/traits/errors)
 ```
 
 See [Architecture](./architecture.md) for the full picture, including the
-data-flow walkthroughs for insert, property search, contraction search, NQL, and
-the ReAct loop.
+data-flow walkthroughs for insert, property search, vector/contraction search,
+NQL, the ReAct loop, auth/tenant scoping, and replication.
