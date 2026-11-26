@@ -10,13 +10,14 @@
 
 <p>
   <a href="https://tensorus.com"><img src="https://img.shields.io/badge/Platform-tensorus.com-173c2c?style=flat-square" alt="Tensorus Platform"></a>
+  <a href="https://tensorus.com/academy"><img src="https://img.shields.io/badge/Learn-Tensorus_Academy-1d4ed8?style=flat-square" alt="Tensorus Academy"></a>
   <a href="https://tensorus.com/handbook"><img src="https://img.shields.io/badge/Docs-Developer_Handbook-245c44?style=flat-square" alt="Developer Handbook"></a>
   <a href="https://pypi.org/project/tensorus/"><img src="https://img.shields.io/badge/PyPI-tensorus_0.2.0-0f766e?style=flat-square" alt="PyPI tensorus 0.2.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.12%2B-2563eb?style=flat-square" alt="Python 3.12+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-475569?style=flat-square" alt="MIT License"></a>
 </p>
 
-**[Website](https://tensorus.com)** · **[Developer Handbook](https://tensorus.com/handbook)** · **[API Reference](https://tensorus.com/handbook#ch-api-reference)** · **[Request Early Access](https://tensorus.com/#connect)** · **[Contact (`ai@tensorus.com`)](mailto:ai@tensorus.com)**
+**[Website](https://tensorus.com)** · **[Tensorus Academy](https://tensorus.com/academy)** · **[Developer Handbook](https://tensorus.com/handbook)** · **[API Reference](https://tensorus.com/handbook#ch-api-reference)** · **[Request Early Access](https://tensorus.com/#connect)** · **[Contact (`ai@tensorus.com`)](mailto:ai@tensorus.com)**
 
 </div>
 
@@ -205,9 +206,13 @@ tensorus mcp
 
 ---
 
-## Documentation & Resources
+## Documentation & Learning Resources
 
-- **[Developer Handbook (`tensorus.com/handbook`)](https://tensorus.com/handbook):** Full 10-chapter guide covering quickstart, physical semantics, validity masks, all 65 operations, MCP setup, Data Products, governance, and interactive API explorer.
+- **[Tensorus Academy (`tensorus.com/academy`)](https://tensorus.com/academy):** Structured 5-level, 24-module engineering curriculum with verified Python labs, vector architecture diagrams, and runtime guardrail receipts:
+  - **Level 100 · Foundations *(Open Access — no sign-in required)*:** Multi-axis array topology (`0D`–`16D`), memory strides, `.npy` framing, `put`/`get` idempotency, zero-download slices, and optimistic snapshots.
+  - **Level 200 · Scientific & ML Practitioner *(Free Starter Account)*:** Dimensional Semantics `v2`, `tensorus[xarray]`, explicit boolean `ValidityBinding` masks, active `WriteContracts`, and leak-free fitted preprocessing.
+  - **Levels 300–500 · Production MLOps, Agentic MCP & Principal Governance *(Pro, Scale & Enterprise)*:** Zero-TOCTOU execution cycles, `tensorus[mlflow]` drift gates, resumable tile streaming, `104`-tool `tensorus-mcp` boundaries, Managed AI budgets, two-person `DataProduct` releases, portable bundles, transitive lineage ACLs, two-phase physical GC, and receipt-recoverable emergency lockdowns.
+- **[Developer Handbook (`tensorus.com/handbook`)](https://tensorus.com/handbook):** Full 10-chapter reference covering quickstart, physical semantics, validity masks, all 67 operations, MCP setup, Data Products, governance, and interactive API explorer.
 - **[Examples (`examples/`)](examples/):** Runnable Python examples for quickstart, Xarray, and MLflow workflows.
 - **[Cloud Workspace & Early Access (`tensorus.com`)](https://tensorus.com):** Explore plans (`Starter $0`, `Pro`, `Scale`, `Enterprise`) or connect to your workspace.
 
